@@ -2,7 +2,6 @@ import axios from 'axios'
 
 const API = axios.create({
   baseURL: '/api/v2/auth',
-  headers: { 'Content-Type': 'application/json' },
 })
 
 API.interceptors.request.use((config) => {
@@ -40,5 +39,10 @@ export async function requestPasswordReset(email) {
 
 export async function confirmPasswordReset(data) {
   const res = await API.post('/password/reset/confirm/', data)
+  return res.data
+}
+
+export async function confirmEmail(uid, token) {
+  const res = await API.post('/email/verify/confirm/', { uid, token })
   return res.data
 }
