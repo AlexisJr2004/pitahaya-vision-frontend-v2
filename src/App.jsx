@@ -8,7 +8,8 @@ import HomePage from './pages/HomePage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function ProtectedRoute({ children }) {
-  const { user } = useAuth()
+  const { user, initialLoading } = useAuth()
+  if (initialLoading) return null
   if (!user) return <Navigate to="/login" replace />
   return children
 }

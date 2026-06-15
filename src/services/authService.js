@@ -46,3 +46,31 @@ export async function confirmEmail(uid, token) {
   const res = await API.post('/email/verify/confirm/', { uid, token })
   return res.data
 }
+
+export async function updateProfile(data) {
+  const isFormData = data instanceof FormData
+  const res = await API.patch('/profile/', data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
+  })
+  return res.data
+}
+
+export async function getProfilePreferences() {
+  const res = await API.get('/profile/preferences/')
+  return res.data
+}
+
+export async function updateProfilePreferences(data) {
+  const res = await API.patch('/profile/preferences/', data)
+  return res.data
+}
+
+export async function changePassword(data) {
+  const res = await API.post('/password/change/', data)
+  return res.data
+}
+
+export async function deleteAccount() {
+  const res = await API.post('/account/delete/')
+  return res.data
+}

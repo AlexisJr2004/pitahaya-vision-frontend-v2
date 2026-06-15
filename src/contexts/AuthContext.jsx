@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { login as apiLogin, logout as apiLogout, getProfile } from '../services/authService'
 
 const AuthContext = createContext(null)
@@ -6,6 +6,27 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
+
+  // ─── Restore session from localStorage on mount ─────────────────
+  useEffect(() => {
+    async function restoreSession() {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        setInitialLoading(false)
+        return
+      }
+      try {
+        const profile = await getProfile()
+        setUser(profile)
+      } catch {
+        localStorage.removeItem('auth_token')
+      } finally {
+        setInitialLoading(false)
+      }
+    }
+    restoreSession()
+  }, [])
 
   const login = useCallback(async (credentials) => {
     setLoading(true)
@@ -31,7 +52,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, initialLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
