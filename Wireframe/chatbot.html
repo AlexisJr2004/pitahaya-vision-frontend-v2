@@ -1,0 +1,3535 @@
+
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Pitahaya Vision — Asistente IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        cormorant: ['"Cormorant Garamond"', 'serif'],
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0',
+                            400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d',
+                        }
+                    },
+                    keyframes: {
+                        fadeUp: { '0%': { opacity: '0', transform: 'translateY(12px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        dotBounce: { '0%,80%,100%': { transform: 'translateY(0)', opacity: '.4' }, '40%': { transform: 'translateY(-6px)', opacity: '1' } },
+                        pulseRing: { '0%': { boxShadow: '0 0 0 0 rgba(239,68,68,.5)' }, '70%': { boxShadow: '0 0 0 9px rgba(239,68,68,0)' }, '100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0)' } },
+                        wave: { '0%,100%': { transform: 'scaleY(.35)' }, '50%': { transform: 'scaleY(1)' } },
+                        slideIn: { '0%': { transform: 'translateX(-100%)' }, '100%': { transform: 'translateX(0)' } },
+                    },
+                    animation: {
+                        'fade-up': 'fadeUp 0.3s ease-out both',
+                        'dot': 'dotBounce 1.3s infinite', 'dot-2': 'dotBounce 1.3s .15s infinite', 'dot-3': 'dotBounce 1.3s .30s infinite',
+                        'pulse-ring': 'pulseRing 1.4s infinite',
+                        'wave-1': 'wave .7s 0s ease-in-out infinite', 'wave-2': 'wave .7s .1s ease-in-out infinite',
+                        'wave-3': 'wave .7s .2s ease-in-out infinite', 'wave-4': 'wave .7s .1s ease-in-out infinite', 'wave-5': 'wave .7s 0s ease-in-out infinite',
+                        'slide-in': 'slideIn 0.28s cubic-bezier(0.22,1,0.36,1) both',
+                    },
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+        }
+
+        body {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .font-cormorant {
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        .brand-avatar {
+            background: linear-gradient(135deg, #16a34a, #22c55e, #4ade80);
+        }
+
+        #chatArea::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        #chatArea::-webkit-scrollbar-thumb {
+            background: #d1fae5;
+            border-radius: 4px;
+        }
+
+        #historyList::-webkit-scrollbar {
+            width: 2px;
+        }
+
+        #historyList::-webkit-scrollbar-thumb {
+            background: #e5e7eb;
+            border-radius: 4px;
+        }
+
+        textarea {
+            resize: none;
+            outline: none;
+            background: transparent;
+        }
+
+        .input-box:focus-within {
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, .15);
+        }
+
+        .chip:hover {
+            background: #f0fdf4;
+            border-color: #16a34a;
+        }
+
+        .chip:active {
+            background: #dcfce7;
+        }
+
+        .send-active {
+            background: linear-gradient(135deg, #16a34a, #22c55e);
+            cursor: pointer;
+        }
+
+        .send-inactive {
+            background: #e5e7eb;
+            cursor: not-allowed;
+        }
+
+        .bot-text strong {
+            font-weight: 600;
+        }
+
+        .bot-text code {
+            background: #f0fdf4;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: .85em;
+            font-family: monospace;
+            color: #15803d;
+        }
+
+        .action-btn:hover {
+            background: #f0fdf4;
+            color: #15803d;
+        }
+
+        .action-btn:active {
+            background: #dcfce7;
+        }
+
+        .user-bubble {
+            background: linear-gradient(135deg, #16a34a, #22c55e);
+            color: #fff;
+        }
+
+        .mic-on {
+            background: #ef4444 !important;
+            animation: pulseRing 1.4s infinite;
+        }
+
+        .wb {
+            width: 3px;
+            height: 14px;
+            background: #fff;
+            border-radius: 2px;
+            transform-origin: center;
+        }
+
+        #drawerOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .35);
+            z-index: 40;
+        }
+
+        #drawerOverlay.open {
+            display: block;
+        }
+
+        #sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 272px;
+            background: #fff;
+            border-right: 1px solid #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 0.75rem;
+            z-index: 50;
+            overflow: hidden;
+            transform: translateX(0);
+            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @media (max-width: 767px) {
+            #sidebar {
+                transform: translateX(-100%);
+            }
+
+            #sidebar.open {
+                transform: translateX(0);
+            }
+        }
+
+        @media (min-width: 768px) {
+            #sidebar {
+                position: relative;
+                flex-shrink: 0;
+            }
+
+            #drawerOverlay {
+                display: none !important;
+            }
+
+            #menuBtn {
+                display: none !important;
+            }
+        }
+
+        .botanical-bg {
+            position: absolute;
+            bottom: -0.75rem;
+            left: -0.75rem;
+            width: 11rem;
+            opacity: 0.08;
+            pointer-events: none;
+        }
+
+        .chips-grid {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        @media (max-width: 360px) {
+            .chips-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .input-zone {
+            padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+        }
+
+        /* ══ USER MENU POPUP ══ */
+        @keyframes popUp {
+            from {
+                opacity: 0;
+                transform: translateY(14px) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        #userMenu {
+            position: fixed;
+            z-index: 200;
+            width: 383px;
+            background: #fff;
+            border-radius: 18px;
+            overflow: hidden;
+            border: 1px solid #f3f4f6;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, .18);
+
+        }
+
+        #userMenu:not(.hidden) {
+            animation: popUp 0.22s cubic-bezier(0.34, 1.18, 0.64, 1) both;
+        }
+
+        .um-option {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding: 11px 18px;
+            text-decoration: none;
+            transition: background 0.12s;
+            cursor: pointer;
+        }
+
+        .um-option:hover {
+            background: #f9fafb;
+        }
+
+        .um-option:active {
+            background: #f3f4f6;
+        }
+
+        .um-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 0.78rem;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        /* User trigger button hover ring */
+        #userTrigger {
+            transition: background 0.15s;
+        }
+
+        #userTrigger:hover {
+            background: #f9fafb;
+        }
+
+        #userTrigger:active {
+            background: #f0fdf4;
+        }
+
+        .trigger-ring {
+            transition: box-shadow 0.15s;
+        }
+
+        #userTrigger:hover .trigger-ring {
+            box-shadow: 0 0 0 2px #4ade80;
+        }
+
+        .session-card {
+            position: relative;
+        }
+
+        .session-card:hover .session-actions,
+        .session-card:focus-within .session-actions,
+        .session-card.menu-open .session-actions {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(-50%) scale(1);
+        }
+
+        .session-actions {
+            position: absolute;
+            top: 50%;
+            right: 0.7rem;
+            transform: translateY(-50%) scale(0.98);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.14s ease, transform 0.14s ease;
+        }
+
+        .session-dot-btn {
+            width: 1.85rem;
+            height: 1.85rem;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, .96);
+            border: 1px solid #e5e7eb;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: none;
+        }
+
+        .session-dot-btn span {
+            display: block;
+            width: 4px;
+            height: 4px;
+            border-radius: 9999px;
+            background: #64748b;
+            margin: 1px 0;
+        }
+
+        .session-menu-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 180;
+            display: none;
+            background: transparent;
+        }
+
+        .session-menu-overlay.open {
+            display: block;
+        }
+
+        .session-menu {
+            position: fixed;
+            z-index: 190;
+            min-width: 196px;
+            border-radius: 18px;
+            background: #fff;
+            border: 1px solid #eef2f7;
+            box-shadow: none;
+            padding: 0.35rem;
+        }
+
+        .session-menu-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.72rem 0.8rem;
+            border-radius: 14px;
+            text-align: left;
+            transition: background 0.14s ease, color 0.14s ease;
+            background: transparent;
+        }
+
+        .session-menu-item:hover {
+            background: #f8fafc;
+        }
+
+        .session-menu-item.danger:hover {
+            background: #f8fafc;
+        }
+
+        .session-pin {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #15803d;
+            background: #dcfce7;
+            border-radius: 9999px;
+            padding: 0.18rem 0.45rem;
+        }
+
+        .delete-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 220;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, .36);
+            backdrop-filter: blur(1px);
+        }
+
+        .delete-overlay.open {
+            display: flex;
+        }
+
+        .delete-modal {
+            width: min(100%, 420px);
+            border-radius: 24px;
+            background: #fff;
+            border: 1px solid #eef2f7;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, .18);
+            overflow: hidden;
+        }
+
+        .delete-modal-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #0f172a;
+            line-height: 1.35;
+        }
+
+        .delete-modal-text {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #64748b;
+        }
+
+        .delete-modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .delete-btn {
+            min-width: 108px;
+            padding: 0.78rem 1rem;
+            border-radius: 14px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+        }
+
+        .delete-btn-secondary {
+            background: #fff;
+            color: #334155;
+            border: 1px solid #e2e8f0;
+        }
+
+        .delete-btn-secondary:hover {
+            background: #f8fafc;
+        }
+
+        .delete-btn-danger {
+            background: #ef4444;
+            color: #fff;
+            border: 1px solid #ef4444;
+        }
+
+        .delete-btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+
+        .context-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 230;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, .45);
+            backdrop-filter: blur(4px);
+        }
+
+        .context-overlay.open {
+            display: flex;
+        }
+
+        .context-modal {
+            width: min(100%, 980px);
+            max-height: min(92dvh, 960px);
+            border-radius: 28px;
+            background: #ffffff;
+            border: 1px solid #eef2f7;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, .18);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .context-modal-header {
+            background: #ffffff;
+            color: #0f172a;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .context-modal-body {
+            overflow-y: auto;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .context-section {
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            border-radius: 22px;
+            padding: 1rem;
+        }
+
+        .context-section-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #166534;
+        }
+
+        .context-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 9999px;
+            border: 1px solid #dcfce7;
+            background: #f0fdf4;
+            color: #15803d;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .context-input,
+        .context-select,
+        .context-textarea {
+            width: 100%;
+            border: 1px solid #dbe4ee;
+            border-radius: 14px;
+            background: #fff;
+            color: #0f172a;
+            padding: 0.78rem 0.9rem;
+            font-size: 0.92rem;
+            transition: border-color 0.14s ease, box-shadow 0.14s ease;
+        }
+
+        .context-input:focus,
+        .context-select:focus,
+        .context-textarea:focus {
+            outline: none;
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, .12);
+        }
+
+        .context-textarea {
+            min-height: 104px;
+            resize: vertical;
+        }
+
+        .context-help {
+            font-size: 0.72rem;
+            line-height: 1.45;
+            color: #64748b;
+        }
+
+        .context-save-btn {
+            min-width: 150px;
+            padding: 0.92rem 1.15rem;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #16a34a, #22c55e);
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            transition: transform 0.14s ease, box-shadow 0.14s ease;
+            box-shadow: 0 14px 26px rgba(22, 163, 74, .18);
+        }
+
+        .context-save-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .context-secondary-btn {
+            min-width: 110px;
+            padding: 0.92rem 1.1rem;
+            border-radius: 16px;
+            border: 1px solid #dbe4ee;
+            background: #fff;
+            color: #334155;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .context-summary {
+            border: 1px dashed #dcfce7;
+            background: #f8fafc;
+            border-radius: 18px;
+            padding: 0.9rem 1rem;
+        }
+
+        .context-summary strong {
+            color: #0f172a;
+        }
+
+        .settings-field {
+            border: 1px solid #edf2f7;
+            border-radius: 18px;
+            background: #f8fafc;
+            padding: 0.9rem;
+        }
+
+        .settings-add-row {
+            display: flex;
+            gap: 0.65rem;
+            flex-wrap: wrap;
+        }
+
+        .settings-add-row input {
+            min-width: 0;
+            flex: 1 1 220px;
+        }
+
+        .settings-add-btn {
+            min-width: 112px;
+            padding: 0.82rem 1rem;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #16a34a, #22c55e);
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .settings-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            margin-top: 0.85rem;
+        }
+
+        .settings-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.42rem 0.7rem;
+            border-radius: 9999px;
+            background: #fff;
+            border: 1px solid #dbe4ee;
+            color: #334155;
+            font-size: 0.8rem;
+            line-height: 1.2;
+        }
+
+        .settings-chip button {
+            width: 1.1rem;
+            height: 1.1rem;
+            border-radius: 9999px;
+            background: #e2e8f0;
+            color: #475569;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            flex-shrink: 0;
+        }
+
+        .settings-chip button:hover {
+            background: #cbd5e1;
+        }
+
+        .settings-empty {
+            font-size: 0.78rem;
+            color: #94a3b8;
+            padding: 0.45rem 0.1rem 0.15rem;
+        }
+
+        /* ══ Parcelas Modal (form style) ══ */
+        .parcelas-farm-hover:hover {
+            background: #fafafa;
+        }
+
+        .parcelas-farm-card {
+            padding: 0 !important;
+            overflow: hidden;
+        }
+
+        .parcelas-farm-header {
+            border-bottom: 1px solid #eef2f7;
+            padding: 0.8rem 1rem;
+        }
+
+        .parcelas-farm-header.expanded {
+            border-bottom-color: #dbe4ee;
+        }
+
+        .parcelas-farm-body {
+            padding: 1rem;
+        }
+
+        .parcelas-farm-content {
+            display: none;
+        }
+
+        .parcelas-farm-card.expanded .parcelas-farm-content {
+            display: block;
+        }
+
+        .parcelas-plots-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .parcelas-plots-table thead {
+            border-bottom: 1.5px solid #eef2f7;
+        }
+
+        .parcelas-plots-table th {
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .parcelas-plots-table td {
+            padding: 9px 10px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.88rem;
+            color: #0f172a;
+        }
+
+        .parcelas-plots-table tbody tr {
+            transition: background 0.12s;
+        }
+
+        .parcelas-plots-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .parcelas-select-btn {
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid #dbe4ee;
+            background: #fff;
+            color: #16a34a;
+            font-size: 0.68rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.12s;
+            white-space: nowrap;
+        }
+
+        .parcelas-select-btn:hover {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+
+        .parcelas-empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #94a3b8;
+        }
+
+        .parcelas-empty-state i {
+            font-size: 2rem;
+            color: #cbd5e1;
+            margin-bottom: 0.75rem;
+        }
+    </style>
+</head>
+
+<body class="flex overflow-hidden bg-white" style="height:100dvh">
+
+    <!-- DRAWER OVERLAY (mobile) -->
+    <div id="drawerOverlay" onclick="closeSidebar()"></div>
+
+    <!-- ══ USER MENU POPUP (direct child of body, position:fixed) ══ -->
+    <div id="userMenu" class="hidden">
+
+        <!-- Top bar: email + close -->
+        <div class="flex items-center justify-between px-5 pt-4 pb-2 gap-2">
+            <!-- Cambiado flex-1 por text-center -->
+            <p class="text-[0.75rem] font-medium text-gray-500 truncate text-center w-full">snietod@unemi.edu.ec</p>
+        </div>
+
+        <!-- Avatar + greeting + CTA -->
+        <div class="flex flex-col items-center px-6 pt-1 pb-6">
+            <!-- Avatar grande con anillo brand -->
+            <div class="mb-3 flex-shrink-0"
+                style="padding:3px; background:linear-gradient(135deg,#16a34a,#4ade80); border-radius:9999px; box-shadow:0 4px 18px rgba(22,163,74,.25);">
+                <div class="w-[78px] h-[78px] rounded-full overflow-hidden bg-white p-0.5">
+                    <!-- Reemplazamos el div de texto por la etiqueta img -->
+                    <img src="logo.jpeg" alt="Avatar"
+                        class="brand-avatar w-full h-full rounded-full object-cover select-none" />
+                </div>
+            </div>
+
+
+            <p class="text-[1.1rem] font-semibold text-gray-800 mb-0.5">¡Hola, Steven!</p>
+            <p class="text-[0.72rem] text-gray-400 mb-4 text-center">Ing. Steven Alexander Nieto Durán</p>
+
+            <!-- CTA outlined -->
+            <button type="button" onclick="openProfileModal()"
+                class="w-full text-center border border-brand-600 text-brand-700 rounded-full py-2 px-4 text-[0.82rem] font-medium hover:bg-brand-50 active:bg-brand-100 transition-colors">
+                Gestionar mi perfil
+            </button>
+        </div>
+
+        <!-- Divider -->
+        <div class="h-px bg-gray-100"></div>
+
+        <!-- Options -->
+        <div class="py-1.5">
+            <button type="button" onclick="openProfileModal()"
+                class="um-option group w-full text-left border-0 bg-transparent">
+                <div class="um-icon bg-gray-100 text-gray-500 group-hover:bg-brand-100 group-hover:text-brand-600">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-700 leading-tight">Perfil</p>
+                    <p class="text-[0.68rem] text-gray-400 mt-0.5">Ver y editar tu perfil</p>
+                </div>
+            </button>
+            <button type="button" onclick="openSettingsModal()"
+                class="um-option group w-full text-left border-0 bg-transparent">
+                <div class="um-icon bg-gray-100 text-gray-500 group-hover:bg-brand-100 group-hover:text-brand-600">
+                    <i class="fas fa-gear"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-700 leading-tight">Configuraciones</p>
+                    <p class="text-[0.68rem] text-gray-400 mt-0.5">Preferencias y ajustes</p>
+                </div>
+            </button>
+        </div>
+
+        <!-- Divider -->
+        <div class="h-px bg-gray-100"></div>
+
+        <!-- Cerrar sesión -->
+        <div class="py-1.5">
+            <a href="login.html" class="um-option group">
+                <div class="um-icon bg-red-50 text-red-400 group-hover:bg-red-100 group-hover:text-red-500">
+                    <i class="fas fa-arrow-right-from-bracket"></i>
+                </div>
+                <p class="text-sm font-semibold text-red-500">Cerrar sesión</p>
+            </a>
+        </div>
+
+        <!-- Footer -->
+        <div class="h-px bg-gray-100"></div>
+        <div class="py-3 flex items-center justify-center gap-2.5">
+            <a href="#"
+                class="text-[0.63rem] text-gray-400 hover:text-gray-600 hover:underline transition-colors">Política de
+                privacidad</a>
+            <span class="text-gray-300 select-none text-xs">·</span>
+            <a href="#"
+                class="text-[0.63rem] text-gray-400 hover:text-gray-600 hover:underline transition-colors">Términos de
+                servicio</a>
+        </div>
+    </div>
+
+    <div id="sessionMenuOverlay" class="session-menu-overlay" onclick="closeSessionMenu()"></div>
+    <div id="sessionMenu" class="session-menu hidden">
+        <button type="button" class="session-menu-item" onclick="pinActiveMenuSession()">
+            <span class="w-4 h-4 flex items-center justify-center text-gray-500">
+                <i class="fas fa-thumbtack text-[0.72rem]"></i>
+            </span>
+            <span id="sessionMenuPinLabel" class="text-sm text-gray-700 font-medium">Fijar conversación</span>
+        </button>
+        <button type="button" class="session-menu-item danger" onclick="deleteActiveMenuSession()">
+            <span class="w-4 h-4 flex items-center justify-center text-gray-500">
+                <i class="fas fa-trash text-[0.72rem]"></i>
+            </span>
+            <span class="text-sm text-gray-700 font-medium">Eliminar conversación</span>
+        </button>
+    </div>
+
+    <div id="deleteOverlay" class="delete-overlay" onclick="closeDeleteModal()">
+        <div class="delete-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle"
+            onclick="event.stopPropagation()">
+            <div class="px-6 pt-6 pb-4">
+                <h3 id="deleteModalTitle" class="delete-modal-title">¿Eliminar conversación?</h3>
+                <p class="delete-modal-text mt-3">
+                    Se eliminarán las peticiones, las respuestas y los comentarios de tu ajuste, además de cualquier
+                    contenido que hayas creado.
+                </p>
+            </div>
+            <div class="px-6 pb-6">
+                <div class="delete-modal-actions">
+                    <button type="button" class="delete-btn delete-btn-secondary"
+                        onclick="closeDeleteModal()">Cancelar</button>
+                    <button type="button" class="delete-btn delete-btn-danger"
+                        onclick="confirmDeleteActiveMenuSession()">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="contextOverlay" class="context-overlay" onclick="closeContextModal()">
+        <div class="context-modal" role="dialog" aria-modal="true" aria-labelledby="contextModalTitle"
+            onclick="event.stopPropagation()">
+            <div class="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <span class="context-badge">Contexto de conversación</span>
+                        <h3 id="contextModalTitle"
+                            class="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">
+                            Registrar datos de la planta antes del escaneo</h3>
+                        <p class="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
+                            Guarda solo lo que ayuda a entender la planta enferma y a tomar decisiones futuras en el
+                            cultivo.
+                        </p>
+                    </div>
+                    <button type="button" onclick="closeContextModal()"
+                        class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500"
+                        aria-label="Cerrar formulario">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="context-summary mt-5 grid gap-2 sm:grid-cols-2">
+                    <div>
+                        <p class="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Uso</p>
+                        <p class="text-sm text-gray-700 mt-1">Conectar diagnóstico, contexto del lote y resultado final.
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Salida</p>
+                        <p class="text-sm text-gray-700 mt-1">Datos listos para análisis histórico de la planta.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="context-modal-body px-4 sm:px-6 py-5">
+                <form id="contextForm" class="space-y-4">
+                    <div class="context-section">
+                        <div class="flex items-center justify-between gap-3 mb-4">
+                            <div>
+                                <p class="context-section-title">Identificación de la planta</p>
+                                <p class="text-sm text-slate-500 mt-1">Ubica con precisión la planta afectada.</p>
+                            </div>
+                            <button type="button" onclick="openParcelasModal()"
+                                class="text-[0.7rem] font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition px-3 py-1.5 rounded-full flex items-center gap-1.5 flex-shrink-0">
+                                <i class="fas fa-field" style="font-size:0.65rem"></i>
+                                Mis parcelas
+                            </button>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Fecha y hora</span>
+                                <input id="contextDatetime" type="datetime-local" class="context-input" />
+                            </label>
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">ID del lote o sector</span>
+                                <select id="contextLotId" class="context-select"></select>
+                            </label>
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Zona</span>
+                                <select id="contextZone" class="context-select"></select>
+                            </label>
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Parcela e hileras</span>
+                                <select id="contextRows" class="context-select"></select>
+                            </label>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-4">
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Planta / unidad</span>
+                                <input id="contextPlantId" type="text" class="context-input"
+                                    placeholder="Ej: Planta 0147, Unidad 12" />
+                            </label>
+                            <label class="block lg:col-span-2">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">GPS o ubicación
+                                    exacta</span>
+                                <input id="contextLocation" type="text" class="context-input"
+                                    placeholder="Lat. -1.234567, Lon. -79.123456 o referencia en campo" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="context-section">
+                        <div class="mb-4">
+                            <p class="context-section-title">Estado sanitario de la planta</p>
+                            <p class="text-sm text-slate-500 mt-1">Describe lo más importante que ves antes de escanear
+                                la imagen.</p>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <label class="block lg:col-span-2">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Síntoma principal</span>
+                                <input id="contextMainSymptom" type="text" class="context-input"
+                                    placeholder="Manchas, clorosis, pudrición, marchitez, daño en tallo..." />
+                            </label>
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Órgano afectado</span>
+                                <select id="contextAffectedPart" class="context-select">
+                                    <option value="">Seleccionar</option>
+                                    <option>Tallo</option>
+                                    <option>Raíz</option>
+                                    <option>Cladodio / brazo</option>
+                                    <option>Flor</option>
+                                    <option>Fruto</option>
+                                    <option>Brote</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2 mt-4">
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Fase fenológica</span>
+                                <select id="contextStage" class="context-select">
+                                    <option value="">Seleccionar</option>
+                                    <option>Brotación floral</option>
+                                    <option>Antesis (Floración)</option>
+                                    <option>Amarre o Cuajado</option>
+                                    <option>Madurez y Cosecha</option>
+                                </select>
+                            </label>
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Severidad observada</span>
+                                <select id="contextSeverity" class="context-select">
+                                    <option value="">Seleccionar</option>
+                                    <option>Baja</option>
+                                    <option>Moderada</option>
+                                    <option>Alta</option>
+                                    <option>Crítica</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="mt-4">
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Notas de campo</span>
+                                <textarea id="contextNotes" class="context-textarea"
+                                    placeholder="Ejemplo: inició después del riego, la planta está en borde del lote, hay humedad acumulada, se observó olor raro..."></textarea>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="context-section">
+                        <div class="mb-4">
+                            <p class="context-section-title">Antecedentes mínimos</p>
+                            <p class="text-sm text-slate-500 mt-1">Solo lo necesario para explicar el estado actual de
+                                la planta.</p>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Riego reciente</span>
+                                <input id="contextIrrigation" type="text" class="context-input"
+                                    placeholder="Frecuencia, volumen o cambio reciente" />
+                            </label>
+                            <label class="block">
+                                <span class="block text-sm font-medium text-slate-700 mb-2">Aplicación
+                                    fitosanitaria</span>
+                                <input id="contextPhytosanitary" type="text" class="context-input"
+                                    placeholder="Producto, fecha y motivo" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="context-section">
+                        <div class="flex flex-wrap gap-3 justify-end">
+                            <button type="button" class="context-secondary-btn"
+                                onclick="clearContextForm()">Limpiar</button>
+                            <button type="button" class="context-secondary-btn"
+                                onclick="saveContextForm(false)">Guardar</button>
+                            <button type="button" class="context-save-btn" onclick="saveContextForm(true)">Guardar y
+                                cargar imagen</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+     Pitahaya Vision — Settings Modal con Accesibilidad Completa
+     ============================================================ -->
+    <div id="settingsOverlay" class="context-overlay" onclick="closeSettingsModal()">
+        <div class="context-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle"
+            onclick="event.stopPropagation()">
+
+            <!-- Header -->
+            <div class="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <span class="context-badge">Configuraciones</span>
+                        <h3 id="settingsModalTitle"
+                            class="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">
+                            Configuraciones y accesibilidad
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
+                            Personaliza la experiencia de la plataforma y administra las opciones de ubicación para el
+                            formulario de análisis.
+                        </p>
+                    </div>
+                    <button type="button" onclick="closeSettingsModal()"
+                        class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500"
+                        aria-label="Cerrar configuraciones">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="context-modal-body px-4 sm:px-6 py-5 space-y-5">
+
+                <!-- ── 1. CONFIGURACIONES GENERALES ── -->
+                <div class="context-section">
+                    <div class="mb-4">
+                        <p class="context-section-title">Configuraciones generales</p>
+                        <p class="text-sm text-slate-500 mt-1">Personaliza la apariencia y el comportamiento de la
+                            plataforma.</p>
+                    </div>
+
+                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="block">
+                            <span class="block text-sm font-medium text-slate-700 mb-2">Tema de la interfaz</span>
+                            <select id="settingsTheme" class="context-select">
+                                <option value="light">Claro</option>
+                                <option value="dark">Oscuro</option>
+                                <option value="system">Según el sistema</option>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="block text-sm font-medium text-slate-700 mb-2">Tamaño de texto</span>
+                            <select id="settingsFontSize" class="context-select">
+                                <option value="small">Pequeño</option>
+                                <option value="medium" selected>Mediano</option>
+                                <option value="large">Grande</option>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="block text-sm font-medium text-slate-700 mb-2">Tipo de letra</span>
+                            <select id="settingsFontFamily" class="context-select">
+                                <option value="inter" selected>Inter (predeterminada)</option>
+                                <option value="lexend">Lexend</option>
+                                <option value="opendyslexic">OpenDyslexic</option>
+                                <option value="roboto">Roboto</option>
+                                <option value="comic-neue">Comic Neue</option>
+                                <option value="courier-prime">Courier Prime</option>
+                                <option value="atkinson">Atkinson Hyperlegible</option>
+                                <option value="times-new-roman">Times New Roman</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ── 2. ACCESIBILIDAD DEL CHAT ── -->
+                <div class="context-section">
+                    <div class="mb-4">
+                        <p class="context-section-title">Accesibilidad del chat</p>
+                        <p class="text-sm text-slate-500 mt-1">Controla cómo el chatbot presenta y entrega sus
+                            respuestas.</p>
+                    </div>
+
+                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="block">
+                            <span class="block text-sm font-medium text-slate-700 mb-2">Modo de daltonismo</span>
+                            <select id="settingsColorBlind" class="context-select"
+                                onchange="applyColorBlindFilter(this.value)">
+                                <option value="none" selected>Normal</option>
+                                <option value="protanopia">Protanopia (dificultad rojo)</option>
+                                <option value="deuteranopia">Deuteranopia (dificultad verde)</option>
+                                <option value="tritanopia">Tritanopia (dificultad azul)</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ── 3. ACCESIBILIDAD VISUAL ── -->
+                <div class="context-section">
+                    <div class="mb-4">
+                        <p class="context-section-title">Accesibilidad visual</p>
+                        <p class="text-sm text-slate-500 mt-1">Opciones visuales y de interacción adicionales.</p>
+                    </div>
+
+                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <label class="block flex items-start gap-3 pt-6">
+                            <input type="checkbox" id="settingsHighContrast"
+                                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                onchange="applyHighContrast(this.checked)" />
+                            <div>
+                                <span class="block text-sm font-medium text-slate-700">Alto contraste</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Mejora la legibilidad de los elementos.</p>
+                            </div>
+                        </label>
+                        <label class="block flex items-start gap-3 pt-6">
+                            <input type="checkbox" id="settingsReducedMotion"
+                                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                onchange="applyReducedMotion(this.checked)" />
+                            <div>
+                                <span class="block text-sm font-medium text-slate-700">Reducir animaciones</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Minimiza transiciones y movimientos.</p>
+                            </div>
+                        </label>
+                        <label class="block flex items-start gap-3 pt-6">
+                            <input type="checkbox" id="settingsDyslexicFont"
+                                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                onchange="applyDyslexicFont(this.checked)" />
+                            <div>
+                                <span class="block text-sm font-medium text-slate-700">Tipografía amigable</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Fuente diseñada para dislexia.</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ── RESPALDO DE DATOS ── -->
+                <div class="context-section">
+                    <div class="mb-4">
+                        <p class="context-section-title">Respaldo de datos</p>
+                        <p class="text-sm text-slate-500 mt-1">Exporta o importa toda tu información (sesiones, análisis, configuraciones).</p>
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <button type="button" class="context-secondary-btn" onclick="exportBackup()">
+                            <i class="fas fa-download mr-1.5"></i> Exportar respaldo
+                        </button>
+                        <label class="context-secondary-btn cursor-pointer inline-flex items-center gap-2">
+                            <i class="fas fa-upload"></i> Importar respaldo
+                            <input type="file" accept=".json" class="hidden" onchange="importBackup(event)" />
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Footer actions -->
+                <div class="flex flex-wrap items-center justify-end gap-3 pt-1">
+                    <button type="button" class="context-secondary-btn" onclick="resetSettings()">Restaurar
+                        valores</button>
+                    <button type="button" class="context-secondary-btn" onclick="closeSettingsModal()">Cerrar</button>
+                    <button type="button" class="context-save-btn" onclick="saveSettings()">Guardar
+                        configuraciones</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+     ARIA LIVE REGION — para lectores de pantalla
+     Coloca este div en el <body>, fuera del modal.
+     ============================================================ -->
+    <div id="chatLiveRegion" role="status" aria-live="polite" aria-atomic="true"
+        style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;">
+    </div>
+
+
+    <div id="profileOverlay" class="context-overlay" onclick="closeProfileModal()">
+        <div class="context-modal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle"
+            onclick="event.stopPropagation()">
+            <div class="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <span class="context-badge">Perfil de usuario</span>
+                        <h3 id="profileModalTitle"
+                            class="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">
+                            Información personal</h3>
+                        <p class="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
+                            Mantén tus datos actualizados y administra tu cuenta desde un solo panel.
+                        </p>
+                    </div>
+                    <button type="button" onclick="closeProfileModal()"
+                        class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500"
+                        aria-label="Cerrar perfil">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="context-modal-body px-4 sm:px-6 py-5">
+                <div class="grid gap-6 lg:grid-cols-[280px_1fr]">
+
+                    <!-- Left: Avatar + info cards -->
+                    <aside class="flex flex-col items-center text-center h-fit">
+                        <div class="context-section w-full flex flex-col items-center text-center">
+                            <div class="relative inline-flex">
+                                <img src="logo.jpeg" alt="Foto de perfil" class="h-28 w-28 rounded-full border-[3px] border-brand-500 object-cover shadow-md shadow-green-600/20" />
+                                <span class="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-brand-500 text-white shadow-sm">
+                                    <i class="fas fa-check text-[0.65rem]"></i>
+                                </span>
+                            </div>
+                            <h2 class="mt-4 text-lg font-semibold text-slate-900">Steven Alexander Nieto Duran</h2>
+                            <p class="text-sm text-slate-500">@snietod</p>
+
+                            <div class="mt-5 w-full">
+                                <input id="profilePhotoInput" type="file" accept="image/*" class="hidden" />
+                                <label for="profilePhotoInput" class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-600">
+                                    <i class="fas fa-cloud-arrow-up text-base"></i>
+                                    <span>Cambiar foto</span>
+                                </label>
+                            </div>
+
+                            <div class="mt-5 w-full space-y-2">
+                                <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5">
+                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Usuario</span>
+                                    <span class="text-sm font-semibold text-slate-800">snietod</span>
+                                </div>
+                                <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5">
+                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Rol</span>
+                                    <span class="text-sm font-semibold text-brand-600">Administrador</span>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Right: Form -->
+                    <form id="profileForm" class="space-y-5" onsubmit="event.preventDefault(); alert('Cambios guardados correctamente.');">
+
+                        <div class="context-section">
+                            <div class="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                <i class="fas fa-envelope text-slate-300"></i>
+                                <span>Datos de cuenta</span>
+                                <div class="h-px flex-1 bg-slate-200"></div>
+                            </div>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Correo electrónico</label>
+                                    <div class="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                                        <i class="fas fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input type="email" value="snietod@unemi.edu.ec" class="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Teléfono</label>
+                                    <div class="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                                        <i class="fas fa-phone absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input type="tel" maxlength="10" value="0997932650" class="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="context-section">
+                            <div class="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                <i class="fas fa-user text-slate-300"></i>
+                                <span>Datos personales</span>
+                                <div class="h-px flex-1 bg-slate-200"></div>
+                            </div>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Nombre</label>
+                                    <div class="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                                        <i class="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input type="text" value="Steven Alexander" class="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Apellido</label>
+                                    <div class="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                                        <i class="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input type="text" value="Nieto Duran" class="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Cédula</label>
+                                    <div class="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                                        <i class="fas fa-id-card absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input type="text" maxlength="10" value="0959982144" class="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Dirección</label>
+                                    <div class="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+                                        <i class="fas fa-location-dot absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                                        <input type="text" placeholder="Av. principal..." class="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-end gap-3 pt-1">
+                            <button type="button" onclick="closeProfileModal()" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-green-600/20 transition-all hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-lg active:translate-y-0">
+                                <i class="fas fa-floppy-disk mr-1.5"></i>
+                                Guardar cambios
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="parcelasOverlay" class="context-overlay" onclick="closeParcelasModal()">
+        <div class="context-modal" role="dialog" aria-modal="true" aria-labelledby="parcelasModalTitle"
+            onclick="event.stopPropagation()">
+            <div class="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <span class="context-badge">Gestión de propiedades</span>
+                        <h3 id="parcelasModalTitle"
+                            class="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">
+                            Mis Parcelas</h3>
+                        <p class="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">
+                            Administra tus fincas y parcelas para asociarlas al contexto de análisis.
+                        </p>
+                    </div>
+                    <button type="button" onclick="closeParcelasModal()"
+                        class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500"
+                        aria-label="Cerrar parcelas">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="context-modal-body px-4 sm:px-6 py-5">
+                <div class="mb-5">
+                    <button type="button" onclick="openAddFarmModal()"
+                        class="w-full py-3 bg-white border-2 border-dashed border-gray-300 rounded-2xl text-brand-600 font-semibold flex items-center justify-center gap-3 transition-all hover:border-brand-500 hover:bg-brand-50">
+                        <i class="fas fa-plus"></i>
+                        Agregar nueva finca
+                    </button>
+                </div>
+                <div id="parcelasFarmsList" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inner modals as direct body children to avoid z-index stacking -->
+    <div id="parcelasAddFarmModal" class="fixed inset-0 z-[300]"
+        style="display:none;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden mx-4"
+            onclick="event.stopPropagation()">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h4 class="text-lg font-semibold text-gray-900">Agregar nueva finca</h4>
+                <button type="button" onclick="closeAddFarmModal()"
+                    class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+            <div class="px-5 py-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">ID del lote o sector</label>
+                    <input type="text" id="parcelasFarmNameInput" class="context-input"
+                        placeholder="Ej: Finca El Paraíso">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Zona</label>
+                    <input type="text" id="parcelasFarmLocationInput" class="context-input"
+                        placeholder="Ej: Provincia del Oro, Machala">
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-100 flex justify-end gap-3">
+                <button type="button" onclick="closeAddFarmModal()" class="context-secondary-btn">Cancelar</button>
+                <button type="button" onclick="addNewFarm()" class="context-save-btn">Agregar finca</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="parcelasAddPlotModal" class="fixed inset-0 z-[300]"
+        style="display:none;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden mx-4"
+            onclick="event.stopPropagation()">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h4 class="text-lg font-semibold text-gray-900">Agregar nueva parcela</h4>
+                <button type="button" onclick="closeAddPlotModal()"
+                    class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+            <div class="px-5 py-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Parcela e hilera</label>
+                    <input type="text" id="parcelasPlotNameInput" class="context-input"
+                        placeholder="Ej: Parcela A, Hilera 1-5">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">GPS o ubicación exacta</label>
+                    <input type="text" id="parcelasPlotGpsInput" class="context-input"
+                        placeholder="Ej: Lat. -3.1234, Lon. -79.5678">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Hectáreas</label>
+                    <input type="number" id="parcelasPlotHectaresInput" class="context-input" placeholder="Ej: 2.5"
+                        step="0.1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Variedad de cultivo</label>
+                    <input type="text" id="parcelasPlotVarietyInput" class="context-input"
+                        placeholder="Ej: Pitahaya Roja">
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-100 flex justify-end gap-3">
+                <button type="button" onclick="closeAddPlotModal()" class="context-secondary-btn">Cancelar</button>
+                <button type="button" onclick="addNewPlot()" class="context-save-btn">Agregar parcela</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════ SIDEBAR ══════════════ -->
+    <aside id="sidebar">
+
+        <svg class="botanical-bg" viewBox="0 0 220 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" stroke-width="2" fill="none"
+                stroke-linecap="round" />
+            <path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" stroke-width="1.2" fill="none"
+                stroke-linecap="round" />
+            <path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" stroke-width="1.2" fill="none"
+                stroke-linecap="round" />
+            <path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" stroke-width="1" fill="none"
+                stroke-linecap="round" />
+            <path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" stroke-width="1" fill="none"
+                stroke-linecap="round" />
+            <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" />
+            <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
+            <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
+        </svg>
+
+        <!-- Brand -->
+        <div class="flex items-center gap-2 mb-1">
+            <div class="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24">
+                    <path
+                        d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
+                </svg>
+            </div>
+            <span class="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
+        </div>
+
+        <button type="button" onclick="openParcelasModal(); closeSidebar();"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-brand-50 border border-gray-200 hover:border-brand-500 transition-all active:bg-brand-100 w-full text-left">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" troke-linecap="round"
+                stroke-linejoin="round" viewBox="0 0 24 24">
+                <path
+                    d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" />
+                <path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" />
+                <path d="M18 22v-3" />
+                <circle cx="10" cy="10" r="3" />
+            </svg>
+            Mis parcelas
+        </button>
+
+        <a href="historial_analisis.html"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-brand-50 border border-gray-200 hover:border-brand-500 transition-all active:bg-brand-100">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M3 12h18" />
+                <path d="M7 6h10" />
+                <path d="M7 18h10" />
+            </svg>
+            Historial de análisis
+        </a>
+
+        <!-- New chat -->
+        <button onclick="newChat(); closeSidebar();"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-brand-50 border border-gray-200 hover:border-brand-500 transition-all active:bg-brand-100">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nueva conversación
+        </button>
+
+        <p class="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1">Recientes</p>
+        <div id="historyList" class="flex flex-col gap-1 overflow-y-auto flex-1">
+            <p class="text-xs text-gray-300 px-2">Sin conversaciones aún</p>
+        </div>
+
+        <!-- ══ USER TRIGGER (bottom of sidebar) ══ -->
+        <div class="border-t border-gray-100 pt-3 mt-1">
+            <button id="userTrigger" onclick="toggleUserMenu()"
+                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left group">
+
+                <!-- Avatar pequeño con anillo -->
+                <div class="trigger-ring w-9 h-9 rounded-full flex-shrink-0 p-0.5"
+                    style="background:linear-gradient(135deg,#16a34a,#4ade80); box-shadow:0 0 0 2px white;">
+                    <!-- Reemplazamos el div por una etiqueta img -->
+                    <img src="logo.jpeg" alt="Avatar"
+                        class="brand-avatar w-full h-full rounded-full object-cover select-none" />
+                </div>
+
+                <div class="min-w-0 flex-1">
+                    <p class="text-[0.82rem] font-semibold text-gray-800 truncate leading-tight">Ing. Steven Nieto</p>
+                    <p class="text-[0.68rem] text-gray-400 truncate leading-tight">snietod@unemi.edu.ec</p>
+                </div>
+
+                <i id="userMenuIcon"
+                    class="fas fa-chevron-up text-[0.62rem] text-gray-400 flex-shrink-0 transition-transform duration-200"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ══════════════ MAIN ══════════════ -->
+    <main class="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
+
+        <!-- Header -->
+        <header class="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <button id="menuBtn" onclick="openSidebar()"
+                    class="p-2 -ml-1 rounded-xl hover:bg-brand-50 transition text-gray-500 active:bg-brand-100"
+                    aria-label="Abrir menú">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                    </svg>
+                </button>
+                <div class="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                    <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24">
+                        <path
+                            d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-cormorant text-base font-semibold text-gray-900 leading-none">Pitahaya Vision</h1>
+                    <p class="text-[0.6rem] font-semibold uppercase tracking-widest text-brand-600 leading-none mt-0.5">
+                        Asistente inteligente</p>
+                </div>
+            </div>
+            <button onclick="newChat()" title="Nueva conversación"
+                class="p-2 rounded-xl hover:bg-brand-50 transition text-gray-400 hover:text-brand-600 active:bg-brand-100">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="1 4 1 10 7 10" />
+                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Chat area -->
+        <div id="chatArea" class="flex-1 overflow-y-auto px-3 sm:px-4 py-5 relative">
+
+            <div id="welcome" class="flex flex-col items-center justify-center min-h-full text-center px-3">
+
+                <svg class="absolute bottom-0 left-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none"
+                    viewBox="0 0 220 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" stroke-width="2" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" stroke-width="1.2" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" stroke-width="1.2" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" stroke-width="1" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" stroke-width="1" fill="none"
+                        stroke-linecap="round" />
+                    <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55"
+                        transform="rotate(-30 130 8)" />
+                    <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55"
+                        transform="rotate(20 -8 122)" />
+                    <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55"
+                        transform="rotate(-15 120 112)" />
+                </svg>
+                <svg class="absolute bottom-0 right-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none scale-x-[-1]"
+                    viewBox="0 0 220 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" stroke-width="2" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" stroke-width="1.2" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" stroke-width="1.2" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" stroke-width="1" fill="none"
+                        stroke-linecap="round" />
+                    <path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" stroke-width="1" fill="none"
+                        stroke-linecap="round" />
+                    <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55"
+                        transform="rotate(-30 130 8)" />
+                    <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55"
+                        transform="rotate(20 -8 122)" />
+                    <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55"
+                        transform="rotate(-15 120 112)" />
+                </svg>
+
+                <div
+                    class="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4">
+                    <svg class="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24">
+                        <path
+                            d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
+                    </svg>
+                </div>
+
+                <p class="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Sistema de diagnóstico
+                    inteligente</p>
+                <h2 class="font-cormorant text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mb-1">
+                    Hola, ¿cómo puedo<br /><em class="italic text-brand-600">ayudarte hoy?</em>
+                </h2>
+                <p class="text-gray-400 text-sm mt-2 mb-6 font-light">Escribe, habla o envía una imagen de tu cultivo.
+                </p>
+
+                <div class="chips-grid w-full max-w-md">
+                    <button onclick="suggest('¿Cuáles son las enfermedades más comunes de la pitahaya?')"
+                        class="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div class="text-lg sm:text-xl mb-1">🌵</div>
+                        <div class="font-medium text-gray-800 text-xs">Enfermedades comunes</div>
+                        <div class="text-gray-400 text-xs mt-0.5">Diagnóstico de cultivos</div>
+                    </button>
+                    <button onclick="suggest('¿Cómo puedo mejorar el rendimiento de mi cultivo de pitahaya?')"
+                        class="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div class="text-lg sm:text-xl mb-1">📈</div>
+                        <div class="font-medium text-gray-800 text-xs">Mejorar rendimiento</div>
+                        <div class="text-gray-400 text-xs mt-0.5">Optimización agrícola</div>
+                    </button>
+                    <button onclick="suggest('¿Qué plagas afectan a la pitahaya y cómo controlarlas?')"
+                        class="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div class="text-lg sm:text-xl mb-1">🐛</div>
+                        <div class="font-medium text-gray-800 text-xs">Control de plagas</div>
+                        <div class="text-gray-400 text-xs mt-0.5">Protección del cultivo</div>
+                    </button>
+                    <button onclick="suggest('¿Cuál es el mejor sistema de riego para pitahaya?')"
+                        class="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div class="text-lg sm:text-xl mb-1">💧</div>
+                        <div class="font-medium text-gray-800 text-xs">Sistema de riego</div>
+                        <div class="text-gray-400 text-xs mt-0.5">Gestión del agua</div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="msgs" class="hidden max-w-2xl mx-auto flex-col gap-4 sm:gap-5"></div>
+        </div>
+
+        <!-- INPUT ZONE -->
+        <div class="input-zone px-3 sm:px-4 pt-2 bg-white border-t border-gray-100 flex-shrink-0">
+            <div class="max-w-2xl mx-auto">
+
+                <div id="imgPreview" class="hidden items-center gap-3 mb-3 px-1">
+                    <div class="relative">
+                        <img id="previewImg" src="" alt="preview"
+                            class="h-14 w-14 sm:h-16 sm:w-16 object-cover rounded-2xl border border-brand-200 shadow-sm" />
+                        <button onclick="removeImage()"
+                            class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-700 hover:bg-gray-900 rounded-full flex items-center justify-center transition">
+                            <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="3"
+                                viewBox="0 0 24 24">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-gray-600" id="imgName">imagen.jpg</p>
+                        <p class="text-xs text-gray-400">Imagen lista para enviar</p>
+                    </div>
+                </div>
+
+                <div
+                    class="input-box flex items-end gap-1.5 sm:gap-2 bg-gray-50 border border-gray-200 rounded-3xl px-2.5 sm:px-3 py-2.5 sm:py-3 transition-all duration-200">
+
+                    <button onclick="document.getElementById('imgInput').click()" title="Adjuntar imagen"
+                        class="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                    </button>
+                    <input type="file" id="imgInput" accept="image/*" class="hidden" onchange="handleImage(event)" />
+
+                    <textarea id="inp" rows="1" placeholder="Escribe sobre tu cultivo..."
+                        class="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"
+                        oninput="onInput()" onkeydown="onKey(event)"></textarea>
+
+                    <button id="micBtn" onclick="toggleMic()" title="Usar micrófono"
+                        class="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200">
+                        <svg id="micIcon" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor"
+                            stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                            <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                            <line x1="12" y1="19" x2="12" y2="23" />
+                            <line x1="8" y1="23" x2="16" y2="23" />
+                        </svg>
+                        <div id="waveAnim" class="hidden items-center gap-0.5">
+                            <div class="wb animate-wave-1"></div>
+                            <div class="wb animate-wave-2"></div>
+                            <div class="wb animate-wave-3"></div>
+                            <div class="wb animate-wave-4"></div>
+                            <div class="wb animate-wave-5"></div>
+                        </div>
+                    </button>
+
+                    <button id="sendBtn" onclick="sendMessage()" disabled
+                        class="send-inactive w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5"
+                            viewBox="0 0 24 24">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                    </button>
+                </div>
+
+                <p class="text-center text-[0.65rem] text-gray-400 mt-2 mb-1 font-light">
+                    El asistente puede cometer errores. Verifica con un agrónomo.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const inp = document.getElementById('inp');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatArea = document.getElementById('chatArea');
+        const welcome = document.getElementById('welcome');
+        const msgs = document.getElementById('msgs');
+        const STORAGE_KEY = 'pitahayaVision.sessions.v2';
+        const PLANT_HISTORY_KEY = 'pitahayaVision.plantHistory.v1';
+        const CONTEXT_OPTIONS_KEY = 'pitahayaVision.contextOptions.v1';
+        const APP_SETTINGS_KEY = 'pitahayaVision.settings.v1';
+        let sessions = [];
+        let activeSessionId = null;
+        let plantHistory = [];
+        let history = [];
+        let busy = false;
+        let sessionMenuState = { sessionId: null, buttonRect: null };
+        let contextOptions = createDefaultContextOptions();
+
+        function createEmptyContext() {
+            return {
+                datetime: '',
+                lotId: '',
+                zone: '',
+                rows: '',
+                plantId: '',
+                location: '',
+                mainSymptom: '',
+                affectedPart: '',
+                severity: '',
+                stage: '',
+                irrigation: '',
+                phytosanitary: '',
+                notes: '',
+            };
+        }
+
+        /* ── Historial de análisis por planta (comparación temporal) ── */
+        function getPlantKey(context) {
+            if (!context) return '';
+            const parts = [context.lotId || '', context.zone || '', context.rows || '', context.plantId || ''];
+            if (parts.every(p => !p)) return '';
+            return parts.join('|');
+        }
+
+        function generateComparison(prev, current, context, allEntries) {
+            const prevDate = prev.date ? new Date(prev.date) : null;
+            const dateStr = prevDate
+                ? prevDate.toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' })
+                : 'fecha desconocida';
+
+            const plantLabel = [context.lotId, context.zone, context.rows, context.plantId].filter(Boolean).join(' \u00b7 ') || 'esta planta';
+
+            const severityOrder = { 'baja': 0, 'leve': 0, 'moderada': 1, 'alta': 2, 'critica': 3, 'cr\u00edtica': 3 };
+            const prevSev = (prev.severity || '').toLowerCase();
+            const curSev = (current.severity || '').toLowerCase();
+            const prevLevel = severityOrder[prevSev] !== undefined ? severityOrder[prevSev] : -1;
+            const curLevel = severityOrder[curSev] !== undefined ? severityOrder[curSev] : -1;
+
+            let trend = '';
+            if (prevLevel >= 0 && curLevel >= 0) {
+                if (curLevel < prevLevel) {
+                    trend = 'Mejorando';
+                } else if (curLevel > prevLevel) {
+                    trend = 'Empeorando';
+                } else {
+                    trend = 'Estable';
+                }
+            }
+
+            const entries = allEntries || [];
+            const sameDiseaseCount = entries.filter(e =>
+                e.disease && current.disease &&
+                e.disease.toLowerCase() === current.disease.toLowerCase()
+            ).length;
+            const isRecurring = sameDiseaseCount >= 2;
+            const prevDiseaseChanged = prev.disease && current.disease &&
+                prev.disease.toLowerCase() !== current.disease.toLowerCase();
+
+            let advice = '';
+            if (trend === 'Mejorando') {
+                advice = 'Las acciones de manejo est\u00e1n dando resultado. Contin\u00faa con el seguimiento.';
+                if (prevDiseaseChanged) {
+                    advice += ' La enfermedad detectada es diferente a la anterior, lo que sugiere que el tratamiento anterior fue efectivo contra el pat\u00f3geno previo.';
+                }
+            } else if (trend === 'Empeorando') {
+                advice = 'Se necesita reforzar las medidas de control. Revisa el plan fitosanitario.';
+                if (isRecurring) {
+                    advice += ' Esta enfermedad se ha presentado en m\u00faltiples ocasiones. Considera rotar el principio activo del fungicida y evaluar condiciones ambientales que favorecen su aparici\u00f3n.';
+                }
+                if (curLevel >= 2) {
+                    advice += ' La severidad es alta. Se recomienda una intervenci\u00f3n inmediata y consultar con un ingeniero agr\u00f3nomo.';
+                }
+            } else {
+                advice = 'No se detectan cambios significativos. Mant\u00e9n el monitoreo constante.';
+                if (isRecurring) {
+                    advice += ' Aunque la severidad no ha cambiado, la enfermedad persiste. Eval\u00faa si el manejo actual est\u00e1 siendo efectivo a largo plazo.';
+                }
+            }
+
+            if (entries.length >= 3) {
+                const levels = entries.map(e => severityOrder[(e.severity || '').toLowerCase()] ?? -1).filter(l => l >= 0);
+                if (levels.length >= 3) {
+                    const first = levels[levels.length - 1];
+                    const last = levels[0];
+                    if (last > first) {
+                        advice += ' En perspectiva general, la condici\u00f3n ha empeorado desde el primer registro. Revisa la estrategia de manejo integral.';
+                    } else if (last < first) {
+                        advice += ' En perspectiva general, la condici\u00f3n ha mejorado desde el primer registro. Sigue con el plan actual.';
+                    }
+                }
+            }
+
+            return (
+                '**Comparaci\u00f3n con an\u00e1lisis anterior**\n' +
+                `**Planta:** ${plantLabel}\n` +
+                `**An\u00e1lisis anterior:** ${dateStr}\n\n` +
+                `**Antes:** ${prev.disease || '\u2014'} \u00b7 Severidad: ${prev.severity || '\u2014'}\n` +
+                `**Ahora:** ${current.disease || '\u2014'} \u00b7 Severidad: ${current.severity || '\u2014'}\n\n` +
+                `**Tendencia:** ${trend}\n` +
+                `**Recomendaci\u00f3n:** ${advice}`
+            );
+        }
+
+        function createDefaultContextOptions() {
+            return {
+                lotId: ['Lote 1', 'Lote 2', 'Sector A', 'Sector B'],
+                zone: ['Zona norte', 'Zona sur', 'Zona este', 'Zona oeste'],
+                rows: ['Parcela 1, hilera 1-5', 'Parcela 2, hilera 6-10', 'Parcela 3, hilera 11-15'],
+            };
+        }
+
+        function normalizeOptionList(list) {
+            return Array.from(new Set((Array.isArray(list) ? list : []).map(item => String(item || '').trim()).filter(Boolean)));
+        }
+
+        function normalizeContextOptions(raw) {
+            const defaults = createDefaultContextOptions();
+            const source = raw && typeof raw === 'object' ? raw : {};
+            return {
+                lotId: normalizeOptionList(source.lotId || defaults.lotId),
+                zone: normalizeOptionList(source.zone || defaults.zone),
+                rows: normalizeOptionList(source.rows || defaults.rows),
+            };
+        }
+
+        function persistContextOptions() {
+            localStorage.setItem(CONTEXT_OPTIONS_KEY, JSON.stringify(contextOptions));
+        }
+
+        function loadContextOptions() {
+            try {
+                const raw = localStorage.getItem(CONTEXT_OPTIONS_KEY);
+                contextOptions = raw ? normalizeContextOptions(JSON.parse(raw)) : createDefaultContextOptions();
+            } catch {
+                contextOptions = createDefaultContextOptions();
+            }
+
+            persistContextOptions();
+        }
+
+        function optionLabelForField(field) {
+            return {
+                lotId: 'lote o sector',
+                zone: 'zona',
+                rows: 'parcela o hilera',
+            }[field] || field;
+        }
+
+        function settingsInputIdForField(field) {
+            return {
+                lotId: 'settingsLotInput',
+                zone: 'settingsZoneInput',
+                rows: 'settingsRowsInput',
+            }[field];
+        }
+
+        function settingsListIdForField(field) {
+            return {
+                lotId: 'settingsLotList',
+                zone: 'settingsZoneList',
+                rows: 'settingsRowsList',
+            }[field];
+        }
+
+        function contextSelectIdForField(field) {
+            return {
+                lotId: 'contextLotId',
+                zone: 'contextZone',
+                rows: 'contextRows',
+            }[field];
+        }
+
+        function renderContextSelect(field, selectedValue = '') {
+            const select = document.getElementById(contextSelectIdForField(field));
+            if (!select) return;
+
+            const values = contextOptions[field] || [];
+            select.innerHTML = '';
+
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = `Seleccionar ${optionLabelForField(field)}`;
+            select.appendChild(placeholder);
+
+            values.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                select.appendChild(option);
+            });
+
+            if (selectedValue && !values.includes(selectedValue)) {
+                const customOption = document.createElement('option');
+                customOption.value = selectedValue;
+                customOption.textContent = selectedValue;
+                select.appendChild(customOption);
+            }
+
+            select.value = selectedValue || '';
+        }
+
+        function renderContextSelects(context = createEmptyContext()) {
+            renderContextSelect('lotId', context.lotId || '');
+            renderContextSelect('zone', context.zone || '');
+            renderContextSelect('rows', context.rows || '');
+        }
+
+        function renderSettingsField(field) {
+            const list = document.getElementById(settingsListIdForField(field));
+            if (!list) return;
+
+            const values = contextOptions[field] || [];
+            list.innerHTML = '';
+
+            if (!values.length) {
+                list.innerHTML = '<p class="settings-empty">Todavía no hay opciones creadas.</p>';
+                return;
+            }
+
+            values.forEach(value => {
+                const chip = document.createElement('span');
+                chip.className = 'settings-chip';
+                chip.innerHTML = `<span>${esc(value)}</span>`;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.title = 'Eliminar opción';
+                removeBtn.onclick = () => removeContextOption(field, value);
+
+                chip.appendChild(removeBtn);
+                list.appendChild(chip);
+            });
+        }
+
+        function renderSettingsModal() {
+            renderSettingsField('lotId');
+            renderSettingsField('zone');
+            renderSettingsField('rows');
+            loadSettingsIntoControls();
+        }
+
+        function createDefaultAppSettings() {
+            return {
+                theme: 'light',
+                fontSize: 'medium',
+                fontFamily: 'inter',
+                highContrast: false,
+                reducedMotion: false,
+                dyslexicFont: false,
+            };
+        }
+
+        function loadAppSettings() {
+            try {
+                const raw = localStorage.getItem(APP_SETTINGS_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    return { ...createDefaultAppSettings(), ...parsed };
+                }
+            } catch { }
+            return createDefaultAppSettings();
+        }
+
+        function loadSettingsIntoControls() {
+            const s = loadAppSettings();
+            const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+            const setChecked = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+            set('settingsTheme', s.theme);
+            set('settingsFontSize', s.fontSize);
+            set('settingsFontFamily', s.fontFamily);
+            setChecked('settingsHighContrast', s.highContrast);
+            setChecked('settingsReducedMotion', s.reducedMotion);
+            setChecked('settingsDyslexicFont', s.dyslexicFont);
+        }
+
+        function saveSettings() {
+            const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+            const getChecked = id => { const el = document.getElementById(id); return el ? el.checked : false; };
+            const settings = {
+                theme: get('settingsTheme'),
+                fontSize: get('settingsFontSize'),
+                fontFamily: get('settingsFontFamily'),
+                highContrast: getChecked('settingsHighContrast'),
+                reducedMotion: getChecked('settingsReducedMotion'),
+                dyslexicFont: getChecked('settingsDyslexicFont'),
+            };
+            localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
+            closeSettingsModal();
+        }
+
+        function addContextOption(field) {
+            const input = document.getElementById(settingsInputIdForField(field));
+            if (!input) return;
+
+            const value = input.value.trim();
+            if (!value) return;
+
+            const list = contextOptions[field] || [];
+            if (!list.includes(value)) {
+                contextOptions[field] = [...list, value];
+                persistContextOptions();
+                renderSettingsModal();
+                renderContextSelects(getActiveSession()?.context || createEmptyContext());
+            }
+
+            input.value = '';
+            input.focus();
+        }
+
+        function removeContextOption(field, value) {
+            contextOptions[field] = (contextOptions[field] || []).filter(item => item !== value);
+            persistContextOptions();
+            renderSettingsModal();
+            renderContextSelects(getActiveSession()?.context || createEmptyContext());
+        }
+
+        function restoreDefaultContextOptions() {
+            contextOptions = createDefaultContextOptions();
+            persistContextOptions();
+            renderSettingsModal();
+            renderContextSelects(getActiveSession()?.context || createEmptyContext());
+        }
+
+        function saveContextOptions() {
+            persistContextOptions();
+            closeSettingsModal();
+        }
+
+        // ── RESPALDO DE DATOS ──
+        const BACKUP_KEYS = [
+            'pitahayaVision.sessions.v2',
+            'pitahayaVision.plantHistory.v1',
+            'pitahayaVision.contextOptions.v1',
+            'pitahayaVision.settings.v1',
+            'pitahayaVisionSettings',
+        ];
+
+        function exportBackup() {
+            const data = {};
+            BACKUP_KEYS.forEach(key => {
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (raw) data[key] = JSON.parse(raw);
+                } catch (_) { }
+            });
+            const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), data }, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pitahaya_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (!parsed.data || typeof parsed.data !== 'object') throw new Error('Formato inválido');
+                    Object.entries(parsed.data).forEach(([key, value]) => {
+                        if (BACKUP_KEYS.includes(key)) {
+                            localStorage.setItem(key, JSON.stringify(value));
+                        }
+                    });
+                    alert('Respaldo importado correctamente. Recarga la página para aplicar los cambios.');
+                    location.reload();
+                } catch (_) {
+                    alert('El archivo seleccionado no es un respaldo válido.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function normalizeSession(session) {
+            if (!session) return null;
+            return {
+                ...session,
+                messages: Array.isArray(session.messages) ? session.messages : [],
+                pinnedAt: session.pinnedAt || null,
+                updatedAt: session.updatedAt || Date.now(),
+                context: { ...createEmptyContext(), ...(session.context || {}) },
+            };
+        }
+
+        function createSession(title = 'Nueva conversación') {
+            return {
+                id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                title,
+                preview: 'Sesión en blanco',
+                updatedAt: Date.now(),
+                pinnedAt: null,
+                messages: [],
+                context: createEmptyContext(),
+            };
+        }
+
+        function persistSessions() {
+            try {
+                const data = JSON.stringify({ activeSessionId, sessions });
+                localStorage.setItem(STORAGE_KEY, data);
+            } catch (e) {
+                console.warn('No se pudo guardar la sesión:', e.message);
+            }
+        }
+
+        function persistPlantHistory() {
+            try {
+                const data = JSON.stringify(plantHistory);
+                localStorage.setItem(PLANT_HISTORY_KEY, data);
+            } catch (e) {
+                console.warn('No se pudo guardar el historial de plantas:', e.message);
+            }
+        }
+
+        function loadPlantHistory() {
+            try {
+                const raw = localStorage.getItem(PLANT_HISTORY_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    const arr = Array.isArray(parsed) ? parsed : [];
+                    arr.forEach(h => delete h.image);
+                    return arr;
+                }
+            } catch { }
+            return [];
+        }
+
+        function loadSessions() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        sessions = parsed.map(normalizeSession).filter(Boolean);
+                    } else {
+                        sessions = Array.isArray(parsed.sessions) ? parsed.sessions.map(normalizeSession).filter(Boolean) : [];
+                        activeSessionId = parsed.activeSessionId || null;
+                    }
+                }
+                plantHistory = loadPlantHistory();
+            } catch {
+                sessions = [];
+                plantHistory = [];
+            }
+
+            if (!sessions.length) {
+                sessions = [createSession()];
+            }
+
+            if (!activeSessionId || !sessions.some(session => session.id === activeSessionId)) {
+                activeSessionId = sessions[0].id;
+            }
+
+            const sessionFromUrl = new URLSearchParams(window.location.search).get('session');
+            if (sessionFromUrl && sessions.some(session => session.id === sessionFromUrl)) {
+                activeSessionId = sessionFromUrl;
+            }
+
+            sortSessionsByRecent();
+            syncActiveSession();
+            renderSessionList();
+            renderActiveSession();
+            persistSessions();
+        }
+
+        function getActiveSession() {
+            return sessions.find(session => session.id === activeSessionId) || sessions[0] || null;
+        }
+
+        function syncActiveSession() {
+            const activeSession = getActiveSession();
+            history = activeSession ? activeSession.messages : [];
+        }
+
+        function sortSessionsByRecent() {
+            sessions.sort((a, b) => {
+                const aPinned = a.pinnedAt || 0;
+                const bPinned = b.pinnedAt || 0;
+                if (aPinned !== bPinned) return bPinned - aPinned;
+                return (b.updatedAt || 0) - (a.updatedAt || 0);
+            });
+        }
+
+        function updateSessionMeta(session, { title, preview }) {
+            if (!session) return;
+            if (title) session.title = title;
+            if (preview) session.preview = preview;
+            session.updatedAt = Date.now();
+            sortSessionsByRecent();
+            persistSessions();
+            renderSessionList();
+        }
+
+        function shortText(text, limit = 34) {
+            const clean = text.replace(/\s+/g, ' ').trim();
+            return clean.length > limit ? `${clean.slice(0, limit)}…` : clean;
+        }
+
+        function getSessionTitleFromUserContent(content, hasImage) {
+            if (hasImage) return 'Análisis de imagen';
+            if (typeof content === 'string' && content.trim()) return shortText(content);
+            return 'Nueva conversación';
+        }
+
+        function getSessionById(sessionId) {
+            return sessions.find(session => session.id === sessionId) || null;
+        }
+
+        function getContextFieldValue(id) {
+            return document.getElementById(id)?.value?.trim() || '';
+        }
+
+        function toDatetimeLocalValue(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            const offset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+        }
+
+        function fromDatetimeLocalValue(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+        }
+
+        function fillContextForm(session) {
+            const context = session?.context || createEmptyContext();
+            renderContextSelects(context);
+            document.getElementById('contextDatetime').value = toDatetimeLocalValue(context.datetime);
+            document.getElementById('contextPlantId').value = context.plantId || '';
+            document.getElementById('contextLocation').value = context.location || '';
+            document.getElementById('contextMainSymptom').value = context.mainSymptom || '';
+            document.getElementById('contextAffectedPart').value = context.affectedPart || '';
+            document.getElementById('contextSeverity').value = context.severity || '';
+            document.getElementById('contextStage').value = context.stage || '';
+            document.getElementById('contextIrrigation').value = context.irrigation || '';
+            document.getElementById('contextPhytosanitary').value = context.phytosanitary || '';
+            document.getElementById('contextNotes').value = context.notes || '';
+        }
+
+        function readContextForm() {
+            return {
+                datetime: fromDatetimeLocalValue(document.getElementById('contextDatetime').value),
+                lotId: getContextFieldValue('contextLotId'),
+                zone: getContextFieldValue('contextZone'),
+                rows: getContextFieldValue('contextRows'),
+                plantId: document.getElementById('contextPlantId').value.trim(),
+                location: getContextFieldValue('contextLocation'),
+                mainSymptom: getContextFieldValue('contextMainSymptom'),
+                affectedPart: document.getElementById('contextAffectedPart').value,
+                severity: document.getElementById('contextSeverity').value,
+                stage: document.getElementById('contextStage').value,
+                irrigation: getContextFieldValue('contextIrrigation'),
+                phytosanitary: getContextFieldValue('contextPhytosanitary'),
+                notes: document.getElementById('contextNotes').value.trim(),
+            };
+        }
+
+        function openContextModal(sessionId = activeSessionId) {
+            const session = getSessionById(sessionId) || getActiveSession();
+            if (!session) return;
+
+            fillContextForm(session);
+            document.getElementById('contextOverlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            if (window.innerWidth < 768) closeUserMenu();
+        }
+
+        function openSettingsModal() {
+            renderSettingsModal();
+            document.getElementById('settingsOverlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            if (window.innerWidth < 768) closeUserMenu();
+        }
+
+        function closeContextModal() {
+            document.getElementById('contextOverlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsOverlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        function openProfileModal() {
+            document.getElementById('profileOverlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            if (window.innerWidth < 768) closeUserMenu();
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profileOverlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        function clearContextForm() {
+            fillContextForm({ context: createEmptyContext() });
+        }
+
+        function saveContextForm(openImageAfterSave = false) {
+            const session = getActiveSession();
+            if (!session) return;
+
+            session.context = {
+                ...createEmptyContext(),
+                ...readContextForm(),
+            };
+            session.updatedAt = Date.now();
+            persistSessions();
+            renderSessionList();
+            closeContextModal();
+            if (openImageAfterSave) {
+                document.getElementById('imgInput').click();
+            }
+        }
+
+        function extractTextFromContent(content) {
+            if (Array.isArray(content)) {
+                const textPart = content.find(part => part.type === 'text');
+                return textPart ? textPart.text : '';
+            }
+
+            return typeof content === 'string' ? content : '';
+        }
+
+        function extractImageFromContent(content) {
+            if (!Array.isArray(content)) return null;
+
+            const imagePart = content.find(part => part.type === 'image');
+            if (!imagePart || !imagePart.source) return null;
+
+            const mime = imagePart.source.media_type || 'image/jpeg';
+            const data = imagePart.source.data || '';
+
+            return {
+                b64: data,
+                mime,
+                name: 'imagen guardada',
+                url: data ? `data:${mime};base64,${data}` : '',
+            };
+        }
+
+        function renderSessionList() {
+            const hl = document.getElementById('historyList');
+            hl.innerHTML = '';
+
+            if (!sessions.length) {
+                hl.innerHTML = '<p class="text-xs text-gray-300 px-2">Sin conversaciones aún</p>';
+                return;
+            }
+
+            sessions.forEach(session => {
+                const item = document.createElement('div');
+                const active = session.id === activeSessionId;
+                item.className = `session-card group rounded-xl border transition w-full cursor-pointer ${active ? 'bg-brand-50 border-brand-200 text-brand-800 shadow-sm' : 'bg-white border-transparent text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`;
+                item.onclick = () => selectSession(session.id);
+
+                const titleClass = active ? 'text-brand-800' : 'text-gray-700';
+                const previewClass = active ? 'text-brand-700/80' : 'text-gray-400';
+                const badgeClass = active ? 'text-brand-700 bg-brand-100' : 'text-gray-400 bg-gray-100';
+                const pinBadge = session.pinnedAt ? '<span class="session-pin"><i class="fas fa-thumbtack text-[0.55rem]"></i> Fijada</span>' : '';
+
+                item.innerHTML = `
+                    <div class="flex items-start justify-between gap-2 px-3 py-2.5 pr-12">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <p class="text-xs font-semibold truncate ${titleClass}">${esc(session.title || 'Nueva conversación')}</p>
+                                ${pinBadge}
+                            </div>
+                            <p class="text-[0.68rem] mt-0.5 truncate ${previewClass}">${esc(session.preview || 'Sesión en blanco')}</p>
+                        </div>
+                        <span class="text-[0.62rem] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${badgeClass}">${session.messages.length} msg</span>
+                    </div>`;
+
+                const actionWrap = document.createElement('div');
+                actionWrap.className = 'session-actions';
+                actionWrap.innerHTML = `
+                    <button type="button" class="session-dot-btn" aria-label="Más opciones" title="Más opciones">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-gray-500 lucide lucide-ellipsis-vertical-icon lucide-ellipsis-vertical">
+                            <circle cx="12" cy="12" r="1"/>
+                            <circle cx="12" cy="5" r="1"/>
+                            <circle cx="12" cy="19" r="1"/>
+                        </svg>
+                    </button>`;
+                actionWrap.querySelector('button').onclick = (e) => {
+                    e.stopPropagation();
+                    openSessionMenu(session.id, e.currentTarget);
+                };
+
+                item.appendChild(actionWrap);
+
+                hl.appendChild(item);
+            });
+        }
+
+        function renderStoredMessage(message) {
+            if (message.role === 'user') {
+                const img = extractImageFromContent(message.content);
+                const text = extractTextFromContent(message.content);
+                addUserBubble(text, img);
+                return;
+            }
+
+            if (message.role === 'assistant') {
+                addBot(message.content);
+            }
+        }
+
+        function renderActiveSession() {
+            const activeSession = getActiveSession();
+            msgs.innerHTML = '';
+
+            if (!activeSession || !activeSession.messages.length) {
+                welcome.classList.remove('hidden');
+                msgs.classList.add('hidden');
+                msgs.classList.remove('flex');
+                return;
+            }
+
+            welcome.classList.add('hidden');
+            msgs.classList.remove('hidden');
+            msgs.classList.add('flex');
+            activeSession.messages.forEach(renderStoredMessage);
+            scroll();
+        }
+
+        function resetComposer() {
+            inp.value = '';
+            inp.style.height = 'auto';
+            removeImage();
+            if (isRec) stopRec();
+            onInput();
+        }
+
+        function selectSession(sessionId) {
+            if (busy) return;
+            closeSessionMenu();
+            activeSessionId = sessionId;
+            syncActiveSession();
+            renderSessionList();
+            renderActiveSession();
+            resetComposer();
+            persistSessions();
+            if (window.innerWidth < 768) closeSidebar();
+        }
+
+        function createAndSelectSession() {
+            const session = createSession();
+            sessions.push(session);
+            activeSessionId = session.id;
+            sortSessionsByRecent();
+            syncActiveSession();
+            renderSessionList();
+            renderActiveSession();
+            resetComposer();
+            persistSessions();
+            return session;
+        }
+
+        function openSessionMenu(sessionId, buttonEl) {
+            const session = getSessionById(sessionId);
+            if (!session || busy) return;
+
+            sessionMenuState = {
+                sessionId,
+                buttonRect: buttonEl.getBoundingClientRect(),
+            };
+
+            const menu = document.getElementById('sessionMenu');
+            const overlay = document.getElementById('sessionMenuOverlay');
+            const label = session.pinnedAt ? 'Desfijar conversación' : 'Fijar conversación';
+            const pinLabel = document.getElementById('sessionMenuPinLabel');
+            if (pinLabel) pinLabel.textContent = label;
+
+            const rect = sessionMenuState.buttonRect;
+            const width = 210;
+            const gap = 8;
+            const isMobile = window.innerWidth < 768;
+            let left;
+            let top;
+
+            if (isMobile) {
+                const sidebarWidth = 272;
+                left = Math.max(12, Math.round((sidebarWidth - width) / 2));
+                top = rect.top + rect.height + gap;
+                if (top + 120 > window.innerHeight - 12) top = rect.top - 120 - gap;
+            } else {
+                const sidebarWidth = 272;
+                left = sidebarWidth + 12;
+                top = rect.top - 13;
+                if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+                if (top + 120 > window.innerHeight - 12) top = rect.top - 120 - gap;
+            }
+
+            if (top < 12) top = 12;
+
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+            menu.classList.remove('hidden');
+            overlay.classList.add('open');
+
+            renderSessionList();
+        }
+
+        function closeSessionMenu() {
+            const menu = document.getElementById('sessionMenu');
+            const overlay = document.getElementById('sessionMenuOverlay');
+            menu.classList.add('hidden');
+            overlay.classList.remove('open');
+            sessionMenuState = { sessionId: null, buttonRect: null };
+            renderSessionList();
+        }
+
+        function pinActiveMenuSession() {
+            const session = getSessionById(sessionMenuState.sessionId);
+            if (!session) return;
+
+            session.pinnedAt = session.pinnedAt ? null : Date.now();
+            session.updatedAt = Date.now();
+            sortSessionsByRecent();
+            persistSessions();
+            closeSessionMenu();
+            renderSessionList();
+        }
+
+        function deleteActiveMenuSession() {
+            const session = getSessionById(sessionMenuState.sessionId);
+            if (!session) return;
+
+            closeSessionMenu();
+            openDeleteModal(session.id);
+        }
+
+        function openDeleteModal(sessionId) {
+            sessionMenuState.sessionId = sessionId;
+            const overlay = document.getElementById('deleteOverlay');
+            overlay.classList.add('open');
+        }
+
+        function closeDeleteModal() {
+            const overlay = document.getElementById('deleteOverlay');
+            overlay.classList.remove('open');
+        }
+
+        function confirmDeleteActiveMenuSession() {
+            const session = getSessionById(sessionMenuState.sessionId);
+            if (!session) {
+                closeDeleteModal();
+                return;
+            }
+
+            const wasActive = session.id === activeSessionId;
+            sessions = sessions.filter(item => item.id !== session.id);
+
+            if (!sessions.length) {
+                sessions = [createSession()];
+            }
+
+            sortSessionsByRecent();
+
+            if (wasActive) {
+                activeSessionId = sessions[0].id;
+                syncActiveSession();
+                renderActiveSession();
+                resetComposer();
+            }
+
+            persistSessions();
+            closeDeleteModal();
+            closeSessionMenu();
+            renderSessionList();
+        }
+
+        /* ── Sidebar ── */
+        function openSidebar() {
+            document.getElementById('sidebar').classList.add('open');
+            document.getElementById('drawerOverlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('drawerOverlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        /* ── Input ── */
+        function onInput() {
+            inp.style.height = 'auto';
+            inp.style.height = Math.min(inp.scrollHeight, 128) + 'px';
+            const ok = (inp.value.trim() || pendingImg) && !busy;
+            sendBtn.disabled = !ok;
+            sendBtn.className = `w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200 ${ok ? 'send-active' : 'send-inactive'}`;
+        }
+        function onKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) {
+                e.preventDefault();
+                if (!sendBtn.disabled) sendMessage();
+            }
+        }
+        function suggest(t) { inp.value = t; onInput(); sendMessage(); }
+
+        /* ── Image ── */
+        let pendingImg = null;
+        function handleImage(e) {
+            const file = e.target.files[0]; if (!file) return;
+            const r = new FileReader();
+            r.onload = ev => {
+                const dataUrl = ev.target.result;
+                pendingImg = { b64: dataUrl.split(',')[1], mime: file.type, name: file.name, url: dataUrl };
+                document.getElementById('previewImg').src = dataUrl;
+                document.getElementById('imgName').textContent = file.name;
+                const prev = document.getElementById('imgPreview');
+                prev.classList.remove('hidden'); prev.classList.add('flex'); onInput();
+            };
+            r.readAsDataURL(file); e.target.value = '';
+        }
+        function removeImage() {
+            pendingImg = null;
+            const prev = document.getElementById('imgPreview');
+            prev.classList.add('hidden'); prev.classList.remove('flex'); onInput();
+        }
+
+        function pause(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getLocalImageResponse() {
+            const disease = 'Pudrición de raíz incipiente';
+            const probability = '44%';
+            const severity = 'Moderada';
+            return {
+                disease,
+                probability,
+                severity,
+                analysis: '**Diagnóstico visual estimado:** Pudrición de raíz incipiente\nProbabilidad: 44%\nSeveridad: Moderada\nEstado general: el patrón observado es compatible con exceso de humedad en la zona radicular, baja oxigenación del sustrato y posible inicio de necrosis en raíces finas.\nHallazgos técnicos: disminución de vigor, riesgo de estrés hídrico secundario y mayor susceptibilidad a patógenos de suelo.\nPrioridad de intervención: alta, idealmente dentro de las próximas 24 a 48 horas.',
+                recommendations: '**Recomendaciones inmediatas:**\n1. Suspende el riego durante 48 a 72 horas y verifica que no exista encharcamiento.\n2. Revisa el drenaje, la estructura del sustrato y los puntos de acumulación de agua.\n3. Retira tejido comprometido y desinfecta las herramientas después de cada corte.\n4. Aplica un manejo sanitario autorizado para hongos de suelo, siguiendo estrictamente la etiqueta del producto y la recomendación técnica local.\n5. Monitorea turgencia, color del tallo y olor del sustrato durante los próximos 7 días.\nSeguimiento: si el deterioro avanza, realiza una revisión de raíces y una evaluación agronómica presencial.'
+            };
+        }
+
+        function compressImage(b64, mime, maxWidth = 800) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width, h = img.height;
+                    if (w > maxWidth) {
+                        h = Math.round((maxWidth / w) * h);
+                        w = maxWidth;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL(mime, 0.7);
+                    const parts = dataUrl.split(',');
+                    const compressedMime = parts[0].split(':')[1].split(';')[0];
+                    resolve({ b64: parts[1], mime: compressedMime, url: dataUrl });
+                };
+                img.onerror = () => resolve({ b64, mime, url: `data:${mime};base64,${b64}` });
+                img.src = `data:${mime};base64,${b64}`;
+            });
+        }
+
+        function getLocalTextResponse(text) {
+            const query = text.toLowerCase();
+
+            if (query.includes('riego') || query.includes('agua') || query.includes('humedad')) {
+                return '**Riego:** mantén un suministro moderado y evita saturar el sustrato. En pitahaya, el exceso de agua suele causar más daño que un riego corto y bien espaciado.';
+            }
+
+            if (query.includes('plaga') || query.includes('insect') || query.includes('bicho')) {
+                return '**Plagas:** revisa el envés de las pencas, brotes tiernos y la base de la planta. Si detectas daño activo, separa la planta afectada y define el control según el tipo de insecto.';
+            }
+
+            if (query.includes('nutric') || query.includes('fert') || query.includes('abon')) {
+                return '**Nutrición:** prioriza una fertilización balanceada con buena disponibilidad de calcio, magnesio y micronutrientes. Evita exceder el nitrógeno para no disparar crecimiento blando.';
+            }
+
+            if (query.includes('cosecha')) {
+                return '**Cosecha:** corta solo frutos con coloración uniforme, buena firmeza y sin daños mecánicos. Un manejo poscosecha suave reduce pérdidas por pudrición.';
+            }
+
+            return 'Puedo ayudarte con diagnóstico de enfermedades, plagas, riego, nutrición y cosecha de pitahaya. Si quieres un análisis visual, adjunta una imagen para obtener un informe técnico y recomendaciones.';
+        }
+
+        /* ── Mic ── */
+        let recog = null, isRec = false;
+        function initRecog() {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) return null;
+            const r = new SR(); r.lang = 'es-ES'; r.continuous = true; r.interimResults = true;
+            r.onresult = ev => {
+                let final = '', interim = '';
+                for (let i = ev.resultIndex; i < ev.results.length; i++) {
+                    const t = ev.results[i][0].transcript;
+                    ev.results[i].isFinal ? final += t : interim += t;
+                }
+                inp.value = (inp.value + final) || interim; onInput();
+            };
+            r.onerror = () => stopRec();
+            r.onend = () => { if (isRec) r.start(); };
+            return r;
+        }
+        function toggleMic() { isRec ? stopRec() : startRec(); }
+        function startRec() {
+            if (!recog) recog = initRecog();
+            if (!recog) { alert('Tu navegador no soporta reconocimiento de voz.\nUsa Chrome para esta función.'); return; }
+            isRec = true; recog.start();
+            document.getElementById('micBtn').classList.add('mic-on');
+            document.getElementById('micIcon').classList.add('hidden');
+            const wa = document.getElementById('waveAnim');
+            wa.classList.remove('hidden'); wa.classList.add('flex');
+            inp.placeholder = '🎤 Escuchando...';
+        }
+        function stopRec() {
+            isRec = false; recog?.stop();
+            document.getElementById('micBtn').classList.remove('mic-on');
+            document.getElementById('micIcon').classList.remove('hidden');
+            const wa = document.getElementById('waveAnim');
+            wa.classList.add('hidden'); wa.classList.remove('flex');
+            inp.placeholder = 'Escribe sobre tu cultivo...';
+        }
+
+        /* ── Send ── */
+        async function sendMessage() {
+            const text = inp.value.trim();
+            if ((!text && !pendingImg) || busy) return;
+            const img = pendingImg;
+            const activeSession = getActiveSession();
+            if (!activeSession) return;
+
+            busy = true;
+            inp.value = '';
+            inp.style.height = 'auto';
+            if (isRec) stopRec();
+            removeImage();
+            onInput();
+            if (img) {
+                const compressed = await compressImage(img.b64, img.mime, 800);
+                img.b64 = compressed.b64;
+                img.mime = compressed.mime;
+                img.url = compressed.url;
+            }
+            addUserBubble(text, img);
+            addTyping();
+
+            try {
+                await pause(450);
+                removeTyping();
+
+                if (img) {
+                    const response = getLocalImageResponse();
+                    const userContent = [
+                        { type: 'image', source: { type: 'base64', media_type: img.mime, data: img.b64 } },
+                        { type: 'text', text: text || 'Analiza esta imagen de mi cultivo de pitahaya y describe lo que observas.' }
+                    ];
+                    activeSession.messages.push({ role: 'user', content: userContent });
+                    activeSession.messages.push({ role: 'assistant', content: response.analysis });
+                    addBot(response.analysis);
+                    await pause(350);
+
+                    const context = activeSession.context || createEmptyContext();
+                    const plantKey = getPlantKey(context);
+
+                    if (plantKey) {
+                        const plantAnalyses = plantHistory.filter(h => h.plantKey === plantKey).sort((a, b) => b.date - a.date);
+
+                        if (plantAnalyses.length > 0) {
+                            const prev = plantAnalyses[0];
+                            const comparison = generateComparison(prev, response, context, plantAnalyses);
+                            activeSession.messages.push({ role: 'assistant', content: comparison });
+                            addBot(comparison);
+                            await pause(350);
+                        }
+
+                        plantHistory.push({
+                            id: Date.now(),
+                            sessionId: activeSession.id,
+                            plantKey,
+                            lotId: context.lotId || '',
+                            zone: context.zone || '',
+                            rows: context.rows || '',
+                            plantId: context.plantId || '',
+                            disease: response.disease,
+                            severity: response.severity,
+                            probability: response.probability,
+                            analysis: response.analysis,
+                            recommendations: response.recommendations,
+                            date: Date.now(),
+                        });
+                        persistPlantHistory();
+                    }
+
+                    activeSession.messages.push({ role: 'assistant', content: response.recommendations });
+                    addBot(response.recommendations);
+                    updateSessionMeta(activeSession, {
+                        title: getSessionTitleFromUserContent(text || '', true),
+                        preview: shortText(response.recommendations, 42),
+                    });
+                } else {
+                    const reply = getLocalTextResponse(text);
+                    activeSession.messages.push({ role: 'user', content: text });
+                    activeSession.messages.push({ role: 'assistant', content: reply });
+                    addBot(reply);
+                    updateSessionMeta(activeSession, {
+                        title: getSessionTitleFromUserContent(text, false),
+                        preview: shortText(reply, 42),
+                    });
+                }
+
+                syncActiveSession();
+            } finally {
+                removeTyping();
+                busy = false;
+                onInput();
+                persistSessions();
+                persistPlantHistory();
+            }
+        }
+
+        /* ── UI ── */
+        function showMsgs() {
+            welcome.classList.add('hidden');
+            msgs.classList.remove('hidden'); msgs.classList.add('flex');
+        }
+        function addUserBubble(text, img) {
+            showMsgs();
+            const d = document.createElement('div'); d.className = 'flex justify-end animate-fade-up';
+            let inner = '';
+            if (img) inner += `<img src="${img.url}" class="max-w-[75vw] sm:max-w-xs w-full rounded-2xl mb-2 block ml-auto shadow-sm" style="max-height:200px;object-fit:cover;"/>`;
+            if (text) inner += `<div class="user-bubble text-white text-sm px-4 py-3 rounded-3xl rounded-tr-md leading-relaxed shadow-sm max-w-[80vw] sm:max-w-sm">${esc(text)}</div>`;
+            d.innerHTML = `<div class="text-right">${inner}</div>`; msgs.appendChild(d); scroll();
+        }
+        function addTyping() {
+            const d = document.createElement('div'); d.id = 'typing'; d.className = 'flex gap-2 sm:gap-3 items-start animate-fade-up';
+            d.innerHTML = `<div class="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm"><svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z"/></svg></div><div class="flex items-center gap-1.5 bg-brand-50 border border-brand-100 px-4 py-3 rounded-3xl rounded-tl-md h-10"><div class="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot"></div><div class="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot-2"></div><div class="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot-3"></div></div>`;
+            msgs.appendChild(d); scroll();
+        }
+        function removeTyping() { document.getElementById('typing')?.remove(); }
+        function addBot(text) {
+            const d = document.createElement('div'); d.className = 'flex gap-2 sm:gap-3 items-start animate-fade-up';
+            const safe = text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/`(.*?)`/g, '<code>$1</code>').replace(/\n/g, '<br>');
+            d.innerHTML = `<div class="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm"><svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z"/></svg></div><div class="flex-1 min-w-0"><div class="bot-text text-gray-800 text-sm leading-relaxed">${safe}</div><div class="flex gap-1 mt-2"><button data-copy="${encodeURIComponent(text)}" onclick="copyMsg(this)" class="action-btn p-1.5 rounded-lg transition text-gray-400" title="Copiar"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="action-btn p-1.5 rounded-lg transition text-gray-400" title="Útil"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button class="action-btn p-1.5 rounded-lg transition text-gray-400" title="No útil"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button></div></div>`;
+            msgs.appendChild(d); scroll();
+        }
+        function copyMsg(btn) {
+            navigator.clipboard.writeText(decodeURIComponent(btn.dataset.copy)).then(() => {
+                btn.innerHTML = `<svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="#16a34a" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
+                setTimeout(() => { btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`; }, 2000);
+            });
+        }
+        function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function scroll() { setTimeout(() => chatArea.scrollTop = chatArea.scrollHeight, 60); }
+        function newChat() {
+            if (busy) return;
+            createAndSelectSession();
+            openContextModal();
+        }
+
+        /* ══ USER MENU ══ */
+        let menuOpen = false;
+
+        function toggleUserMenu() {
+            menuOpen ? closeUserMenu() : openUserMenu();
+        }
+
+        function openUserMenu() {
+            const menu = document.getElementById('userMenu');
+            const trigger = document.getElementById('userTrigger');
+            const rect = trigger.getBoundingClientRect();
+
+            const W = 310;
+            const MARGIN = 10;
+
+            // Anchor left to the trigger
+            let left = rect.left;
+            // Appear above the trigger
+            let bottom = window.innerHeight - rect.top + 10;
+
+            // Don't overflow right edge
+            if (left + W > window.innerWidth - MARGIN) left = window.innerWidth - W - MARGIN;
+            // Don't go below left edge
+            if (left < MARGIN) left = MARGIN;
+
+            menu.style.left = left + 'px';
+            menu.style.bottom = bottom + 'px';
+            menu.style.top = 'auto';
+
+            menu.classList.remove('hidden');
+            document.getElementById('userMenuIcon').style.transform = 'rotate(180deg)';
+            menuOpen = true;
+        }
+
+        function closeUserMenu() {
+            document.getElementById('userMenu').classList.add('hidden');
+            document.getElementById('userMenuIcon').style.transform = 'rotate(0deg)';
+            menuOpen = false;
+        }
+
+        // Click outside to close
+        document.addEventListener('click', function (e) {
+            if (!menuOpen) return;
+            const menu = document.getElementById('userMenu');
+            const trigger = document.getElementById('userTrigger');
+            if (!menu.contains(e.target) && !trigger.contains(e.target)) {
+                closeUserMenu();
+            }
+        });
+
+        // Reposition on resize
+        window.addEventListener('resize', () => { if (menuOpen) openUserMenu(); });
+
+        document.getElementById('contextForm').addEventListener('submit', event => {
+            event.preventDefault();
+            saveContextForm(false);
+        });
+
+        const profileForm = document.getElementById('profileForm');
+        if (profileForm) {
+            profileForm.addEventListener('submit', event => {
+                event.preventDefault();
+                alert('Cambios guardados correctamente.');
+                closeProfileModal();
+            });
+        }
+
+        /* ══ PARCELAS MODAL ══ */
+        let parcelasFarms = [
+            {
+                id: 1, name: 'Finca El Paraíso', location: 'Provincia del Oro, Machala',
+                createdAt: '2023-06-15', hectares: 12.5, expanded: false,
+                plots: [
+                    { id: 1, farmId: 1, name: 'Parcela A - Norte', hectares: 3.5, cropVariety: 'Pitahaya Roja', gpsLocation: 'Lat. -3.1234, Lon. -79.5678', createdAt: '2023-06-20' },
+                    { id: 2, farmId: 1, name: 'Parcela B - Centro', hectares: 4.2, cropVariety: 'Pitahaya Blanca', gpsLocation: 'Lat. -3.1240, Lon. -79.5680', createdAt: '2023-07-10' },
+                    { id: 3, farmId: 1, name: 'Parcela C - Sur', hectares: 4.8, cropVariety: 'Pitahaya Amarilla', gpsLocation: 'Lat. -3.1245, Lon. -79.5685', createdAt: '2023-08-05' },
+                ]
+            },
+            {
+                id: 2, name: 'Finca Verde Esperanza', location: 'Santa Rosa, El Oro',
+                createdAt: '2024-01-20', hectares: 8.0, expanded: false,
+                plots: [
+                    { id: 4, farmId: 2, name: 'Parcela 1 - Sector Este', hectares: 4.0, cropVariety: 'Pitahaya Roja', gpsLocation: 'Lat. -3.2000, Lon. -79.6000', createdAt: '2024-01-25' },
+                    { id: 5, farmId: 2, name: 'Parcela 2 - Sector Oeste', hectares: 4.0, cropVariety: 'Pitahaya Roja', gpsLocation: 'Lat. -3.2010, Lon. -79.6010', createdAt: '2024-02-10' },
+                ]
+            },
+            {
+                id: 3, name: 'Finca Los Frutales', location: 'Pasaje, El Oro',
+                createdAt: '2024-03-10', hectares: 15.3, expanded: false,
+                plots: [
+                    { id: 6, farmId: 3, name: 'Parcela Principal', hectares: 10.0, cropVariety: 'Pitahaya Roja', gpsLocation: 'Lat. -3.3000, Lon. -79.7000', createdAt: '2024-03-15' },
+                    { id: 7, farmId: 3, name: 'Parcela Experimental', hectares: 5.3, cropVariety: 'Pitahaya Hibrida', gpsLocation: 'Lat. -3.3010, Lon. -79.7010', createdAt: '2024-04-20' },
+                ]
+            }
+        ];
+        let parcelasCurrentFarmForPlot = null;
+
+        function syncParcelasToContextOptions() {
+            const farmNames = parcelasFarms.map(f => f.name).filter(Boolean);
+            const farmLocations = parcelasFarms.map(f => f.location).filter(Boolean);
+            const plotNames = parcelasFarms.flatMap(f => f.plots.map(p => p.name));
+            const gpsLocations = parcelasFarms.flatMap(f => f.plots.map(p => p.gpsLocation).filter(Boolean));
+
+            contextOptions.lotId = [...new Set([...contextOptions.lotId, ...farmNames])];
+            contextOptions.zone = [...new Set([...contextOptions.zone, ...farmLocations])];
+            contextOptions.rows = [...new Set([...contextOptions.rows, ...plotNames])];
+
+            persistContextOptions();
+            const overlay = document.getElementById('contextOverlay');
+            if (overlay.classList.contains('open')) {
+                renderContextSelects(getActiveSession());
+            }
+        }
+
+        function openParcelasModal() {
+            document.getElementById('parcelasOverlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+            if (window.innerWidth < 768) closeUserMenu();
+            syncParcelasToContextOptions();
+            try { renderParcelasFarms(); } catch (e) { console.error(e); }
+        }
+
+        function closeParcelasModal() {
+            document.getElementById('parcelasOverlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        function renderParcelasFarms() {
+            const list = document.getElementById('parcelasFarmsList');
+            if (!parcelasFarms.length) {
+                list.innerHTML = '<div class="parcelas-empty-state"><i class="fas fa-field"></i><p class="text-sm text-slate-500">No tienes fincas aún.</p></div>';
+                return;
+            }
+            list.innerHTML = parcelasFarms.map(farm => `
+                <div class="context-section parcelas-farm-card ${farm.expanded ? 'expanded' : ''}">
+                    <!-- Header -->
+                    <div class="parcelas-farm-header ${farm.expanded ? 'expanded' : ''} cursor-pointer parcelas-farm-hover rounded-[22px_22px_0_0]" onclick="toggleParcelasFarmExpand(${farm.id})">
+                        <div class="flex items-center gap-3">
+                            <div>
+                                <p class="font-semibold text-gray-900 text-sm">${esc(farm.name)}</p>
+                                <p class="text-xs text-slate-500 mt-0.5">${esc(farm.location)}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs text-slate-500 flex-shrink-0">
+                            <span>Parcelas: <strong class="text-brand-600">${farm.plots.length}</strong></span>
+                            <span>Has: <strong class="text-brand-600">${farm.hectares}</strong></span>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <button onclick="event.stopPropagation(); editParcelasFarm(${farm.id})" class="w-8 h-8 rounded-lg border border-gray-200 bg-white text-slate-400 hover:text-brand-600 hover:border-brand-500 hover:bg-brand-50 transition flex items-center justify-center text-xs" title="Editar">
+                                <i class="fas fa-pencil"></i>
+                            </button>
+                            <button onclick="event.stopPropagation(); deleteParcelasFarm(${farm.id})" class="w-8 h-8 rounded-lg border border-gray-200 bg-white text-slate-400 hover:text-red-500 hover:border-red-300 hover:bg-red-50 transition flex items-center justify-center text-xs" title="Eliminar">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="parcelas-farm-body parcelas-farm-content">
+                        <p class="context-section-title mb-3">Parcelas (${farm.plots.length})</p>
+
+                        <div class="overflow-x-auto">
+                            <table class="parcelas-plots-table">
+                                <thead>
+                                    <tr>
+                                        <th>Parcela e hilera</th>
+                                        <th>GPS</th>
+                                        <th>Has</th>
+                                        <th>Variedad</th>
+                                        <th class="text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${farm.plots.map(plot => `
+                                        <tr>
+                                            <td class="font-semibold text-gray-900">${esc(plot.name)}</td>
+                                            <td class="text-xs text-slate-500 max-w-[140px] truncate" title="${esc(plot.gpsLocation || '')}">${esc(plot.gpsLocation || '—')}</td>
+                                            <td><span class="inline-block bg-brand-100 text-brand-700 px-2.5 py-0.5 rounded-full text-xs font-medium">${plot.hectares} ha</span></td>
+                                            <td class="text-sm">${esc(plot.cropVariety)}</td>
+                                            <td>
+                                                <div class="flex gap-1.5 justify-center items-center">
+                                                    <button onclick="selectParcelasPlot(${farm.id},${plot.id})" class="parcelas-select-btn" title="Usar en formulario">
+                                                        <i class="fas fa-check text-[0.6rem]"></i> Seleccionar
+                                                    </button>
+                                                    <button onclick="editParcelasPlot(${farm.id},${plot.id})" class="w-7 h-7 rounded-md border border-gray-200 bg-white text-slate-400 hover:text-brand-600 hover:border-brand-500 transition flex items-center justify-center text-[0.7rem]" title="Editar">
+                                                        <i class="fas fa-pencil"></i>
+                                                    </button>
+                                                    <button onclick="deleteParcelasPlot(${farm.id},${plot.id})" class="w-7 h-7 rounded-md border border-gray-200 bg-white text-slate-400 hover:text-red-500 hover:border-red-300 transition flex items-center justify-center text-[0.7rem]" title="Eliminar">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button onclick="openParcelasAddPlotModal(${farm.id})" class="context-secondary-btn w-full mt-3 flex items-center justify-center gap-2 text-sm">
+                            <i class="fas fa-plus text-xs"></i>
+                            Agregar parcela
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleParcelasFarmExpand(farmId) {
+            const farm = parcelasFarms.find(f => f.id === farmId);
+            if (farm) { farm.expanded = !farm.expanded; renderParcelasFarms(); }
+        }
+
+        function openAddFarmModal() {
+            document.getElementById('parcelasAddFarmModal').style.display = 'flex';
+            document.getElementById('parcelasFarmNameInput').value = '';
+            document.getElementById('parcelasFarmLocationInput').value = '';
+            setTimeout(() => document.getElementById('parcelasFarmNameInput').focus(), 100);
+        }
+
+        function closeAddFarmModal() {
+            document.getElementById('parcelasAddFarmModal').style.display = 'none';
+        }
+
+        function openParcelasAddPlotModal(farmId) {
+            parcelasCurrentFarmForPlot = farmId;
+            document.getElementById('parcelasAddPlotModal').style.display = 'flex';
+            document.getElementById('parcelasPlotNameInput').value = '';
+            document.getElementById('parcelasPlotGpsInput').value = '';
+            document.getElementById('parcelasPlotHectaresInput').value = '';
+            document.getElementById('parcelasPlotVarietyInput').value = '';
+            setTimeout(() => document.getElementById('parcelasPlotNameInput').focus(), 100);
+        }
+
+        function closeAddPlotModal() {
+            document.getElementById('parcelasAddPlotModal').style.display = 'none';
+            parcelasCurrentFarmForPlot = null;
+        }
+
+        function addNewFarm() {
+            const name = document.getElementById('parcelasFarmNameInput').value.trim();
+            const location = document.getElementById('parcelasFarmLocationInput').value.trim();
+            if (!name || !location) { alert('Por favor completa todos los campos'); return; }
+            const newFarm = {
+                id: Math.max(...parcelasFarms.map(f => f.id), 0) + 1,
+                name, location,
+                createdAt: new Date().toISOString().split('T')[0],
+                hectares: 0, expanded: true, plots: []
+            };
+            parcelasFarms.push(newFarm);
+            syncParcelasToContextOptions();
+            renderParcelasFarms();
+            closeAddFarmModal();
+        }
+
+        function addNewPlot() {
+            const name = document.getElementById('parcelasPlotNameInput').value.trim();
+            const gps = document.getElementById('parcelasPlotGpsInput').value.trim();
+            const hectares = parseFloat(document.getElementById('parcelasPlotHectaresInput').value);
+            const variety = document.getElementById('parcelasPlotVarietyInput').value.trim();
+            if (!name || isNaN(hectares) || hectares <= 0 || !variety) {
+                alert('Por favor completa todos los campos correctamente'); return;
+            }
+            const farm = parcelasFarms.find(f => f.id === parcelasCurrentFarmForPlot);
+            if (!farm) return;
+            const newPlot = {
+                id: Math.max(...parcelasFarms.flatMap(f => f.plots).map(p => p.id), 0) + 1,
+                farmId: farm.id, name, hectares, cropVariety: variety, gpsLocation: gps,
+                createdAt: new Date().toISOString().split('T')[0]
+            };
+            farm.plots.push(newPlot);
+            farm.hectares = farm.plots.reduce((sum, p) => sum + p.hectares, 0);
+            syncParcelasToContextOptions();
+            renderParcelasFarms();
+            closeAddPlotModal();
+        }
+
+        function editParcelasFarm(farmId) {
+            alert('Editar finca #' + farmId + ': En una versión real abrirías un modal de edición.');
+        }
+
+        function deleteParcelasFarm(farmId) {
+            if (confirm('¿Eliminar esta finca y todas sus parcelas?')) {
+                parcelasFarms = parcelasFarms.filter(f => f.id !== farmId);
+                syncParcelasToContextOptions();
+                renderParcelasFarms();
+            }
+        }
+
+        function editParcelasPlot(farmId, plotId) {
+            alert('Editar parcela #' + plotId + ': En una versión real abrirías un modal de edición.');
+        }
+
+        function deleteParcelasPlot(farmId, plotId) {
+            if (confirm('¿Eliminar esta parcela?')) {
+                const farm = parcelasFarms.find(f => f.id === farmId);
+                if (farm) {
+                    farm.plots = farm.plots.filter(p => p.id !== plotId);
+                    farm.hectares = farm.plots.reduce((sum, p) => sum + p.hectares, 0);
+                    syncParcelasToContextOptions();
+                    renderParcelasFarms();
+                }
+            }
+        }
+
+        function selectParcelasPlot(farmId, plotId) {
+            const farm = parcelasFarms.find(f => f.id === farmId);
+            if (!farm) return;
+            const plot = farm.plots.find(p => p.id === plotId);
+            if (!plot) return;
+
+            syncParcelasToContextOptions();
+
+            const session = getActiveSession();
+            if (session) {
+                session.context.lotId = farm.name;
+                session.context.zone = farm.location;
+                session.context.rows = plot.name;
+                session.context.location = plot.gpsLocation || (plot.name + ', ' + farm.location);
+                session.context.plantId = '';
+                session.updatedAt = Date.now();
+                persistSessions();
+                renderSessionList();
+            }
+
+            // Also update the context form if it's open
+            const contextOverlay = document.getElementById('contextOverlay');
+            if (contextOverlay.classList.contains('open')) {
+                fillContextForm(getActiveSession());
+            }
+
+            closeParcelasModal();
+        }
+
+        // Close inner modals on backdrop click
+        document.getElementById('parcelasAddFarmModal').onclick = function (e) {
+            if (e.target === this) closeAddFarmModal();
+        };
+        document.getElementById('parcelasAddPlotModal').onclick = function (e) {
+            if (e.target === this) closeAddPlotModal();
+        };
+
+        loadContextOptions();
+        loadSessions();
+    </script>
+
+    <!-- ============================================================
+     JAVASCRIPT — lógica de accesibilidad
+     ============================================================ -->
+    <script>
+        /* ----------------------------------------------------------
+           saveSettings — lee todos los controles y aplica todo
+        ---------------------------------------------------------- */
+        function saveSettings() {
+            const config = {
+                theme: document.getElementById('settingsTheme')?.value,
+                fontSize: document.getElementById('settingsFontSize')?.value,
+                fontFamily: document.getElementById('settingsFontFamily')?.value,
+                colorBlind: document.getElementById('settingsColorBlind')?.value,
+                highContrast: document.getElementById('settingsHighContrast')?.checked,
+                reducedMotion: document.getElementById('settingsReducedMotion')?.checked,
+                dyslexicFont: document.getElementById('settingsDyslexicFont')?.checked,
+            };
+
+            localStorage.setItem('pitahayaVisionSettings', JSON.stringify(config));
+            applyAllSettings(config);
+            closeSettingsModal();
+        }
+
+        /* ----------------------------------------------------------
+           resetSettings — vuelve a los valores por defecto
+        ---------------------------------------------------------- */
+        function resetSettings() {
+            localStorage.removeItem('pitahayaVisionSettings');
+            location.reload();
+        }
+
+        /* ----------------------------------------------------------
+           applyAllSettings — aplica todo de una vez (al cargar página)
+        ---------------------------------------------------------- */
+        function applyAllSettings(config) {
+            if (!config) return;
+            applyColorBlindFilter(config.colorBlind);
+            applyHighContrast(config.highContrast);
+            applyReducedMotion(config.reducedMotion);
+            applyDyslexicFont(config.dyslexicFont);
+            applyFontFamily(config.fontFamily);
+        }
+
+        /* ----------------------------------------------------------
+           ── FUNCIONES INDIVIDUALES ──
+        ---------------------------------------------------------- */
+
+        /**
+         * MODO DALTONISMO
+         * Aplica filtros SVG al <html> para simular/compensar deficiencias de color.
+         * Importante para los diagnósticos con código de color (semáforos de severidad).
+         */
+        function applyColorBlindFilter(value) {
+            // Elimina cualquier filtro previo
+            document.getElementById('_cbFilter')?.remove();
+
+            if (!value || value === 'none') {
+                document.documentElement.style.filter = '';
+                return;
+            }
+
+            const matrices = {
+                protanopia: '0.567,0.433,0,0,0 0.558,0.442,0,0,0 0,0.242,0.758,0,0 0,0,0,1,0',
+                deuteranopia: '0.625,0.375,0,0,0 0.7,0.3,0,0,0 0,0.3,0.7,0,0 0,0,0,1,0',
+                tritanopia: '0.95,0.05,0,0,0 0,0.433,0.567,0,0 0,0.475,0.525,0,0 0,0,0,1,0',
+            };
+
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" style="display:none" id="_cbFilter">
+        <filter id="cb-filter">
+            <feColorMatrix type="matrix" values="${matrices[value]}" />
+        </filter>
+    </svg>`;
+
+            document.body.insertAdjacentHTML('beforeend', svg);
+            document.documentElement.style.filter = 'url(#cb-filter)';
+        }
+
+        /**
+         * ALTO CONTRASTE
+         */
+        function applyHighContrast(enabled) {
+            document.documentElement.classList.toggle('high-contrast', !!enabled);
+        }
+
+        /**
+         * REDUCIR ANIMACIONES
+         */
+        function applyReducedMotion(enabled) {
+            let style = document.getElementById('_reducedMotionStyle');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = '_reducedMotionStyle';
+                document.head.appendChild(style);
+            }
+            style.textContent = enabled
+                ? '*, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }'
+                : '';
+        }
+
+        /**
+         * TIPOGRAFÍA AMIGABLE PARA DISLEXIA
+         * Usa OpenDyslexic (disponible en CDN).
+         */
+        function applyDyslexicFont(enabled) {
+            let link = document.getElementById('_dyslexicFontLink');
+            if (enabled && !link) {
+                link = document.createElement('link');
+                link.id = '_dyslexicFontLink';
+                link.rel = 'stylesheet';
+                link.href = 'https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/open-dyslexic-regular.css';
+                document.head.appendChild(link);
+            }
+            let style = document.getElementById('_dyslexicFontStyle');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = '_dyslexicFontStyle';
+                document.head.appendChild(style);
+            }
+            style.textContent = enabled
+                ? 'body, .chat-message-text, textarea, input { font-family: "OpenDyslexic", sans-serif !important; letter-spacing: 0.05em; word-spacing: 0.1em; }'
+                : '';
+        }
+
+        /**
+         * TIPO DE LETRA
+         * Aplica la fuente seleccionada al body y elementos del chat.
+         */
+        function applyFontFamily(value) {
+            const fonts = {
+                inter: '"Inter", system-ui, sans-serif',
+                lexend: '"Lexend", sans-serif',
+                opendyslexic: '"OpenDyslexic", sans-serif',
+                roboto: '"Roboto", sans-serif',
+                'comic-neue': '"Comic Neue", cursive',
+                'courier-prime': '"Courier Prime", monospace',
+                atkinson: '"Atkinson Hyperlegible", sans-serif',
+                'times-new-roman': '"Times New Roman", serif',
+            };
+            const family = fonts[value] || fonts.inter;
+            let style = document.getElementById('_fontFamilyStyle');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = '_fontFamilyStyle';
+                document.head.appendChild(style);
+            }
+            style.textContent = `body, .chat-message-text, textarea, input { font-family: ${family} !important; }`;
+        }
+
+
+        /* ----------------------------------------------------------
+           INIT — aplica configuraciones guardadas al cargar la página
+        ---------------------------------------------------------- */
+        (function initSettings() {
+            try {
+                const saved = localStorage.getItem('pitahayaVisionSettings');
+                if (saved) {
+                    const config = JSON.parse(saved);
+                    applyAllSettings(config);
+
+                    // Restaura estados de los controles en el modal
+                    const fields = {
+                        settingsTheme: config.theme,
+                        settingsFontSize: config.fontSize,
+                        settingsFontFamily: config.fontFamily,
+                        settingsColorBlind: config.colorBlind,
+                    };
+                    Object.entries(fields).forEach(([id, val]) => {
+                        const el = document.getElementById(id);
+                        if (el && val) el.value = val;
+                    });
+
+                    const checks = {
+                        settingsHighContrast: config.highContrast,
+                        settingsReducedMotion: config.reducedMotion,
+                        settingsDyslexicFont: config.dyslexicFont,
+                    };
+                    Object.entries(checks).forEach(([id, val]) => {
+                        const el = document.getElementById(id);
+                        if (el) el.checked = !!val;
+                    });
+                }
+            } catch (_) { }
+        })();
+    </script>
+
+</body>
+
+</html>

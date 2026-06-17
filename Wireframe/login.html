@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pitahaya Vision — Iniciar sesión</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
+        rel="stylesheet" />
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        cormorant: ['"Cormorant Garamond"', 'serif'],
+                    },
+                    keyframes: {
+                        fadeUp: {
+                            '0%': { opacity: '0', transform: 'translateY(22px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                    },
+                    animation: {
+                        'fade-up': 'fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) both',
+                        'fade-up-d1': 'fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both',
+                        'fade-up-d2': 'fadeUp 0.7s 0.12s cubic-bezier(0.22,1,0.36,1) both',
+                        'fade-up-d3': 'fadeUp 0.85s 0.25s cubic-bezier(0.22,1,0.36,1) both',
+                    },
+                    clipPath: {
+                        agroWave: 'url(#agroWave)',
+                    },
+                },
+            },
+        }
+    </script>
+
+    <style>
+        /* clip-path utility not in Tailwind core */
+        .clip-agro {
+            clip-path: url(#agroWave);
+        }
+
+        /* Cormorant shorthand */
+        .font-cormorant {
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        /* Input background */
+        .bg-input {
+            background-color: #F2F4FB;
+        }
+
+        /* Radial glows */
+        .glow-circle {
+            background: radial-gradient(circle at center,
+                    rgba(187, 247, 208, .55) 0%,
+                    rgba(220, 252, 231, .35) 35%,
+                    rgba(255, 255, 255, 0) 70%);
+        }
+
+        .glow-corner {
+            background: radial-gradient(circle at center, #f0fdf4, transparent 70%);
+        }
+    </style>
+</head>
+
+<body class="antialiased bg-white text-gray-900 h-screen overflow-hidden">
+
+    <!-- Clip-path definition -->
+    <svg width="0" height="0" class="absolute" aria-hidden="true">
+        <defs>
+            <clipPath id="agroWave" clipPathUnits="objectBoundingBox">
+                <path
+                    d="M 0.09,0 C 0.02,0.12 0.14,0.26 0.05,0.42 C -0.03,0.58 0.13,0.74 0.04,0.88 C 0.03,0.94 0.07,1 0.07,1 L 1,1 L 1,0 Z" />
+            </clipPath>
+        </defs>
+    </svg>
+
+    <!-- ═══════════ PAGE GRID ═══════════ -->
+    <main class="grid grid-cols-1 lg:grid-cols-2 h-screen w-screen relative">
+
+        <!-- ════════════════ LEFT PANEL ════════════════ -->
+        <section
+            class="relative z-20 flex items-center justify-center px-8 py-6 lg:px-12 bg-white overflow-hidden h-screen">
+
+            <!-- Green gradient circle (desktop only) -->
+            <div class="glow-circle hidden lg:block absolute -right-32 top-[8%] w-[420px] h-[420px] rounded-full pointer-events-none"
+                aria-hidden="true"></div>
+
+            <!-- Corner glow -->
+            <div class="glow-corner absolute -top-20 -right-20 w-80 h-80 rounded-full pointer-events-none opacity-60"
+                aria-hidden="true"></div>
+
+            <!-- Botanical SVG -->
+            <svg class="absolute -bottom-3 -left-3 w-48 lg:w-56 opacity-30 pointer-events-none" viewBox="0 0 220 280"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" stroke-width="2" fill="none"
+                    stroke-linecap="round" />
+                <path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" stroke-width="1.2" fill="none"
+                    stroke-linecap="round" />
+                <path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" stroke-width="1.2" fill="none"
+                    stroke-linecap="round" />
+                <path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" stroke-width="1" fill="none"
+                    stroke-linecap="round" />
+                <path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" stroke-width="1" fill="none"
+                    stroke-linecap="round" />
+                <path d="M58 110 C 58 110, 16 94, 0 76" stroke="#16a34a" stroke-width=".9" fill="none"
+                    stroke-linecap="round" />
+                <path d="M58 110 C 58 110, 98 88, 122 72" stroke="#16a34a" stroke-width=".9" fill="none"
+                    stroke-linecap="round" />
+                <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" />
+                <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
+                <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55"
+                    transform="rotate(-15 120 112)" />
+                <ellipse cx="0" cy="76" rx="10" ry="5.5" fill="#16a34a" opacity=".45" transform="rotate(25 0 76)" />
+                <ellipse cx="122" cy="72" rx="11" ry="6" fill="#16a34a" opacity=".45" transform="rotate(-20 122 72)" />
+            </svg>
+
+            <!-- ── Form card ── -->
+            <article class="relative z-30 w-full max-w-md animate-fade-up">
+
+                <!-- Brand -->
+                <header class="flex items-center gap-3 mb-8">
+                    <figure
+                        class="w-10 h-10 rounded-lg bg-green-600 flex items-center justify-center shadow-md flex-shrink-0">
+                        <svg class="w-5 h-5 fill-white" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
+                        </svg>
+                    </figure>
+                    <span class="font-cormorant text-2xl font-semibold text-gray-900">Pitahaya Vision</span>
+                </header>
+
+                <!-- Eyebrow + heading -->
+                <p class="text-[0.7rem] font-bold uppercase tracking-widest text-green-600 mb-2">
+                    Sistema de diagnóstico inteligente
+                </p>
+                <h1 class="font-cormorant text-4xl font-medium leading-tight text-gray-900 mb-2">
+                    Bienvenido <em class="italic text-green-600">de vuelta</em>
+                </h1>
+                <p class="text-sm font-light text-gray-500 mb-5 leading-relaxed">
+                    Ingresa tus credenciales para acceder a tu espacio de trabajo.
+                </p>
+
+                <!-- Form -->
+                <form class="space-y-3.5">
+
+                    <!-- Username -->
+                    <div>
+                        <label for="username"
+                            class="block text-[0.7rem] font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                            Usuario
+                        </label>
+                        <div class="relative">
+                            <i class="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"
+                                aria-hidden="true"></i>
+                            <input type="text" id="username" name="username" placeholder="Tu usuario"
+                                autocomplete="username" required
+                                class="bg-input w-full border border-gray-200 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 hover:border-gray-300 focus:border-green-600 focus:ring-2 focus:ring-green-100 focus:bg-white" />
+                        </div>
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <label for="password"
+                            class="block text-[0.7rem] font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                            Contraseña
+                        </label>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"
+                                aria-hidden="true"></i>
+                            <input type="password" id="password" name="password" placeholder="••••••••"
+                                autocomplete="current-password" required
+                                class="bg-input w-full border border-gray-200 rounded-lg pl-10 pr-10 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 hover:border-gray-300 focus:border-green-600 focus:ring-2 focus:ring-green-100 focus:bg-white" />
+                            <!-- Eye icon (purely decorative sin JS) -->
+                            <span
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm cursor-pointer select-none p-1">
+                                <i class="fas fa-eye"></i>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Forgot password -->
+                    <div class="flex justify-end -mt-1">
+                        <a href="password_reset.html"
+                            class="text-xs font-medium text-green-600 hover:text-green-700 hover:underline transition-colors">
+                            ¿Olvidaste tu contraseña?
+                        </a>
+                    </div>
+
+                    <!-- Submit -->
+                    <button type="button" onclick="window.location.href='chatbot.html'"
+                        class="w-full py-2.5 rounded-lg text-sm font-bold tracking-wider bg-green-600 text-white shadow-md transition-all duration-150 hover:bg-green-700 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0">
+                        Iniciar sesión
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="flex items-center gap-2 my-4">
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                        <span class="text-xs text-gray-400 px-1 tracking-wider">o</span>
+                        <div class="flex-1 h-px bg-gray-200"></div>
+                    </div>
+
+                    <!-- Register -->
+                    <p class="text-center text-sm text-gray-500">
+                        ¿No tienes una cuenta?&nbsp;
+                        <a href="register.html" class="font-bold text-green-600 hover:text-green-700 transition-colors">
+                            Regístrate gratis
+                        </a>
+                    </p>
+
+                </form>
+            </article>
+        </section>
+
+        <!-- ════════════════ RIGHT PANEL ════════════════ -->
+        <aside class="clip-agro relative hidden lg:block overflow-hidden h-screen z-0">
+
+            <img src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?fm=jpg&q=80&w=2400&auto=format&fit=crop"
+                alt="Campo agrícola" class="absolute inset-0 w-full h-full object-cover" />
+
+            <!-- Overlay -->
+            <div
+                class="absolute inset-0 bg-gradient-to-r from-[rgba(15,61,30,0.52)] via-[rgba(15,61,30,0.20)] to-[rgba(15,61,30,0.48)] z-10">
+            </div>
+
+            <!-- Stats pills -->
+            <div class="absolute top-6 right-6 z-30 flex flex-col gap-3 items-end">
+                <div
+                    class="animate-fade-up-d1 flex items-center gap-2 bg-white/10 backdrop-blur-2xl border border-white/15 rounded-2xl px-4 py-3">
+                    <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span class="text-xs text-white whitespace-nowrap">
+                        <strong class="font-semibold">1,240</strong> cultivos monitoreados
+                    </span>
+                </div>
+                <div
+                    class="animate-fade-up-d2 flex items-center gap-2 bg-white/10 backdrop-blur-2xl border border-white/15 rounded-2xl px-4 py-3">
+                    <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span class="text-xs text-white whitespace-nowrap">
+                        <strong class="font-semibold">98.4%</strong> disponibilidad del sistema
+                    </span>
+                </div>
+            </div>
+
+            <!-- Quote card -->
+            <div
+                class="animate-fade-up-d3 absolute bottom-6 left-[12%] right-6 z-30 bg-white/10 backdrop-blur-2xl border border-white/15 rounded-2xl p-5">
+                <!-- Green accent bar -->
+                <div class="absolute left-0 top-5 bottom-5 w-1 rounded-r bg-green-500"></div>
+
+                <p class="font-cormorant text-base italic text-white leading-relaxed mb-3 pl-2">
+                    "La tierra es el mayor patrimonio del agricultor. Pitahaya Vision la protege."
+                </p>
+
+                <footer class="flex items-center gap-3 pl-2">
+                    <figure
+                        class="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0 border border-white/30">
+                        <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
+                        </svg>
+                    </figure>
+                    <figcaption>
+                        <strong class="block text-sm font-semibold text-white leading-tight">Plataforma Pitahaya
+                            Vision</strong>
+                        <span class="text-xs text-white/70">Gestión inteligente del diagnóstico</span>
+                    </figcaption>
+                </footer>
+            </div>
+        </aside>
+
+        <!-- Wave accent line -->
+        <svg class="hidden lg:block absolute right-0 top-0 w-16 h-screen z-20" viewBox="0 0 100 100"
+            preserveAspectRatio="none" aria-hidden="true">
+            <path d="M 54.5,0 C 51,12 57,26 52.5,42 C 48.5,58 56.5,74 52,88 C 51.5,94 53.5,100 53.5,100"
+                stroke="#16a34a" stroke-width="1.5" fill="none" opacity=".35" vector-effect="non-scaling-stroke" />
+        </svg>
+
+    </main>
+
+</body>
+
+</html>
