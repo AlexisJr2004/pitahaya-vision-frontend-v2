@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, getProfilePreferences, updateProfilePreferences, changePassword } from '../services/authService'
-import { getFarms, createFarm, deleteFarm, createPlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage } from '../services/chatbotService'
+import { getFarms, createFarm, deleteFarm, createPlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory } from '../services/chatbotService'
 import { uploadImage, updateAnalysis } from '../services/analysisService'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 export default function ChatbotPage() {
+  const PLANT_HISTORY_STORAGE_KEY = 'pitahayaVision.plantHistory.v1'
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -32,6 +35,7 @@ export default function ChatbotPage() {
   const [confirmDeleteConv, setConfirmDeleteConv] = useState(null)
   const [contextSelectedFarmId, setContextSelectedFarmId] = useState('')
   const [contextSelectedZone, setContextSelectedZone] = useState('')
+  const [contextSelectedPlotId, setContextSelectedPlotId] = useState('')
   const [farmName, setFarmName] = useState('')
   const [farmLocation, setFarmLocation] = useState('')
   const [plotName, setPlotName] = useState('')
@@ -44,6 +48,16 @@ export default function ChatbotPage() {
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null)
   const [sessionMenuState, setSessionMenuState] = useState({ sessionId: null, left: 0, top: 0, open: false })
   const [contextOptions, setContextOptions] = useState({ lotId: [], zone: [], rows: [] })
+  const [plantHistories, setPlantHistories] = useState([])
+  const [savedPlantKey, setSavedPlantKey] = useState('')
+  const [showNoFarmHint, setShowNoFarmHint] = useState(false)
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [plotGpsCoords, setPlotGpsCoords] = useState({ lat: '', lng: '' })
+  const [farmError, setFarmError] = useState('')
+  const [plotError, setPlotError] = useState('')
+  const mapContainerRef = useRef(null)
+  const leafletMapRef = useRef(null)
+  const mapMarkerRef = useRef(null)
   const menuRef = useRef(null)
   const triggerRef = useRef(null)
   const chatAreaRef = useRef(null)
@@ -81,13 +95,17 @@ export default function ChatbotPage() {
   })()
   const profilePhotoUrl = user?.profile_photo_url
 
+  const loadFarms = async () => { try { const d = await getFarms(); setFarms(Array.isArray(d) ? d : d.results || []) } catch { setFarms([]) } }
+  const loadConversations = async () => { try { const d = await getConversations(); setConversations(Array.isArray(d) ? d : d.results || []) } catch { setConversations([]) } }
+  const loadPlantHistories = async () => { try { const d = await getPlantHistories(); setPlantHistories(Array.isArray(d) ? d : d.results || []) } catch { setPlantHistories([]) } }
+
+  useEffect(() => { loadFarms(); loadConversations(); loadPlantHistories() }, [])
+
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const urlConvId = searchParams.get('conversation')
   const stateConvId = location.state?.conversationId
   const targetConvId = stateConvId || urlConvId
-
-  useEffect(() => { loadFarms(); loadConversations() }, [])
 
   useEffect(() => {
     if (!targetConvId) return
@@ -96,7 +114,7 @@ export default function ChatbotPage() {
         const full = await getConversation(targetConvId)
         if (full && full.id) {
           setActiveConvId(full.id)
-          setMessages(full.messages || [])
+          setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
           setShowWelcome(false)
           setConversations(prev => prev.some(c => c.id === full.id) ? prev : [...prev, full])
         }
@@ -129,14 +147,433 @@ export default function ChatbotPage() {
     if (chatAreaRef.current) chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight
   }, [messages])
 
-  const loadFarms = async () => {
-    try { const d = await getFarms(); setFarms(Array.isArray(d) ? d : d.results || []) } catch { setFarms([]) }
+  // Leaflet map lifecycle — init when plot modal opens, destroy when it closes
+  useEffect(() => {
+    if (!showAddPlotModal) {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove()
+        leafletMapRef.current = null
+        mapMarkerRef.current = null
+      }
+      return
+    }
+    const GEO_KEY = '9d07134f01f14f54929ca9f76e55c516'
+    const mkIcon = () => L.divIcon({
+      html: '<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.45)"></div>',
+      iconSize: [20, 20], iconAnchor: [10, 10], className: '',
+    })
+    const tileOpts = (style) => ({
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://www.geoapify.com/">Geoapify</a>',
+      maxZoom: 20,
+      tileSize: 256,
+      zoomOffset: 0,
+    })
+    const timer = setTimeout(() => {
+      if (!mapContainerRef.current || leafletMapRef.current) return
+      const lat = -2.0
+      const lng = -79.0
+      const zoom = 7
+
+      const map = L.map(mapContainerRef.current, { center: [lat, lng], zoom, zoomControl: true })
+      map.getContainer().style.background = '#e8f4ea'
+
+      // Capas de mapa
+      const layerStreet = L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, tileOpts('osm-bright'))
+      const layerLight  = L.tileLayer(`https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, tileOpts('positron'))
+      const layerDark   = L.tileLayer(`https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, tileOpts('dark-matter'))
+      layerStreet.addTo(map)
+
+      L.control.layers(
+        { '🗺️ Callejero': layerStreet, '⬜ Claro': layerLight, '🌙 Oscuro': layerDark },
+        {}, { position: 'topright', collapsed: true }
+      ).addTo(map)
+
+      L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map)
+
+      map.on('click', e => {
+        const clat = e.latlng.lat.toFixed(6)
+        const clng = e.latlng.lng.toFixed(6)
+        setPlotGps(`${clat}, ${clng}`)
+        setPlotGpsCoords({ lat: clat, lng: clng })
+        if (mapMarkerRef.current) {
+          mapMarkerRef.current.setLatLng([parseFloat(clat), parseFloat(clng)])
+        } else {
+          mapMarkerRef.current = L.marker([parseFloat(clat), parseFloat(clng)], { icon: mkIcon() }).addTo(map)
+        }
+      })
+
+      leafletMapRef.current = map
+      // Forzar recalculo de tamaño después de que el DOM finaliza el layout
+      setTimeout(() => map.invalidateSize(), 100)
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [showAddPlotModal])
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return }
+    setGeoLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const lat = coords.latitude.toFixed(6)
+        const lng = coords.longitude.toFixed(6)
+        setPlotGps(`${lat}, ${lng}`)
+        setPlotGpsCoords({ lat, lng })
+        if (leafletMapRef.current) {
+          leafletMapRef.current.setView([parseFloat(lat), parseFloat(lng)], 15)
+          const mkIcon = L.divIcon({
+            html: '<div style="width:18px;height:18px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>',
+            iconSize: [18, 18], iconAnchor: [9, 9], className: '',
+          })
+          if (mapMarkerRef.current) {
+            mapMarkerRef.current.setLatLng([parseFloat(lat), parseFloat(lng)])
+          } else {
+            mapMarkerRef.current = L.marker([parseFloat(lat), parseFloat(lng)], { icon: mkIcon }).addTo(leafletMapRef.current)
+          }
+        }
+        setGeoLoading(false)
+      },
+      () => { setGeoLoading(false); alert('No se pudo obtener la ubicación. Verifica los permisos del navegador.') },
+      { timeout: 10000, enableHighAccuracy: true }
+    )
   }
 
-  const loadConversations = async () => {
-    try { const d = await getConversations(); setConversations(Array.isArray(d) ? d : d.results || []) } catch { setConversations([]) }
+  const readLocalPlantHistories = () => {
+    try {
+      const raw = localStorage.getItem(PLANT_HISTORY_STORAGE_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
   }
 
+  const writeLocalPlantHistories = (entries) => {
+    const safeEntries = Array.isArray(entries) ? entries : []
+    localStorage.setItem(PLANT_HISTORY_STORAGE_KEY, JSON.stringify(safeEntries))
+    setPlantHistories(safeEntries)
+  }
+
+  const upsertLocalPlantHistory = (entry) => {
+    const entryKey = String(entry.analysis_result || entry.id || entry.conversation_id || entry.plant_key || '')
+    const current = readLocalPlantHistories()
+    const next = current.filter(item => String(item.analysis_result || item.id || item.conversation_id || item.plant_key || '') !== entryKey)
+    next.unshift(entry)
+    writeLocalPlantHistories(next)
+  }
+
+  const getSelectedPlotContext = () => {
+    const plotVal = contextSelectedPlotId || contextRowsRef.current?.value || ''
+    const selectedFarm = farms.find(farm => String(farm.id) === String(contextLotRef.current?.value || contextSelectedFarmId)) || null
+    const selectedPlot = farms
+      .flatMap(farm => (farm.plots || []).map(plot => ({ ...plot, farmId: farm.id, farmName: farm.name })))
+      .find(plot => String(plot.id) === String(plotVal)) || null
+    return { selectedFarm, selectedPlot }
+  }
+
+  const buildPlantHistoryEntry = ({ analysisResult, convId, userText, botReply, comparisonText, fullMessages, imageUrl, imageType }) => {
+    const { selectedFarm, selectedPlot } = getSelectedPlotContext()
+    const plantKeyOrId = contextPlantRef.current?.value || ''
+    const plotId = selectedPlot?.id || contextSelectedPlotId || ''
+    const plantKey = `${plantKeyOrId || `plot_${plotId}`}${plotId ? `|${plotId}` : ''}`.replace(/\|$/, '')
+    const contextDetail = {
+      datetime: contextDatetimeRef.current?.value || '',
+      farm_id: selectedFarm?.id || contextSelectedFarmId || '',
+      farm_name: selectedFarm?.name || '',
+      lotId: selectedFarm?.name || '',
+      plot_id: plotId,
+      plot_name: selectedPlot?.name || '',
+      zone: contextZoneRef.current?.value || contextSelectedZone || selectedPlot?.zone || '',
+      rows: selectedPlot?.rows || '',
+      plant_key_or_id: plantKeyOrId,
+      location: contextLocationRef.current?.value || selectedPlot?.gps_location || '',
+      main_symptom: contextSymptomRef.current?.value || '',
+      affected_part: contextPartRef.current?.value || '',
+      stage: contextStageRef.current?.value || '',
+      severity: contextSeverityRef.current?.value || '',
+      irrigation: contextIrrigationRef.current?.value || '',
+      phytosanitary: contextPhytoRef.current?.value || '',
+      notes: contextNotesRef.current?.value || '',
+    }
+
+    return {
+      id: analysisResult.id,
+      analysis_result: analysisResult.id,
+      conversation: convId,
+      conversation_id: convId,
+      sessionId: convId,
+      created_at: analysisResult.created_at || new Date().toISOString(),
+      date: Date.now(),
+      plant_key: plantKey,
+      plantKey,
+      lotId: contextDetail.lotId,
+      zone: contextDetail.zone,
+      rows: contextDetail.rows,
+      plantId: contextDetail.plant_key_or_id,
+      disease_name_predicted: analysisResult.disease_name_predicted || '',
+      final_diagnosis: analysisResult.final_diagnosis || '',
+      severity: analysisResult.severity || '',
+      confidence_percent: analysisResult.confidence_percent ?? '',
+      analysis_text: analysisResult.analysis_text || '',
+      recommendations_text: analysisResult.recommendations_text || '',
+      image_url: imageUrl || analysisResult.image_url || imagePreview || '',
+      image_type: imageType || '',
+      user_message: userText,
+      assistant_reply: botReply,
+      comparison_reply: comparisonText || '',
+      context_detail: contextDetail,
+      messages: Array.isArray(fullMessages) ? fullMessages : [],
+    }
+  }
+
+  const sevOrder = { baja:0, leve:0, moderada:1, alta:2, critica:3, crítica:3 }
+
+  function generateComparison(prevHistories, current) {
+    if (!prevHistories.length) return ''
+    const prev = prevHistories[0]
+    const prevDate = prev.created_at ? new Date(prev.created_at) : null
+    const dateStr = prevDate ? prevDate.toLocaleDateString('es-EC', { day:'numeric', month:'long', year:'numeric' }) : 'fecha desconocida'
+    const prevDisease = prev.disease_name_predicted || prev.final_diagnosis || '—'
+    const curDisease = current.disease_name_predicted || '—'
+    const prevSev = (prev.severity || '').toLowerCase()
+    const curSev = (current.severity || '').toLowerCase()
+    const prevLevel = sevOrder[prevSev] !== undefined ? sevOrder[prevSev] : -1
+    const curLevel = sevOrder[curSev] !== undefined ? sevOrder[curSev] : -1
+    let trend = ''
+    if (prevLevel >= 0 && curLevel >= 0) {
+      if (curLevel < prevLevel) trend = 'Mejorando'
+      else if (curLevel > prevLevel) trend = 'Empeorando'
+      else trend = 'Estable'
+    }
+    const sameDiseaseCount = prevHistories.filter(e =>
+      (e.disease_name_predicted || e.final_diagnosis || '').toLowerCase() === curDisease.toLowerCase()
+    ).length
+    const isRecurring = sameDiseaseCount >= 2
+    const prevDiseaseChanged = prevDisease.toLowerCase() !== curDisease.toLowerCase()
+    let advice = ''
+    if (trend === 'Mejorando') {
+      advice = 'Las acciones de manejo están dando resultado. Continúa con el seguimiento.'
+      if (prevDiseaseChanged) advice += ' La enfermedad detectada es diferente a la anterior, lo que sugiere que el tratamiento anterior fue efectivo contra el patógeno previo.'
+    } else if (trend === 'Empeorando') {
+      advice = 'Se necesita reforzar las medidas de control. Revisa el plan fitosanitario.'
+      if (isRecurring) advice += ' Esta enfermedad se ha presentado en múltiples ocasiones. Considera rotar el principio activo del fungicida y evaluar condiciones ambientales que favorecen su aparición.'
+      if (curLevel >= 2) advice += ' La severidad es alta. Se recomienda una intervención inmediata y consultar con un ingeniero agrónomo.'
+    } else {
+      advice = 'No se detectan cambios significativos. Mantén el monitoreo constante.'
+      if (isRecurring) advice += ' Aunque la severidad no ha cambiado, la enfermedad persiste. Evalúa si el manejo actual está siendo efectivo a largo plazo.'
+    }
+    if (prevHistories.length >= 3) {
+      const levels = prevHistories.map(e => sevOrder[(e.severity || '').toLowerCase()] ?? -1).filter(l => l >= 0)
+      if (levels.length >= 3) {
+        const first = levels[levels.length - 1]
+        const last = levels[0]
+        if (last > first) advice += ' En perspectiva general, la condición ha empeorado desde el primer registro. Revisa la estrategia de manejo integral.'
+        else if (last < first) advice += ' En perspectiva general, la condición ha mejorado desde el primer registro. Sigue con el plan actual.'
+      }
+    }
+    return (
+      '**Comparación con análisis anterior**\n\n' +
+      `**Análisis anterior:** ${dateStr}\n\n` +
+      `**Antes:** ${prevDisease} · Severidad: ${prev.severity || '—'}\n` +
+      `**Ahora:** ${curDisease} · Severidad: ${current.severity || '—'}\n\n` +
+      `**Tendencia:** ${trend}\n` +
+      `**Recomendación:** ${advice}`
+    )
+  }
+
+  const handleSaveContext = async () => {
+    try {
+      const plotVal = contextSelectedPlotId || contextRowsRef.current?.value || ''
+      const allPlots = farms.flatMap(f => f.plots || [])
+      const selectedPlot = allPlots.find(p => String(p.id) === String(plotVal))
+      if (!selectedPlot) {
+        alert('Selecciona una parcela antes de guardar.')
+        return
+      }
+      const contextData = {
+        plot: selectedPlot.id,
+        plant_key_or_id: contextPlantRef.current?.value || '',
+        main_symptom: contextSymptomRef.current?.value || '',
+        affected_part: contextPartRef.current?.value || '',
+        status: contextSeverityRef.current?.value?.toLowerCase() || 'desconocida',
+      }
+      let convId = activeConvId
+      let contextId = null
+      if (convId) {
+        const conv = await getConversation(convId)
+        if (conv.context) {
+          const existingCtxId = typeof conv.context === 'object' ? conv.context.id : conv.context
+          await updateContext(existingCtxId, contextData)
+          contextId = existingCtxId
+        } else {
+          const newCtx = await createContext(contextData)
+          contextId = newCtx.id
+          await updateConversation(convId, { context: contextId })
+        }
+      } else {
+        const newCtx = await createContext(contextData)
+        contextId = newCtx.id
+        const conv = await createConversation({ title: 'Nueva conversacion', context: contextId })
+        convId = conv.id
+        setActiveConvId(convId)
+        loadConversations()
+      }
+      savedContextIdRef.current = contextId
+      const pkPlant = contextData.plant_key_or_id || `plot_${selectedPlot.id}`
+      const pk = `${pkPlant}|${selectedPlot.id}`
+      savedPlantKeyRef.current = pk
+      setSavedPlantKey(pk)
+    } catch (e) {
+      console.error('Error al guardar contexto:', e)
+      alert('Error al guardar el contexto. Verifica tu conexion e intenta de nuevo.')
+    }
+  }
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setImagePreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  const removeImage = () => { setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() }
+  }
+
+  const handleSendMessage = async () => {
+    if (sending) return
+    const text = inputValue.trim()
+    if (!text && !imageFile) return
+    const imgFile = imageFile
+    const imgPrev = imagePreview
+    const imgType = imageFile?.type || ''
+    removeImage()
+    setMessages(prev => [...prev, { role: 'user', content: text, image_type: imgType, image_path: imgPrev }]); setInputValue(''); setShowWelcome(false); setSending(true)
+    let convId = activeConvId
+    try {
+      if (!convId) {
+        const ctxIdForConv = savedContextIdRef.current
+        const conv = await createConversation({
+          title: text.substring(0, 100) || 'Nueva conversacion',
+          ...(ctxIdForConv ? { context: ctxIdForConv } : {}),
+        })
+        convId = conv.id; setActiveConvId(convId); loadConversations()
+      }
+      let imageUrl = ''
+      let analysisResult = null
+      if (imgFile) {
+        const formData = new FormData()
+        formData.append('image_path', imgFile)
+        formData.append('conversation', convId)
+        analysisResult = await uploadImage(formData)
+        imageUrl = analysisResult.image_url || ''
+      }
+      // Only send image_type when no prior uploadImage result — prevents backend from creating a second analysis record
+      const userMsg = await sendMessage({
+        conversation: convId,
+        role: 'user',
+        content: text,
+        image_path: imageUrl,
+        ...(analysisResult ? {} : { image_type: imgType }),
+      })
+      if (analysisResult && analysisResult.id) {
+        updateAnalysis(analysisResult.id, { chat_message: userMsg.id }).catch(() => {})
+      }
+      if (analysisResult) {
+        const disease = analysisResult.disease_name_predicted || 'Pendiente'
+        const severity = analysisResult.severity || 'Desconocida'
+        const confidence = analysisResult.confidence_percent || '---'
+        const recs = analysisResult.recommendations_text || 'Consulta con un ingeniero agr\u00f3nomo para una evaluaci\u00f3n m\u00e1s precisa.'
+        const botReply =
+          '**An\u00e1lisis de imagen completado**\n\n' +
+          `**Diagn\u00f3stico estimado:** ${disease}\n` +
+          `**Severidad:** ${severity}\n` +
+          `**Confianza:** ${confidence}%\n\n` +
+          `**Hallazgos t\u00e9cnicos:** el an\u00e1lisis de la imagen sugiere la presencia de ${disease.toLowerCase()} con un nivel de severidad ${severity.toLowerCase()}. ` +
+          `La confianza del diagn\u00f3stico es del ${confidence}%, lo que indica que los patrones visuales coinciden con los s\u00edntomas t\u00edpicos de esta condici\u00f3n.\n\n` +
+          `**Recomendaciones:**\n${recs}`
+        await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
+
+        // Fetch plant histories once — used for both deduplication check and comparison
+        let allPhs = []
+        try {
+          const phs = await getPlantHistories()
+          allPhs = Array.isArray(phs) ? phs : phs.results || []
+        } catch {}
+
+        // Save plant history only if backend didn't auto-create one for this analysis
+        const ctxId = savedContextIdRef.current
+        if (ctxId) {
+          const alreadyExists = allPhs.some(ph => {
+            const phId = ph.analysis_result?.id ?? ph.analysis_result
+            return String(phId) === String(analysisResult.id)
+          })
+          if (!alreadyExists) {
+            try {
+              const newPh = await createPlantHistory({
+                context: ctxId,
+                analysis_result: analysisResult.id,
+                final_diagnosis: analysisResult.disease_name_predicted || '',
+                notes: contextNotesRef.current?.value || '',
+              })
+              allPhs = [...allPhs, newPh]
+            } catch (e) {
+              console.error('Error guardando historial de planta:', e)
+            }
+          }
+        }
+
+        // Compare with prior analyses of the same plant using already-fetched list
+        let comparisonText = ''
+        const currentPlotId = contextSelectedPlotId || (contextRowsRef.current?.value || '')
+        const currentPlantKey = savedPlantKeyRef.current
+        if ((currentPlotId || currentPlantKey) && allPhs.length > 0) {
+          const matching = allPhs.filter(ph => {
+            const phAnalysisId = ph.analysis_result?.id ?? ph.analysis_result
+            if (String(phAnalysisId) === String(analysisResult.id)) return false
+            const phPlantKey = ph.plant_key || ph.plantKey
+            if (phPlantKey && currentPlantKey) return phPlantKey === currentPlantKey
+            const phPlotId = ph.context?.plot || ph.context?.plot_id || ''
+            return currentPlotId && String(phPlotId) === String(currentPlotId)
+          })
+          if (matching.length > 0) {
+            const normalized = matching.map(ph => ({
+              disease_name_predicted: ph.final_diagnosis || ph.analysis_result?.disease_name_predicted || '',
+              severity: ph.analysis_result?.severity || ph.severity || '',
+              confidence_percent: ph.analysis_result?.confidence_percent || '',
+              created_at: ph.created_at || ph.analysis_result?.created_at || '',
+            }))
+            comparisonText = generateComparison(normalized, analysisResult)
+          }
+        }
+        if (comparisonText) {
+          await sendMessage({ conversation: convId, role: 'assistant', content: comparisonText })
+        }
+      } else {
+        const botReply = 'Estoy procesando tu consulta sobre el cultivo. Un asesor agr\u00edcola podr\u00e1 darte una respuesta m\u00e1s precisa.'
+        await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
+      }
+      try {
+        const full = await getConversation(convId)
+        const msgs = (full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+        setMessages(msgs)
+      } catch {}
+      loadConversations()
+      loadPlantHistories()
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Ocurri\u00f3 un error al procesar tu mensaje. Intenta de nuevo.' }])
+    }
+    setSending(false)
+  }
+
+  const openParcelasModal = () => { setShowParcelasModal(true); closeSidebar() }
+  const closeParcelasModal = () => { setShowParcelasModal(false) }
+  const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
+  const closeSidebar = () => { setSidebarOpen(false); document.body.style.overflow = '' }
   const toggleUserMenu = () => {
     if (menuOpen) { setMenuOpen(false); return }
     const trigger = triggerRef.current
@@ -150,11 +587,66 @@ export default function ChatbotPage() {
     setMenuPos({ left, bottom })
     setMenuOpen(true)
   }
+  const handleLogout = async () => { setMenuOpen(false); await logout(); navigate('/login', { replace: true }) }
 
-  const handleLogout = async () => { await logout(); navigate('/login', { replace: true }) }
+  const newChat = () => {
+    setMessages([]); setInputValue(''); removeImage()
+    setShowWelcome(true); setActiveConvId(null)
+    savedContextIdRef.current = null; savedPlantKeyRef.current = ''
+    setContextSelectedFarmId(''); setContextSelectedZone(''); setContextSelectedPlotId('')
+    setSavedPlantKey(''); closeSidebar(); setSending(false)
+    if (farms.length === 0) {
+      setShowParcelasModal(true)
+    } else {
+      setShowContextModal(true)
+    }
+  }
 
-  const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
-  const closeSidebar = () => { setSidebarOpen(false); document.body.style.overflow = '' }
+  const suggest = (text) => {
+    setInputValue(text)
+    setShowWelcome(false); setSending(true)
+    setTimeout(async () => {
+      const botReply = 'Gracias por tu consulta. Estoy analizando la informaci\u00f3n para brindarte una respuesta adecuada sobre el manejo de tu cultivo de pitahaya.'
+      setSending(false)
+      try {
+        let convId = activeConvId
+        if (!convId) {
+          const conv = await createConversation({ title: text.substring(0, 100) })
+          convId = conv.id; setActiveConvId(convId); loadConversations()
+        }
+        await sendMessage({ conversation: convId, role: 'user', content: text })
+        await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
+        try {
+          const full = await getConversation(convId)
+          setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
+        } catch {}
+        loadConversations()
+      } catch {}
+    }, 800)
+  }
+
+  const selectConversation = async (conv) => {
+    setActiveConvId(conv.id)
+    try {
+      const full = await getConversation(conv.id)
+      setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
+    } catch {
+      setMessages((conv.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
+    }
+    setShowWelcome(false)
+    if (window.innerWidth < 768) closeSidebar()
+  }
+
+  const handleSelectPlot = (plot, farm) => {
+    setContextSelectedFarmId(farm.id); setContextSelectedZone(plot.zone || '')
+    setContextSelectedPlotId(String(plot.id))
+    setTimeout(() => { if (contextRowsRef.current) contextRowsRef.current.value = String(plot.id) }, 0)
+    if (contextLocationRef.current && plot.gps_location) contextLocationRef.current.value = plot.gps_location
+    if (contextDatetimeRef.current && !contextDatetimeRef.current.value) {
+      contextDatetimeRef.current.value = new Date().toISOString().slice(0, 16)
+    }
+    setShowParcelasModal(false); setShowContextModal(true)
+  }
 
   const openSessionMenu = (convId, buttonEl) => {
     const rect = buttonEl.getBoundingClientRect()
@@ -174,41 +666,15 @@ export default function ChatbotPage() {
     if (top < 12) top = 12
     setSessionMenuState({ sessionId: convId, left, top, open: true })
   }
-
   const closeSessionMenu = () => setSessionMenuState({ sessionId: null, left: 0, top: 0, open: false })
 
   const togglePinConversation = (convId) => {
     setConversations(prev => prev.map(c => c.id === convId ? { ...c, pinnedAt: c.pinnedAt ? null : Date.now() } : c))
     closeSessionMenu()
   }
-
   const getConvPinState = (convId) => {
     const conv = conversations.find(c => c.id === convId)
     return conv?.pinnedAt ? true : false
-  }
-
-  const sortedConversations = [...conversations].sort((a, b) => {
-    const aPinned = a.pinnedAt || 0, bPinned = b.pinnedAt || 0
-    if (aPinned !== bPinned) return bPinned - aPinned
-    return (b.updated_at || 0) - (a.updated_at || 0)
-  })
-
-  const newChat = () => {
-    setMessages([]); setInputValue(''); setImageFile(null); setImagePreview(null)
-    setShowWelcome(true); setActiveConvId(null); setContextSelectedFarmId(''); setContextSelectedZone('')
-    closeSidebar(); setShowContextModal(true)
-  }
-
-  const selectConversation = async (conv) => {
-    setActiveConvId(conv.id)
-    try {
-      const full = await getConversation(conv.id)
-      setMessages(full.messages || [])
-    } catch {
-      setMessages(conv.messages || [])
-    }
-    setShowWelcome(false)
-    if (window.innerWidth < 768) closeSidebar()
   }
 
   const handleDeleteConversation = async () => {
@@ -220,110 +686,26 @@ export default function ChatbotPage() {
     } catch { alert('Error al eliminar la conversacion') }
   }
 
-  const handleSendMessage = async () => {
-    const text = inputValue.trim()
-    if (!text && !imageFile) return
-    const imgFile = imageFile
-    const imgPrev = imagePreview
-    const imgType = imageFile?.type || ''
-    removeImage()
-    setMessages(prev => [...prev, { role: 'user', content: text, image_type: imgType, image_path: imgPrev }]); setInputValue(''); setShowWelcome(false); setSending(true)
-    let convId = activeConvId
-    try {
-      if (!convId) {
-        const conv = await createConversation({ title: text.substring(0, 100) || 'Nueva conversacion' })
-        convId = conv.id; setActiveConvId(convId); loadConversations()
-      }
-      let imageUrl = ''
-      let analysisResult = null
-      if (imgFile) {
-        const formData = new FormData()
-        formData.append('image_path', imgFile)
-        formData.append('conversation', convId)
-        analysisResult = await uploadImage(formData)
-        imageUrl = analysisResult.image_url || ''
-      }
-      const userMsg = await sendMessage({ conversation: convId, role: 'user', content: text, image_type: imgType, image_path: imageUrl })
-      if (analysisResult && analysisResult.id) {
-        updateAnalysis(analysisResult.id, { chat_message: userMsg.id }).catch(() => {})
-      }
-      const botReply = analysisResult
-        ? '**Analisis de imagen completado**\n\n**Diagnostico:** ' + (analysisResult.disease_name_predicted || 'Pendiente') + '\n**Severidad:** ' + (analysisResult.severity || 'Desconocida') + '\n**Confianza:** ' + (analysisResult.confidence_percent || '---') + '\n\n' + (analysisResult.recommendations_text || 'Consulta con un ingeniero agronomo para una evaluacion mas precisa.')
-        : 'Estoy procesando tu consulta sobre el cultivo. Un asesor agricola podra darte una respuesta mas precisa.'
-      await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
-      try {
-        const full = await getConversation(convId)
-        setMessages(full.messages || [])
-      } catch {
-        setMessages(prev => [...prev, { role: 'assistant', content: botReply }])
-      }
-      loadConversations()
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Ocurrio un error al procesar tu mensaje. Intenta de nuevo.' }])
-    }
-    setSending(false)
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() }
-  }
-
-  const suggest = (text) => {
-    setInputValue(text)
-    setMessages(prev => [...prev, { role: 'user', content: text }])
-    setShowWelcome(false); setSending(true)
-    setTimeout(async () => {
-      const botReply = 'Gracias por tu consulta. Estoy analizando la informacion para brindarte una respuesta adecuada sobre el manejo de tu cultivo de pitahaya.'
-      setSending(false)
-      try {
-        let convId = activeConvId
-        if (!convId) {
-          const conv = await createConversation({ title: text.substring(0, 100) })
-          convId = conv.id; setActiveConvId(convId); loadConversations()
-        }
-        await sendMessage({ conversation: convId, role: 'user', content: text })
-        await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
-        try {
-          const full = await getConversation(convId)
-          setMessages(full.messages || [])
-        } catch {
-          setMessages(prev => [...prev, { role: 'assistant', content: botReply }])
-        }
-        loadConversations()
-      } catch {}
-    }, 800)
-  }
-
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    setImageFile(file)
-    const reader = new FileReader()
-    reader.onload = (ev) => setImagePreview(ev.target.result)
-    reader.readAsDataURL(file)
-  }
-
-  const removeImage = () => { setImageFile(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }
-
-  const openParcelasModal = () => { setShowParcelasModal(true); closeSidebar() }
-
-  const handleSelectPlot = (plot, farm) => {
-    setContextSelectedFarmId(farm.id); setContextSelectedZone(plot.zone || '')
-    if (contextRowsRef.current) contextRowsRef.current.value = plot.name
-    if (contextLocationRef.current && plot.gps_location) contextLocationRef.current.value = plot.gps_location
-    if (contextDatetimeRef.current && !contextDatetimeRef.current.value) {
-      contextDatetimeRef.current.value = new Date().toISOString().slice(0, 16)
-    }
-    setShowParcelasModal(false); setShowContextModal(true)
-  }
-
-  const closeParcelasModal = () => { setShowParcelasModal(false) }
-
-  const openAddFarmModal = () => { setFarmName(''); setFarmLocation(''); setShowAddFarmModal(true) }
+  const sortedConversations = (() => {
+    const sorted = [...conversations].sort((a, b) => {
+      const aPinned = a.pinnedAt || 0, bPinned = b.pinnedAt || 0
+      if (aPinned !== bPinned) return bPinned - aPinned
+      return (b.updated_at || 0) - (a.updated_at || 0)
+    })
+    return sorted
+  })()
+  const openAddFarmModal = () => { setFarmName(''); setFarmLocation(''); setFarmError(''); setShowAddFarmModal(true) }
 
   const handleCreateFarm = async () => {
-    if (!farmName.trim()) return
-    try { await createFarm({ name: farmName.trim(), location: farmLocation.trim() }); setShowAddFarmModal(false); loadFarms() } catch { alert('Error al crear la finca') }
+    if (!farmName.trim()) { setFarmError('El nombre de la finca es obligatorio.'); return }
+    setFarmError('')
+    try {
+      const newFarm = await createFarm({ name: farmName.trim(), location: farmLocation.trim() })
+      setFarmName(''); setFarmLocation('')
+      setShowAddFarmModal(false)
+      await loadFarms()
+      openAddPlotModal(newFarm)
+    } catch { setFarmError('No se pudo crear la finca. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
   const handleDeleteFarm = async (id) => {
@@ -336,16 +718,26 @@ export default function ChatbotPage() {
   }
 
   const openAddPlotModal = (farm) => {
-    setSelectedFarmForPlot(farm); setPlotName(''); setPlotGps(''); setPlotHectares(''); setPlotZone(''); setPlotRows('')
+    setSelectedFarmForPlot(farm)
+    setPlotName(''); setPlotGps(''); setPlotHectares(''); setPlotZone(''); setPlotRows('')
+    setPlotGpsCoords({ lat: '', lng: '' })
+    setPlotError('')
     setShowAddPlotModal(true)
   }
 
   const handleCreatePlot = async () => {
-    if (!plotName.trim() || !selectedFarmForPlot) return
+    if (!plotName.trim()) { setPlotError('El nombre de la parcela es obligatorio.'); return }
+    if (!selectedFarmForPlot) return
+    setPlotError('')
     try {
       await createPlot({ farm: selectedFarmForPlot.id, name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
-      setShowAddPlotModal(false); loadFarms()
-    } catch { alert('Error al crear la parcela') }
+      setShowAddPlotModal(false)
+      await loadFarms()
+      if (farms.flatMap(f => f.plots || []).length === 0) {
+        setShowParcelasModal(false)
+        setShowContextModal(true)
+      }
+    } catch { setPlotError('No se pudo guardar la parcela. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
   const handleDeletePlot = async (id) => { try { await deletePlot(id); loadFarms() } catch { alert('Error al eliminar la parcela') } }
@@ -462,6 +854,8 @@ export default function ChatbotPage() {
 
   const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+  const savedContextIdRef = useRef(null)
+  const savedPlantKeyRef = useRef('')
   const micRef = useRef(null)
   const recogRef = useRef(null)
   const micWaveRef = useRef(null)
@@ -610,7 +1004,7 @@ export default function ChatbotPage() {
         .session-menu-item { width: 100%; display: flex; align-items: center; gap: 0.7rem; padding: 0.72rem 0.8rem; border-radius: 14px; text-align: left; transition: background 0.14s ease, color 0.14s ease; background: transparent; border: none; cursor: pointer; }
         .session-menu-item:hover { background: #f8fafc; }
         .session-pin { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #15803d; background: #dcfce7; border-radius: 9999px; padding: 0.18rem 0.45rem; }
-        .delete-overlay { position: fixed; inset: 0; z-index: 220; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .36); backdrop-filter: blur(1px); }
+        .delete-overlay { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .36); backdrop-filter: blur(1px); }
         .delete-overlay.open { display: flex; }
         .delete-modal { width: min(100%, 420px); border-radius: 24px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); overflow: hidden; }
         .delete-modal-title { font-size: 1rem; font-weight: 700; color: #0f172a; }
@@ -621,6 +1015,38 @@ export default function ChatbotPage() {
         .delete-btn-secondary:hover { background: #f8fafc; }
         .delete-btn-danger { background: #ef4444; color: #fff; border: 1px solid #ef4444; }
         .delete-btn-danger:hover { background: #dc2626; }
+        /* Onboarding */
+        .onboard-step { display: flex; align-items: center; gap: 0.85rem; text-align: left; border-radius: 18px; padding: 0.85rem 1rem; border: 1px solid; transition: all 0.18s; }
+        .onboard-step.active { background: #f0fdf4; border-color: #bbf7d0; }
+        .onboard-step.inactive { background: #f8fafc; border-color: #e2e8f0; opacity: 0.55; }
+        .onboard-num { width: 2rem; height: 2rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700; flex-shrink: 0; }
+        .onboard-num.active { background: linear-gradient(135deg,#16a34a,#22c55e); color: #fff; }
+        .onboard-num.inactive { background: #e2e8f0; color: #94a3b8; }
+        /* No-farm hint */
+        @keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+        .farm-hint { animation: slideDown 0.22s ease-out; }
+        /* Icon inputs — fuerza padding-left para que el ícono no tape el texto */
+        .ctx-icon-input { padding-left: 2.65rem !important; }
+        /* GPS map */
+        .map-wrap { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; position: relative; }
+        .leaflet-container { font-family: 'Inter', sans-serif !important; background: #e8f4ea !important; }
+        .leaflet-control-layers { border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 16px rgba(0,0,0,.1) !important; font-size: 0.8rem !important; font-family: 'Inter', sans-serif !important; }
+        .leaflet-control-layers-selector { accent-color: #16a34a; }
+        .leaflet-control-scale-line { border-color: #16a34a; border-top: none; background: rgba(255,255,255,.85); color: #166534; font-size: 0.7rem; font-family: 'Inter', sans-serif; }
+        .leaflet-bar a { border-color: #e2e8f0 !important; color: #374151 !important; font-size: 0.95rem !important; }
+        .leaflet-bar a:hover { background: #f0fdf4 !important; color: #16a34a !important; }
+        /* Coordenadas badge */
+        .gps-badge { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 0.55rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #15803d; font-weight: 500; }
+        /* Geoloc button */
+        .geo-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; border-radius: 12px; border: 1.5px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.14s; white-space: nowrap; }
+        .geo-btn:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
+        .geo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        /* Plot modal two-column */
+        .plot-modal-body { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr; gap: 1.25rem; padding: 1.25rem 1.5rem; align-items: start; }
+        @media (min-width: 768px) { .plot-modal-body { grid-template-columns: 1fr 1fr; align-items: stretch; } }
+        .plot-col { display: flex; flex-direction: column; gap: 1rem; }
+        .plot-map-col { display: flex; flex-direction: column; gap: 0.75rem; }
+        .plot-map-fill { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; height: 320px; }
       `}</style>
 
       {/* DRAWER OVERLAY */}
@@ -748,6 +1174,7 @@ export default function ChatbotPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <p className={`text-xs font-semibold truncate ${activeConvId === conv.id ? 'text-brand-800' : 'text-gray-700'}`}>{esc(conv.title || 'Nueva conversacion')}</p>
                         {conv.pinnedAt ? <span className="session-pin"><i className="fas fa-thumbtack text-[0.55rem]"></i> Fijada</span> : null}
+
                       </div>
                       <p className={`text-[0.68rem] mt-0.5 truncate ${activeConvId === conv.id ? 'text-brand-700/80' : 'text-gray-400'}`}>{conv.preview || 'Sesion en blanco'}</p>
                     </div>
@@ -802,26 +1229,59 @@ export default function ChatbotPage() {
               <div id="welcome" className="flex flex-col items-center justify-center min-h-full text-center px-3">
                 <svg className="absolute bottom-0 left-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
                 <svg className="absolute bottom-0 right-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none scale-x-[-1]" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
-                <div className="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4">
-                  <svg className="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                </div>
-                <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Sistema de diagnostico inteligente</p>
-                <h2 className="font-cormorant text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mb-1">Hola, ¿como puedo<br /><em className="italic text-brand-600">ayudarte hoy?</em></h2>
-                <p className="text-gray-400 text-sm mt-2 mb-6 font-light">Escribe, habla o envia una imagen de tu cultivo.</p>
-                <div className="chips-grid w-full max-w-md">
-                  <button onClick={() => suggest('¿Cuales son las enfermedades mas comunes de la pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                    <div className="text-lg sm:text-xl mb-1">🌵</div><div className="font-medium text-gray-800 text-xs">Enfermedades comunes</div><div className="text-gray-400 text-xs mt-0.5">Diagnostico de cultivos</div>
-                  </button>
-                  <button onClick={() => suggest('¿Como puedo mejorar el rendimiento de mi cultivo de pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                    <div className="text-lg sm:text-xl mb-1">📈</div><div className="font-medium text-gray-800 text-xs">Mejorar rendimiento</div><div className="text-gray-400 text-xs mt-0.5">Optimizacion agricola</div>
-                  </button>
-                  <button onClick={() => suggest('¿Que plagas afectan a la pitahaya y como controlarlas?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                    <div className="text-lg sm:text-xl mb-1">🐛</div><div className="font-medium text-gray-800 text-xs">Control de plagas</div><div className="text-gray-400 text-xs mt-0.5">Proteccion del cultivo</div>
-                  </button>
-                  <button onClick={() => suggest('¿Cual es el mejor sistema de riego para pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                    <div className="text-lg sm:text-xl mb-1">💧</div><div className="font-medium text-gray-800 text-xs">Sistema de riego</div><div className="text-gray-400 text-xs mt-0.5">Gestion del agua</div>
-                  </button>
-                </div>
+
+                {farms.length === 0 ? (
+                  /* ── ONBOARDING: usuario nuevo sin fincas ── */
+                  <div className="w-full max-w-sm animate-fade-up">
+                    <div className="brand-avatar w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4 mx-auto">
+                      <svg className="w-7 h-7 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+                    </div>
+                    <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Bienvenido al sistema</p>
+                    <h2 className="font-cormorant text-3xl font-medium text-gray-900 mb-2 leading-tight">¡Hola, {displayName.split(' ')[0]}!<br /><em className="text-brand-600">Comencemos</em></h2>
+                    <p className="text-gray-400 text-sm mb-7 font-light leading-relaxed">Para analizar tu cultivo primero necesitas<br />registrar tu finca y una parcela.</p>
+                    <div className="space-y-2.5 mb-7 text-left">
+                      <div className="onboard-step active">
+                        <div className="onboard-num active">1</div>
+                        <div><p className="text-sm font-semibold text-gray-800 leading-tight">Registra tu finca</p><p className="text-xs text-gray-500 mt-0.5">Nombre y ubicación de tu propiedad</p></div>
+                      </div>
+                      <div className="onboard-step inactive">
+                        <div className="onboard-num inactive">2</div>
+                        <div><p className="text-sm font-semibold text-gray-700 leading-tight">Agrega una parcela</p><p className="text-xs text-gray-400 mt-0.5">Zona, hileras y coordenadas GPS</p></div>
+                      </div>
+                      <div className="onboard-step inactive">
+                        <div className="onboard-num inactive">3</div>
+                        <div><p className="text-sm font-semibold text-gray-700 leading-tight">Sube una foto y analiza</p><p className="text-xs text-gray-400 mt-0.5">Diagnóstico inteligente en segundos</p></div>
+                      </div>
+                    </div>
+                    <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="context-save-btn w-full">
+                      <i className="fas fa-plus mr-2"></i>Registrar mi primera finca
+                    </button>
+                  </div>
+                ) : (
+                  /* ── BIENVENIDA normal con sugerencias ── */
+                  <>
+                    <div className="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4">
+                      <svg className="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+                    </div>
+                    <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Sistema de diagnostico inteligente</p>
+                    <h2 className="font-cormorant text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mb-1">Hola, ¿como puedo<br /><em className="italic text-brand-600">ayudarte hoy?</em></h2>
+                    <p className="text-gray-400 text-sm mt-2 mb-6 font-light">Escribe, habla o envia una imagen de tu cultivo.</p>
+                    <div className="chips-grid w-full max-w-md">
+                      <button onClick={() => suggest('¿Cuales son las enfermedades mas comunes de la pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div className="text-lg sm:text-xl mb-1">🌵</div><div className="font-medium text-gray-800 text-xs">Enfermedades comunes</div><div className="text-gray-400 text-xs mt-0.5">Diagnostico de cultivos</div>
+                      </button>
+                      <button onClick={() => suggest('¿Como puedo mejorar el rendimiento de mi cultivo de pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div className="text-lg sm:text-xl mb-1">📈</div><div className="font-medium text-gray-800 text-xs">Mejorar rendimiento</div><div className="text-gray-400 text-xs mt-0.5">Optimizacion agricola</div>
+                      </button>
+                      <button onClick={() => suggest('¿Que plagas afectan a la pitahaya y como controlarlas?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div className="text-lg sm:text-xl mb-1">🐛</div><div className="font-medium text-gray-800 text-xs">Control de plagas</div><div className="text-gray-400 text-xs mt-0.5">Proteccion del cultivo</div>
+                      </button>
+                      <button onClick={() => suggest('¿Cual es el mejor sistema de riego para pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
+                        <div className="text-lg sm:text-xl mb-1">💧</div><div className="font-medium text-gray-800 text-xs">Sistema de riego</div><div className="text-gray-400 text-xs mt-0.5">Gestion del agua</div>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div id="msgs" className="max-w-2xl mx-auto flex flex-col gap-4 sm:gap-5">
@@ -880,6 +1340,22 @@ export default function ChatbotPage() {
           {/* INPUT ZONE */}
           <div className="input-zone px-3 sm:px-4 pt-2 bg-white border-t border-gray-100 flex-shrink-0">
             <div className="max-w-2xl mx-auto">
+              {/* Hint: usuario sin fincas intenta interactuar */}
+              {showNoFarmHint && farms.length === 0 && (
+                <div className="farm-hint mb-3 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+                  <i className="fas fa-triangle-exclamation text-amber-500 flex-shrink-0"></i>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu finca</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Necesitas al menos una parcela para empezar el análisis.</p>
+                  </div>
+                  <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="flex-shrink-0 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100 transition" style={{ cursor: 'pointer' }}>
+                    Crear finca
+                  </button>
+                  <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
+                    <i className="fas fa-xmark text-xs"></i>
+                  </button>
+                </div>
+              )}
               <div id="imgPreview" className={`${imagePreview ? 'flex' : 'hidden'} items-center gap-3 mb-3 px-1`}>
                 <div className="relative">
                   <img id="previewImg" src={imagePreview || ''} alt="preview" className="h-14 w-14 sm:h-16 sm:w-16 object-cover rounded-2xl border border-brand-200 shadow-sm" />
@@ -893,11 +1369,28 @@ export default function ChatbotPage() {
                 </div>
               </div>
               <div className="input-box flex items-end gap-1.5 sm:gap-2 bg-gray-50 border border-gray-200 rounded-3xl px-2.5 sm:px-3 py-2.5 sm:py-3 transition-all duration-200">
-                <button onClick={() => fileInputRef.current?.click()} title="Adjuntar imagen" className="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <button
+                  onClick={() => {
+                    if (farms.length === 0) { setShowNoFarmHint(true); return }
+                    fileInputRef.current?.click()
+                  }}
+                  title="Adjuntar imagen"
+                  className="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
                 </button>
                 <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
-                <textarea ref={inpRef} value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={handleKeyDown} rows="1" placeholder="Escribe sobre tu cultivo..." className="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"></textarea>
+                <textarea
+                  ref={inpRef}
+                  value={inputValue}
+                  onChange={e => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => { if (farms.length === 0) setShowNoFarmHint(true) }}
+                  rows="1"
+                  placeholder={farms.length === 0 ? 'Registra una finca para comenzar...' : 'Escribe sobre tu cultivo...'}
+                  className="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"
+                />
                 <button ref={micRef} onClick={toggleMic} title="Usar microfono" className="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200" style={{ border: 'none', cursor: 'pointer' }}>
                   <svg ref={micIconRef} className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
                   <div ref={micWaveRef} className="hidden items-center gap-0.5">
@@ -1145,9 +1638,9 @@ export default function ChatbotPage() {
                     </select>
                   </label>
                   <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Parcela e hileras</span>
-                    <select ref={contextRowsRef} className="context-select">
+                    <select ref={contextRowsRef} className="context-select" onChange={e => setContextSelectedPlotId(e.target.value)}>
                       <option value="">Seleccionar parcela</option>
-                      {farms.filter(f => String(f.id) === String(contextSelectedFarmId)).flatMap(f => (f.plots || []).filter(p => !contextSelectedZone || p.zone === contextSelectedZone).map(p => <option key={p.id} value={p.name}>{p.name}{p.rows ? ` (${p.rows})` : ''}</option>))}
+                      {farms.filter(f => String(f.id) === String(contextSelectedFarmId)).flatMap(f => (f.plots || []).filter(p => !contextSelectedZone || p.zone === contextSelectedZone).map(p => <option key={p.id} value={p.id}>{p.name}{p.rows ? ` (${p.rows})` : ''}</option>))}
                     </select>
                   </label>
                 </div>
@@ -1206,8 +1699,8 @@ export default function ChatbotPage() {
                     if (contextPhytoRef.current) contextPhytoRef.current.value = ''
                     if (contextNotesRef.current) contextNotesRef.current.value = ''
                   }}>Limpiar</button>
-                  <button type="button" className="context-secondary-btn" onClick={() => setShowContextModal(false)}>Guardar</button>
-                  <button type="button" className="context-save-btn" onClick={() => { setShowContextModal(false); setTimeout(() => fileInputRef.current?.click(), 300) }}>Guardar y cargar imagen</button>
+                  <button type="button" className="context-secondary-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false) }}>Guardar</button>
+                  <button type="button" className="context-save-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false); setTimeout(() => fileInputRef.current?.click(), 300) }}>Guardar y cargar imagen</button>
                 </div>
               </div>
             </form>
@@ -1277,42 +1770,226 @@ export default function ChatbotPage() {
         </div>
       </div>
 
-      {/* ADD FARM MODAL */}
-      <div className="fixed inset-0 z-[300]" style={{ display: showAddFarmModal ? 'flex' : 'none', background: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden mx-4" onClick={e => e.stopPropagation()}>
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h4 className="text-lg font-semibold text-gray-900">Agregar nueva finca</h4>
-            <button onClick={() => setShowAddFarmModal(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500" style={{ border: 'none', cursor: 'pointer' }}><i className="fas fa-xmark"></i></button>
+      {/* ADD FARM MODAL — Rediseñado */}
+      <div className={`context-overlay ${showAddFarmModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => setShowAddFarmModal(false)}>
+        <div className="context-modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+          <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="context-badge"><i className="fas fa-map-location-dot mr-1.5"></i>Nueva finca</span>
+                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Registrar finca</h3>
+                <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">Ingresa los datos básicos de tu propiedad agrícola.<br />Después podrás agregar parcelas.</p>
+              </div>
+              <button onClick={() => setShowAddFarmModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <i className="fas fa-xmark"></i>
+              </button>
+            </div>
           </div>
-          <div className="px-5 py-4 space-y-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">Nombre de la finca</label><input type="text" className="context-input" placeholder="Ej: Finca El Paraiso" value={farmName} onChange={e => setFarmName(e.target.value)} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">Ubicacion</label><input type="text" className="context-input" placeholder="Ej: Provincia del Oro, Machala" value={farmLocation} onChange={e => setFarmLocation(e.target.value)} /></div>
+          <div className="context-modal-body px-5 sm:px-8 py-6">
+            <div className="context-section space-y-4">
+              <p className="context-section-title">Datos de la finca</p>
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-2">Nombre de la finca <span className="text-red-400">*</span></span>
+                <div className="relative">
+                  <i className="fas fa-tree-city absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Finca El Paraíso" value={farmName}
+                    onChange={e => { setFarmName(e.target.value); if (farmError) setFarmError('') }}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
+                </div>
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-2">Ubicación / Sector</span>
+                <div className="relative">
+                  <i className="fas fa-location-dot absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Machala, El Oro, Ecuador" value={farmLocation}
+                    onChange={e => setFarmLocation(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
+                </div>
+              </label>
+              {farmError && (
+                <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  <i className="fas fa-circle-exclamation flex-shrink-0"></i>{farmError}
+                </p>
+              )}
+              <div className="flex items-start gap-2 bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
+                <i className="fas fa-circle-info text-brand-500 mt-0.5 text-sm flex-shrink-0"></i>
+                <p className="text-xs text-brand-700 leading-relaxed">Al crear la finca, podrás agregar parcelas de inmediato. Necesitas al menos una parcela para iniciar un análisis.</p>
+              </div>
+            </div>
           </div>
-          <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <div className="px-5 sm:px-8 py-5 border-t border-gray-100 flex justify-end gap-3">
             <button onClick={() => setShowAddFarmModal(false)} className="context-secondary-btn">Cancelar</button>
-            <button onClick={handleCreateFarm} className="context-save-btn">Agregar finca</button>
+            <button onClick={handleCreateFarm} className="context-save-btn">
+              <i className="fas fa-plus mr-2"></i>Crear finca y agregar parcela
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ADD PLOT MODAL */}
-      <div className="fixed inset-0 z-[300]" style={{ display: showAddPlotModal ? 'flex' : 'none', background: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden mx-4" onClick={e => e.stopPropagation()}>
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h4 className="text-lg font-semibold text-gray-900">Agregar nueva parcela</h4>
-            <p className="text-sm text-gray-500">{selectedFarmForPlot?.name}</p>
-            <button onClick={() => setShowAddPlotModal(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500" style={{ border: 'none', cursor: 'pointer' }}><i className="fas fa-xmark"></i></button>
+      {/* ADD PLOT MODAL — Rediseñado con mapa GPS */}
+      <div className={`context-overlay ${showAddPlotModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => setShowAddPlotModal(false)}>
+        <div className="context-modal" style={{ maxWidth: '960px' }} onClick={e => e.stopPropagation()}>
+          <div className="context-modal-header px-5 py-4 sm:px-8 sm:py-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <span className="context-badge"><i className="fas fa-seedling mr-1.5"></i>Nueva parcela</span>
+                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-2 leading-tight">
+                  Registrar parcela
+                  {selectedFarmForPlot && <span className="font-cormorant text-brand-600"> — {selectedFarmForPlot.name}</span>}
+                </h3>
+              </div>
+              <button onClick={() => setShowAddPlotModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <i className="fas fa-xmark"></i>
+              </button>
+            </div>
           </div>
-          <div className="px-5 py-4 space-y-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">Parcela e hilera</label><input type="text" className="context-input" placeholder="Ej: Parcela A, Hilera 1-5" value={plotName} onChange={e => setPlotName(e.target.value)} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">Zona</label><input type="text" className="context-input" placeholder="Ej: Zona norte" value={plotZone} onChange={e => setPlotZone(e.target.value)} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">Hileras</label><input type="text" className="context-input" placeholder="Ej: 1-5" value={plotRows} onChange={e => setPlotRows(e.target.value)} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">GPS o ubicacion exacta</label><input type="text" className="context-input" placeholder="Ej: Lat. -3.1234, Lon. -79.5678" value={plotGps} onChange={e => setPlotGps(e.target.value)} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-2">Hectareas</label><input type="number" className="context-input" placeholder="Ej: 2.5" step="0.1" value={plotHectares} onChange={e => setPlotHectares(e.target.value)} /></div>
+
+          {/* DOS COLUMNAS: izquierda datos | derecha GPS + mapa */}
+          <div className="plot-modal-body">
+
+            {/* COLUMNA IZQUIERDA — Datos de la parcela */}
+            <div className="context-section plot-col">
+              <p className="context-section-title mb-4">Datos de la parcela</p>
+
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-2">Nombre <span className="text-red-400">*</span></span>
+                <div className="relative">
+                  <i className="fas fa-map absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Parcela A, Hilera 1-5" value={plotName}
+                    onChange={e => { setPlotName(e.target.value); if (plotError) setPlotError('') }} />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-2">Zona</span>
+                <div className="relative">
+                  <i className="fas fa-compass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Zona norte" value={plotZone} onChange={e => setPlotZone(e.target.value)} />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-2">Hileras</span>
+                <div className="relative">
+                  <i className="fas fa-list-ol absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: 1-10" value={plotRows} onChange={e => setPlotRows(e.target.value)} />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="block text-sm font-medium text-slate-700 mb-2">Hectáreas</span>
+                <div className="relative">
+                  <i className="fas fa-ruler-combined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <input type="number" className="context-input ctx-icon-input" placeholder="Ej: 2.5" step="0.1" min="0" value={plotHectares} onChange={e => setPlotHectares(e.target.value)} />
+                </div>
+              </label>
+
+              {plotError && (
+                <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  <i className="fas fa-circle-exclamation flex-shrink-0"></i>{plotError}
+                </p>
+              )}
+              <div className="mt-auto pt-3 border-t border-gray-100">
+                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                  <i className="fas fa-circle-info text-brand-400"></i>
+                  Solo el nombre es obligatorio. Puedes editar los demás datos después.
+                </p>
+              </div>
+            </div>
+
+            {/* COLUMNA DERECHA — GPS + Mapa */}
+            <div className="context-section plot-map-col">
+              {/* Header GPS con botón */}
+              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <div>
+                  <p className="context-section-title">Ubicación GPS</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Toca el mapa o ingresa coordenadas manualmente</p>
+                </div>
+                <button onClick={handleGetLocation} disabled={geoLoading} className="geo-btn">
+                  {geoLoading
+                    ? <><i className="fas fa-spinner fa-spin text-brand-500"></i><span>Obteniendo...</span></>
+                    : <><i className="fas fa-location-crosshairs text-brand-500"></i><span>Mi ubicación</span></>
+                  }
+                </button>
+              </div>
+
+              {/* Lat / Lng manuales */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <label className="block">
+                  <span className="block text-xs font-semibold text-slate-600 mb-1.5">Latitud</span>
+                  <div className="relative">
+                    <i className="fas fa-arrows-up-down absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none z-10"></i>
+                    <input
+                      type="number" step="any" className="context-input ctx-icon-input text-sm" placeholder="-2.123456"
+                      value={plotGpsCoords.lat}
+                      onChange={e => {
+                        const lat = e.target.value
+                        setPlotGpsCoords(p => ({ ...p, lat }))
+                        if (lat && plotGpsCoords.lng) {
+                          setPlotGps(`${lat}, ${plotGpsCoords.lng}`)
+                          if (leafletMapRef.current) {
+                            leafletMapRef.current.setView([parseFloat(lat), parseFloat(plotGpsCoords.lng)], 14)
+                            const mkIcon = L.divIcon({ html:'<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.45)"></div>', iconSize:[20,20], iconAnchor:[10,10], className:'' })
+                            if (mapMarkerRef.current) mapMarkerRef.current.setLatLng([parseFloat(lat), parseFloat(plotGpsCoords.lng)])
+                            else mapMarkerRef.current = L.marker([parseFloat(lat), parseFloat(plotGpsCoords.lng)], { icon: mkIcon }).addTo(leafletMapRef.current)
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-semibold text-slate-600 mb-1.5">Longitud</span>
+                  <div className="relative">
+                    <i className="fas fa-arrows-left-right absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none z-10"></i>
+                    <input
+                      type="number" step="any" className="context-input ctx-icon-input text-sm" placeholder="-79.123456"
+                      value={plotGpsCoords.lng}
+                      onChange={e => {
+                        const lng = e.target.value
+                        setPlotGpsCoords(p => ({ ...p, lng }))
+                        if (plotGpsCoords.lat && lng) {
+                          setPlotGps(`${plotGpsCoords.lat}, ${lng}`)
+                          if (leafletMapRef.current) {
+                            leafletMapRef.current.setView([parseFloat(plotGpsCoords.lat), parseFloat(lng)], 14)
+                            const mkIcon = L.divIcon({ html:'<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.45)"></div>', iconSize:[20,20], iconAnchor:[10,10], className:'' })
+                            if (mapMarkerRef.current) mapMarkerRef.current.setLatLng([parseFloat(plotGpsCoords.lat), parseFloat(lng)])
+                            else mapMarkerRef.current = L.marker([parseFloat(plotGpsCoords.lat), parseFloat(lng)], { icon: mkIcon }).addTo(leafletMapRef.current)
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              {/* Badge coordenadas */}
+              {plotGps
+                ? <div className="gps-badge mb-3">
+                    <i className="fas fa-location-dot text-brand-500 flex-shrink-0"></i>
+                    <span className="truncate text-xs"><strong>{plotGps}</strong></span>
+                    <button onClick={() => { setPlotGps(''); setPlotGpsCoords({ lat:'', lng:'' }); if (mapMarkerRef.current && leafletMapRef.current) { mapMarkerRef.current.remove(); mapMarkerRef.current = null } }} className="ml-auto flex-shrink-0 text-slate-400 hover:text-red-400 transition" style={{ background:'none', border:'none', cursor:'pointer' }}>
+                      <i className="fas fa-xmark text-xs"></i>
+                    </button>
+                  </div>
+                : <div className="mb-3 text-xs text-gray-400 flex items-center gap-1.5" style={{ height: '2rem' }}>
+                    <i className="fas fa-hand-pointer text-gray-300"></i>
+                    Haz clic en el mapa para fijar la ubicación exacta
+                  </div>
+              }
+
+              {/* Mapa interactivo */}
+              <div className="plot-map-fill">
+                <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }}></div>
+              </div>
+            </div>
           </div>
-          <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-3">
+
+          <div className="px-5 sm:px-8 py-4 border-t border-gray-100 flex justify-end gap-3">
             <button onClick={() => setShowAddPlotModal(false)} className="context-secondary-btn">Cancelar</button>
-            <button onClick={handleCreatePlot} className="context-save-btn">Agregar parcela</button>
+            <button onClick={handleCreatePlot} className="context-save-btn">
+              <i className="fas fa-plus mr-2"></i>Guardar parcela
+            </button>
           </div>
         </div>
       </div>

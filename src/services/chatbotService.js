@@ -66,8 +66,33 @@ export async function sendMessage(data) {
   return res.data
 }
 
+// ─── Contexts ───
+export async function createContext(data) {
+  const res = await API.post('/contexts/', data)
+  return res.data
+}
+export async function updateContext(id, data) {
+  const res = await API.patch(`/contexts/${id}/`, data)
+  return res.data
+}
+export async function updateConversation(id, data) {
+  const res = await API.patch(`/conversations/${id}/`, data)
+  return res.data
+}
+
 // ─── Plant Histories ───
 export async function getPlantHistories(params = {}) {
   const res = await API.get('/plant-histories/', { params })
+  return res.data
+}
+
+export async function createPlantHistory(data) {
+  const res = await API.post('/plant-histories/', data)
+  return res.data
+}
+
+// ─── Contexts (read) ───
+export async function getContexts() {
+  const res = await API.get('/contexts/')
   return res.data
 }
