@@ -2081,7 +2081,7 @@ export default function ChatbotPage() {
             </form>
           </div>
         </div>
-      </div>
+      </div> 
 
       {/* PARCELAS MODAL */}
       <div className={`context-overlay ${showParcelasModal ? 'open' : ''}`} onClick={() => animateClose(parcelasModalRef, closeParcelasModal)}>
