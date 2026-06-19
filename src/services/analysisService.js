@@ -28,3 +28,8 @@ export async function updateAnalysis(id, data) {
   const res = await API.patch(`/${id}/`, data)
   return res.data
 }
+
+export async function getWeather(lat, lon) {
+  const res = await API.get('/weather/', { params: { lat, lon } })
+  return res.data
+}

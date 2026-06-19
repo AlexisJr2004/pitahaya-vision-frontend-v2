@@ -96,3 +96,14 @@ export async function getContexts() {
   const res = await API.get('/contexts/')
   return res.data
 }
+
+// ─── AI Chatbot ───
+export async function askChatbot({ message, conversation_id, max_length = 1024, no_rag = false }) {
+  const res = await API.post('/chat/', { message, conversation_id, max_length, no_rag })
+  return res.data
+}
+
+export async function getSuggestions({ bot_response }) {
+  const res = await API.post('/suggest/', { bot_response })
+  return res.data
+}

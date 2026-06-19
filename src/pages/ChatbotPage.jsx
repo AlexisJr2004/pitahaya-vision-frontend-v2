@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, getProfilePreferences, updateProfilePreferences, changePassword } from '../services/authService'
-import { getFarms, createFarm, deleteFarm, createPlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory } from '../services/chatbotService'
-import { uploadImage, updateAnalysis } from '../services/analysisService'
+import { getFarms, createFarm, deleteFarm, createPlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, getSuggestions } from '../services/chatbotService'
+import { uploadImage, updateAnalysis, getWeather } from '../services/analysisService'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 export default function ChatbotPage() {
@@ -19,6 +19,7 @@ export default function ChatbotPage() {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [sending, setSending] = useState(false)
+  const [suggestedQuestions, setSuggestedQuestions] = useState([])
   const [copiedIndex, setCopiedIndex] = useState(null)
   const [micActive, setMicActive] = useState(false)
   const [farms, setFarms] = useState([])
@@ -51,7 +52,12 @@ export default function ChatbotPage() {
   const [plantHistories, setPlantHistories] = useState([])
   const [savedPlantKey, setSavedPlantKey] = useState('')
   const [showNoFarmHint, setShowNoFarmHint] = useState(false)
+  const [showNoContextHint, setShowNoContextHint] = useState(false)
   const [geoLoading, setGeoLoading] = useState(false)
+  const [sTheme, setSTheme] = useState('light')
+  const [weatherData, setWeatherData] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherCondition, setWeatherCondition] = useState('')
   const [plotGpsCoords, setPlotGpsCoords] = useState({ lat: '', lng: '' })
   const [farmError, setFarmError] = useState('')
   const [plotError, setPlotError] = useState('')
@@ -76,16 +82,16 @@ export default function ChatbotPage() {
   const contextIrrigationRef = useRef(null)
   const contextPhytoRef = useRef(null)
   const contextNotesRef = useRef(null)
-  const settingsThemeRef = useRef(null)
-  const settingsFontSizeRef = useRef(null)
-  const settingsFontFamilyRef = useRef(null)
-  const settingsHighContrastRef = useRef(null)
-  const settingsReducedMotionRef = useRef(null)
-  const settingsColorBlindRef = useRef(null)
-  const settingsDyslexicFontRef = useRef(null)
   const settingsLotInputRef = useRef(null)
   const settingsZoneInputRef = useRef(null)
   const settingsRowsInputRef = useRef(null)
+  const parcelasModalRef = useRef(null)
+  const addFarmModalRef = useRef(null)
+  const addPlotModalRef = useRef(null)
+  const contextSelModalRef = useRef(null)
+  const profileModalRef = useRef(null)
+  const settingsModalRef = useRef(null)
+  const animatedModalRefs = useRef(new Set())
   const displayName = user?.full_name || user?.username || 'Usuario'
   const userEmail = user?.email || ''
   const roleLabel = user?.role_label || (user?.is_admin ? 'Administrador' : 'Usuario')
@@ -100,6 +106,8 @@ export default function ChatbotPage() {
   const loadPlantHistories = async () => { try { const d = await getPlantHistories(); setPlantHistories(Array.isArray(d) ? d : d.results || []) } catch { setPlantHistories([]) } }
 
   useEffect(() => { loadFarms(); loadConversations(); loadPlantHistories() }, [])
+
+  useEffect(() => { if (user?.id) loadSettings() }, [user?.id])
 
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -146,6 +154,26 @@ export default function ChatbotPage() {
   useEffect(() => {
     if (chatAreaRef.current) chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight
   }, [messages])
+
+  useEffect(() => {
+    if (!contextSelectedPlotId || !farms.length) { setWeatherData(null); setWeatherCondition(''); return }
+    const plot = farms.flatMap(f => f.plots || []).find(p => String(p.id) === String(contextSelectedPlotId))
+    if (!plot?.gps_location) { setWeatherData(null); return }
+    const nums = plot.gps_location.match(/-?\d+\.?\d+/g)
+    if (!nums || nums.length < 2) { setWeatherData(null); return }
+    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1])
+    let cancelled = false
+    setWeatherLoading(true)
+    setWeatherData(null)
+    ;(async () => {
+      try {
+        const data = await getWeather(lat, lon)
+        if (!cancelled) { setWeatherData(data); setWeatherCondition(data.condition) }
+      } catch { if (!cancelled) setWeatherData(null) }
+      if (!cancelled) setWeatherLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [contextSelectedPlotId, farms])
 
   // Leaflet map lifecycle — init when plot modal opens, destroy when it closes
   useEffect(() => {
@@ -293,6 +321,7 @@ export default function ChatbotPage() {
       severity: contextSeverityRef.current?.value || '',
       irrigation: contextIrrigationRef.current?.value || '',
       phytosanitary: contextPhytoRef.current?.value || '',
+      weather: weatherCondition || '',
       notes: contextNotesRef.current?.value || '',
     }
 
@@ -419,6 +448,7 @@ export default function ChatbotPage() {
         loadConversations()
       }
       savedContextIdRef.current = contextId
+      setShowNoContextHint(false)
       const pkPlant = contextData.plant_key_or_id || `plot_${selectedPlot.id}`
       const pk = `${pkPlant}|${selectedPlot.id}`
       savedPlantKeyRef.current = pk
@@ -452,6 +482,7 @@ export default function ChatbotPage() {
     const imgPrev = imagePreview
     const imgType = imageFile?.type || ''
     removeImage()
+    setSuggestedQuestions([])
     setMessages(prev => [...prev, { role: 'user', content: text, image_type: imgType, image_path: imgPrev }]); setInputValue(''); setShowWelcome(false); setSending(true)
     let convId = activeConvId
     try {
@@ -487,16 +518,44 @@ export default function ChatbotPage() {
         const disease = analysisResult.disease_name_predicted || 'Pendiente'
         const severity = analysisResult.severity || 'Desconocida'
         const confidence = analysisResult.confidence_percent || '---'
-        const recs = analysisResult.recommendations_text || 'Consulta con un ingeniero agr\u00f3nomo para una evaluaci\u00f3n m\u00e1s precisa.'
-        const botReply =
-          '**An\u00e1lisis de imagen completado**\n\n' +
-          `**Diagn\u00f3stico estimado:** ${disease}\n` +
-          `**Severidad:** ${severity}\n` +
-          `**Confianza:** ${confidence}%\n\n` +
-          `**Hallazgos t\u00e9cnicos:** el an\u00e1lisis de la imagen sugiere la presencia de ${disease.toLowerCase()} con un nivel de severidad ${severity.toLowerCase()}. ` +
-          `La confianza del diagn\u00f3stico es del ${confidence}%, lo que indica que los patrones visuales coinciden con los s\u00edntomas t\u00edpicos de esta condici\u00f3n.\n\n` +
-          `**Recomendaciones:**\n${recs}`
-        await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
+        const recs = analysisResult.recommendations_text || ''
+
+        // Mensaje 1: Comprensi\u00f3n de la enfermedad e impacto
+        const diseasePrompt = [
+          `Pitahaya Vision detect\u00f3: ${disease} \u2014 severidad ${severity} \u2014 confianza ${confidence}%.\n`,
+          recs ? `Observaci\u00f3n del modelo: ${recs}\n` : '',
+          text ? `El agricultor pregunta: "${text}"\n` : '',
+          `\nComo fitopat\u00f3logo de pitahaya, explica en m\u00e1ximo 4 oraciones: qu\u00e9 es esta enfermedad, `,
+          `sus causas principales y el impacto agron\u00f3mico concreto para severidad ${severity}. `,
+          `Sin tratamiento, solo diagn\u00f3stico e impacto.`,
+        ].join('')
+
+        let botReply = ''
+        try {
+          const aiResult = await askChatbot({ message: diseasePrompt, conversation_id: convId, max_length: 300 })
+          botReply = aiResult.response || ''
+        } catch {}
+        if (!botReply) {
+          botReply = `**Diagn\u00f3stico:** ${disease}\n**Severidad:** ${severity}\n**Confianza:** ${confidence}%\n\n${recs || 'Consulta con un ingeniero agr\u00f3nomo.'}`
+        }
+        await sendMessage({ conversation: convId, role: 'assistant', content: `**Resultados del an\u00e1lisis**\n\n${botReply}` })
+
+        // Mensaje 2: Plan de tratamiento
+        const treatmentPrompt = [
+          `Pitahaya con "${disease}", severidad "${severity}".\n`,
+          `Como especialista fitosanitario, indica en forma de lista numerada (m\u00e1ximo 5 pasos) `,
+          `el plan de tratamiento inmediato y las medidas preventivas clave. S\u00e9 directo y espec\u00edfico.`,
+        ].join('')
+
+        let treatmentReply = ''
+        try {
+          const treatResult = await askChatbot({ message: treatmentPrompt, conversation_id: convId, max_length: 550 })
+          treatmentReply = treatResult.response || ''
+        } catch {}
+        if (!treatmentReply) {
+          treatmentReply = 'Consulte con un ingeniero agr\u00f3nomo para un plan de tratamiento espec\u00edfico seg\u00fan las condiciones locales del cultivo.'
+        }
+        await sendMessage({ conversation: convId, role: 'assistant', content: `**Plan de tratamiento**\n\n${treatmentReply}` })
 
         // Fetch plant histories once — used for both deduplication check and comparison
         let allPhs = []
@@ -547,15 +606,56 @@ export default function ChatbotPage() {
               confidence_percent: ph.analysis_result?.confidence_percent || '',
               created_at: ph.created_at || ph.analysis_result?.created_at || '',
             }))
-            comparisonText = generateComparison(normalized, analysisResult)
+            // Ordenar por fecha descendente para tomar el an\u00e1lisis previo m\u00e1s reciente
+            const sortedPrev = [...normalized].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            const prev = sortedPrev[0]
+            const fmt = (d) => d ? new Date(d).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Fecha no registrada'
+            const prevDate = fmt(prev.created_at)
+            const currentDate = fmt(new Date().toISOString())
+
+            // Encabezado estructurado con los datos clave de ambos an\u00e1lisis
+            const compHeader = [
+              `**Comparaci\u00f3n con an\u00e1lisis anterior**\n\n`,
+              `**An\u00e1lisis anterior** \u2014 ${prevDate}\n`,
+              `- Enfermedad detectada: ${prev.disease_name_predicted || 'No registrada'}\n`,
+              `- Severidad: ${prev.severity || 'No registrada'}\n`,
+              prev.confidence_percent ? `- Confianza del modelo: ${prev.confidence_percent}%\n` : '',
+              `\n**Diagn\u00f3stico actual** \u2014 ${currentDate}\n`,
+              `- Enfermedad detectada: ${disease}\n`,
+              `- Severidad: ${severity}\n`,
+              `- Confianza del modelo: ${confidence}%\n`,
+              `\n`,
+            ].join('')
+
+            const rawComp = generateComparison(normalized, analysisResult)
+            const compPrompt = (
+              `Cultivo de pitahaya:\n` +
+              `- An\u00e1lisis anterior (${prevDate}): "${prev.disease_name_predicted || 'sin datos'}", severidad "${prev.severity || 'sin datos'}"\n` +
+              `- Diagn\u00f3stico actual (${currentDate}): "${disease}", severidad "${severity}"\n\n` +
+              `En m\u00e1ximo 3 oraciones: \u00bfla condici\u00f3n mejor\u00f3, empeor\u00f3 o se mantuvo? \u00bfQu\u00e9 acci\u00f3n prioritaria debe tomar el agricultor?`
+            )
+            try {
+              const compResult = await askChatbot({ message: compPrompt, conversation_id: convId, no_rag: true, max_length: 250 })
+              comparisonText = compHeader + (compResult.response || rawComp || '')
+            } catch {
+              comparisonText = compHeader + (rawComp || '')
+            }
           }
         }
         if (comparisonText) {
           await sendMessage({ conversation: convId, role: 'assistant', content: comparisonText })
         }
+        generateSuggestions(comparisonText || treatmentReply || botReply)
       } else {
-        const botReply = 'Estoy procesando tu consulta sobre el cultivo. Un asesor agr\u00edcola podr\u00e1 darte una respuesta m\u00e1s precisa.'
+        let botReply = ''
+        try {
+          const aiResult = await askChatbot({ message: text, conversation_id: convId, max_length: 450 })
+          botReply = aiResult.response || 'No pude generar una respuesta. Intenta de nuevo.'
+        } catch {
+          botReply = 'Ocurri\u00f3 un error al consultar el asistente. Intenta de nuevo.'
+        }
         await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
+        generateSuggestions(botReply)
       }
       try {
         const full = await getConversation(convId)
@@ -572,6 +672,76 @@ export default function ChatbotPage() {
 
   const openParcelasModal = () => { setShowParcelasModal(true); closeSidebar() }
   const closeParcelasModal = () => { setShowParcelasModal(false) }
+
+  const animateClose = useCallback((modalRef, closeFn) => {
+    if (window.innerWidth >= 640 || !modalRef.current) { closeFn(); return }
+    const m = modalRef.current
+    m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
+    m.style.transform = 'translateY(110%)'
+    setTimeout(() => { m.style.transform = ''; m.style.transition = ''; animatedModalRefs.current.delete(modalRef); closeFn() }, 340)
+  }, [])
+
+  useEffect(() => {
+    if (window.innerWidth >= 640) return
+    const setups = [
+      { ref: parcelasModalRef, open: showParcelasModal, close: () => setShowParcelasModal(false) },
+      { ref: addFarmModalRef, open: showAddFarmModal, close: () => setShowAddFarmModal(false) },
+      { ref: addPlotModalRef, open: showAddPlotModal, close: () => setShowAddPlotModal(false) },
+      { ref: contextSelModalRef, open: showContextModal, close: () => setShowContextModal(false) },
+      { ref: profileModalRef, open: showProfileModal, close: () => setShowProfileModal(false) },
+      { ref: settingsModalRef, open: showSettingsModal, close: () => setShowSettingsModal(false) },
+    ]
+    const cleanups = []
+    setups.forEach(({ ref, open, close }) => {
+      if (!open || !ref.current) return
+      const modal = ref.current
+      const handle = modal.querySelector('.drag-handle')
+      if (!handle) return
+
+      // Animación de entrada JS (slide-up) — solo la primera vez que abre
+      if (!animatedModalRefs.current.has(ref)) {
+        animatedModalRefs.current.add(ref)
+        modal.style.transition = 'none'
+        modal.style.transform = 'translateY(100%)'
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
+            modal.style.transform = 'translateY(0)'
+          })
+        })
+      }
+
+      let sy = 0, dy = 0
+      const onStart = e => {
+        sy = e.touches[0].clientY; dy = 0
+        modal.style.transition = 'none'
+      }
+      const onMove = e => {
+        dy = Math.max(0, e.touches[0].clientY - sy)
+        modal.style.transform = `translateY(${dy}px)`
+      }
+      const onEnd = () => {
+        if (dy > 80) {
+          modal.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
+          modal.style.transform = 'translateY(110%)'
+          setTimeout(() => { modal.style.transform = ''; modal.style.transition = ''; animatedModalRefs.current.delete(ref); close() }, 340)
+        } else {
+          modal.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)'
+          modal.style.transform = 'translateY(0)'
+          setTimeout(() => { modal.style.transition = '' }, 320)
+        }
+      }
+      handle.addEventListener('touchstart', onStart, { passive: true })
+      handle.addEventListener('touchmove', onMove, { passive: true })
+      handle.addEventListener('touchend', onEnd, { passive: true })
+      cleanups.push(() => {
+        handle.removeEventListener('touchstart', onStart)
+        handle.removeEventListener('touchmove', onMove)
+        handle.removeEventListener('touchend', onEnd)
+      })
+    })
+    return () => cleanups.forEach(fn => fn())
+  }, [showParcelasModal, showAddFarmModal, showAddPlotModal, showContextModal, showProfileModal, showSettingsModal])
   const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
   const closeSidebar = () => { setSidebarOpen(false); document.body.style.overflow = '' }
   const toggleUserMenu = () => {
@@ -591,6 +761,7 @@ export default function ChatbotPage() {
 
   const newChat = () => {
     setMessages([]); setInputValue(''); removeImage()
+    setSuggestedQuestions([]); setShowNoContextHint(false)
     setShowWelcome(true); setActiveConvId(null)
     savedContextIdRef.current = null; savedPlantKeyRef.current = ''
     setContextSelectedFarmId(''); setContextSelectedZone(''); setContextSelectedPlotId('')
@@ -602,12 +773,25 @@ export default function ChatbotPage() {
     }
   }
 
+  const generateSuggestions = useCallback(async (botResponse) => {
+    if (!botResponse || botResponse.length < 30) return
+    try {
+      const data = await getSuggestions({ bot_response: botResponse })
+      const qs = (data.suggestions || []).slice(0, 3)
+      if (qs.length > 0) setSuggestedQuestions(qs)
+    } catch { /* sugerencias opcionales */ }
+  }, [])
+
+  const handleSuggestionClick = (question) => {
+    setSuggestedQuestions([])
+    suggest(question)
+  }
+
   const suggest = (text) => {
-    setInputValue(text)
-    setShowWelcome(false); setSending(true)
+    setSuggestedQuestions([])
+    setMessages(prev => [...prev, { role: 'user', content: text }])
+    setInputValue(''); setShowWelcome(false); setSending(true)
     setTimeout(async () => {
-      const botReply = 'Gracias por tu consulta. Estoy analizando la informaci\u00f3n para brindarte una respuesta adecuada sobre el manejo de tu cultivo de pitahaya.'
-      setSending(false)
       try {
         let convId = activeConvId
         if (!convId) {
@@ -615,18 +799,29 @@ export default function ChatbotPage() {
           convId = conv.id; setActiveConvId(convId); loadConversations()
         }
         await sendMessage({ conversation: convId, role: 'user', content: text })
+        let botReply = ''
+        try {
+          const aiResult = await askChatbot({ message: text, conversation_id: convId, max_length: 450 })
+          botReply = aiResult.response || 'No pude generar una respuesta. Intenta de nuevo.'
+        } catch {
+          botReply = 'Ocurri\u00f3 un error al consultar el asistente. Intenta de nuevo.'
+        }
         await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
         try {
           const full = await getConversation(convId)
           setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
         } catch {}
         loadConversations()
+        generateSuggestions(botReply)
       } catch {}
+      setInputValue('')
+      setSending(false)
     }, 800)
   }
 
   const selectConversation = async (conv) => {
     setActiveConvId(conv.id)
+    setSuggestedQuestions([])
     try {
       const full = await getConversation(conv.id)
       setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
@@ -777,26 +972,13 @@ export default function ChatbotPage() {
     try {
       const prefs = await getProfilePreferences()
       const s = prefs.preferences || {}
-      if (settingsThemeRef.current) settingsThemeRef.current.value = s.theme || 'light'
-      if (settingsFontSizeRef.current) settingsFontSizeRef.current.value = s.fontSize || 'medium'
-      if (settingsFontFamilyRef.current) settingsFontFamilyRef.current.value = s.fontFamily || 'inter'
-      if (settingsHighContrastRef.current) settingsHighContrastRef.current.checked = s.highContrast || false
-      if (settingsReducedMotionRef.current) settingsReducedMotionRef.current.checked = s.reducedMotion || false
-      if (settingsDyslexicFontRef.current) settingsDyslexicFontRef.current.checked = s.dyslexicFont || false
-      if (settingsColorBlindRef.current) settingsColorBlindRef.current.value = s.colorBlind || 'none'
-      const ctx = prefs.preferences?.contextOptions || { lotId: ['Lote 1', 'Lote 2', 'Sector A', 'Sector B'], zone: ['Zona norte', 'Zona sur', 'Zona este', 'Zona oeste'], rows: ['Parcela 1, hilera 1-5', 'Parcela 2, hilera 6-10'] }
-      setContextOptions(ctx)
+      setSTheme(s.theme || 'light')
     } catch {}
   }
 
   const handleSaveSettings = async () => {
-    const preferences = {
-      theme: settingsThemeRef.current?.value || 'light', fontSize: settingsFontSizeRef.current?.value || 'medium',
-      fontFamily: settingsFontFamilyRef.current?.value || 'inter', highContrast: settingsHighContrastRef.current?.checked || false,
-      reducedMotion: settingsReducedMotionRef.current?.checked || false, dyslexicFont: settingsDyslexicFontRef.current?.checked || false,
-      colorBlind: settingsColorBlindRef.current?.value || 'none', contextOptions,
-    }
-    try { await updateProfilePreferences({ preferences }); alert('Configuraciones guardadas.'); setShowSettingsModal(false) } catch { alert('Error al guardar configuraciones') }
+    const preferences = { theme: sTheme }
+    try { await updateProfilePreferences({ preferences }); animateClose(settingsModalRef, () => setShowSettingsModal(false)) } catch { alert('Error al guardar configuraciones') }
   }
 
   const addContextOption = (field) => {
@@ -834,18 +1016,92 @@ export default function ChatbotPage() {
   }
 
   const resetSettings = () => {
-    if (settingsThemeRef.current) settingsThemeRef.current.value = 'light'
-    if (settingsFontSizeRef.current) settingsFontSizeRef.current.value = 'medium'
-    if (settingsFontFamilyRef.current) settingsFontFamilyRef.current.value = 'inter'
-    if (settingsHighContrastRef.current) settingsHighContrastRef.current.checked = false
-    if (settingsReducedMotionRef.current) settingsReducedMotionRef.current.checked = false
-    if (settingsDyslexicFontRef.current) settingsDyslexicFontRef.current.checked = false
-    if (settingsColorBlindRef.current) settingsColorBlindRef.current.value = 'none'
-    setContextOptions({ lotId: ['Lote 1', 'Lote 2', 'Sector A', 'Sector B'], zone: ['Zona norte', 'Zona sur', 'Zona este', 'Zona oeste'], rows: ['Parcela 1, hilera 1-5', 'Parcela 2, hilera 6-10'] })
+    setSTheme('light')
   }
 
   const formatBotText = (text) => {
-    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/`(.*?)`/g, '<code>$1</code>').replace(/\n/g, '<br>')
+    if (!text) return ''
+
+    // 1. Escapar HTML base
+    let escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+
+    // Inline: aplica negrita, cursiva y código
+    const inline = (t) =>
+      t
+        .replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight:600">$1</strong>')
+        .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:0.82em;font-family:monospace">$1</code>')
+
+    const lines = escaped.split('\n')
+    const out = []
+    let inUl = false
+    let inOl = false
+    let olCounter = 0
+
+    const closeList = () => {
+      if (inUl) { out.push('</ul>'); inUl = false }
+      if (inOl) { out.push('</ol>'); inOl = false; olCounter = 0 }
+    }
+
+    for (const line of lines) {
+      const t = line.trim()
+
+      // Títulos
+      if (/^### (.+)/.test(t)) {
+        closeList()
+        out.push(`<p style="font-weight:700;font-size:0.9em;color:#1f2937;margin:10px 0 3px">${inline(t.slice(4))}</p>`)
+        continue
+      }
+      if (/^## (.+)/.test(t)) {
+        closeList()
+        out.push(`<p style="font-weight:700;font-size:0.95em;color:#111827;margin:12px 0 4px">${inline(t.slice(3))}</p>`)
+        continue
+      }
+      if (/^# (.+)/.test(t)) {
+        closeList()
+        out.push(`<p style="font-weight:800;font-size:1em;color:#111827;margin:14px 0 5px">${inline(t.slice(2))}</p>`)
+        continue
+      }
+
+      // Separador
+      if (/^---+$/.test(t)) {
+        closeList()
+        out.push('<hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0">')
+        continue
+      }
+
+      // Lista sin orden (- o *)
+      if (/^[-*] /.test(line)) {
+        if (!inUl) { closeList(); out.push('<ul style="padding-left:1.2rem;margin:4px 0;list-style:disc">'); inUl = true }
+        out.push(`<li style="margin:2px 0;color:#374151;line-height:1.55">${inline(line.replace(/^[-*] /, ''))}</li>`)
+        continue
+      }
+
+      // Lista numerada — renderizamos el número manualmente para evitar el reset de CSS de Tailwind
+      if (/^\d+\. /.test(line)) {
+        if (!inOl) { closeList(); out.push('<ol style="padding-left:0;margin:4px 0;list-style:none">'); inOl = true; olCounter = 0 }
+        olCounter++
+        out.push(`<li style="margin:3px 0;color:#374151;line-height:1.55;display:flex;gap:0.45em;align-items:flex-start"><span style="flex-shrink:0;font-weight:600;color:#4b5563;min-width:1.4em">${olCounter}.</span><span>${inline(line.replace(/^\d+\. /, ''))}</span></li>`)
+        continue
+      }
+
+      // Línea vacía → espacio vertical
+      if (t === '') {
+        closeList()
+        out.push('<div style="height:5px"></div>')
+        continue
+      }
+
+      // Párrafo normal
+      closeList()
+      out.push(`<span style="display:block;line-height:1.6;color:#374151">${inline(line)}</span>`)
+    }
+
+    closeList()
+    return out.join('')
   }
 
   const handleCopy = (text, index) => {
@@ -911,6 +1167,8 @@ export default function ChatbotPage() {
         .chip:active { background: #dcfce7; }
         .send-active { background: linear-gradient(135deg, #16a34a, #22c55e); cursor: pointer; }
         .send-inactive { background: #e5e7eb; cursor: not-allowed; }
+        .send-inactive svg { color: #9ca3af !important; }
+        .bot-text { color: #1f2937; }
         .user-bubble { background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; }
         .bot-text strong { font-weight: 600; }
         .bot-text code { background: #f0fdf4; padding: 1px 5px; border-radius: 4px; font-size: .85em; font-family: monospace; color: #15803d; }
@@ -958,21 +1216,38 @@ export default function ChatbotPage() {
         .sidebar-btn:hover { background: #f0fdf4; border-color: #22c55e; }
         .sidebar-btn:active { background: #dcfce7; }
         .sidebar-btn.active { background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 500; }
-        .context-overlay { position: fixed; inset: 0; z-index: 230; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .45); backdrop-filter: blur(4px); }
+        .context-overlay { position: fixed; inset: 0; z-index: 230; display: none; align-items: flex-end; justify-content: center; padding: 0; background: rgba(15, 23, 42, .45); backdrop-filter: blur(4px); }
         .context-overlay.open { display: flex; }
-        .context-modal { width: min(100%, 980px); max-height: min(92dvh, 960px); border-radius: 28px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); overflow: hidden; display: flex; flex-direction: column; }
+        .context-modal { width: 100%; max-height: 92dvh; border-radius: 28px 28px 0 0; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 -8px 48px rgba(15, 23, 42, .18); overflow: hidden; display: flex; flex-direction: column; }
+        @media (min-width: 640px) {
+          .context-overlay { align-items: center; padding: 1rem; }
+          .context-modal { width: min(100%, 980px); max-height: min(92dvh, 960px); border-radius: 28px; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); }
+        }
         .context-modal-header { background: #fff; color: #0f172a; border-bottom: 1px solid #eef2f7; flex-shrink: 0; }
         .context-modal-body { overflow-y: auto; background: linear-gradient(180deg, #fff 0%, #f8fafc 100%); flex: 1; }
+        .drag-handle { display: none; }
+        @media (max-width: 639px) {
+          .drag-handle { display: block; width: 36px; height: 4px; background: #cbd5e1; border-radius: 999px; margin: 10px auto 4px; flex-shrink: 0; touch-action: none; cursor: grab; }
+        }
+        .modal-footer-btns { display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; }
+        @media (max-width: 480px) {
+          .modal-footer-btns { flex-direction: column-reverse; }
+          .modal-footer-btns .context-save-btn,
+          .modal-footer-btns .context-secondary-btn { width: 100%; min-width: 0; text-align: center; font-size: 0.88rem; }
+        }
         .context-section { border: 1px solid #e5e7eb; background: #fff; border-radius: 22px; padding: 1rem; }
         .context-section-title { font-size: 0.78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #166534; }
         .context-badge { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 9999px; border: 1px solid #dcfce7; background: #f0fdf4; color: #15803d; padding: 0.3rem 0.7rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
         .context-input, .context-select, .context-textarea { width: 100%; border: 1px solid #dbe4ee; border-radius: 14px; background: #fff; color: #0f172a; padding: 0.78rem 0.9rem; font-size: 0.92rem; transition: border-color 0.14s ease, box-shadow 0.14s ease; }
         .context-input:focus, .context-select:focus, .context-textarea:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, .12); }
         .context-textarea { min-height: 104px; resize: vertical; }
-        .context-save-btn { min-width: 150px; padding: 0.92rem 1.15rem; border-radius: 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; font-size: 0.95rem; font-weight: 700; transition: transform 0.14s ease, box-shadow 0.14s ease; box-shadow: 0 14px 26px rgba(22, 163, 74, .18); border: none; cursor: pointer; }
+        .context-save-btn { min-width: 130px; padding: 0.82rem 1.15rem; border-radius: 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; font-size: 0.9rem; font-weight: 700; transition: transform 0.14s ease, box-shadow 0.14s ease; box-shadow: 0 14px 26px rgba(22, 163, 74, .18); border: none; cursor: pointer; }
         .context-save-btn:hover { transform: translateY(-1px); }
-        .context-secondary-btn { min-width: 110px; padding: 0.92rem 1.1rem; border-radius: 16px; border: 1px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.14s; }
+        .context-secondary-btn { min-width: 90px; padding: 0.82rem 1.1rem; border-radius: 16px; border: 1px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.14s; }
         .context-secondary-btn:hover { background: #f8fafc; }
+        @media (max-width: 400px) {
+          .context-save-btn, .context-secondary-btn { min-width: 0; flex: 1; font-size: 0.85rem; padding: 0.78rem 0.9rem; }
+        }
         .context-summary { border: 1px dashed #dcfce7; background: #f8fafc; border-radius: 18px; padding: 0.9rem 1rem; }
         .settings-field { border: 1px solid #edf2f7; border-radius: 18px; background: #f8fafc; padding: 0.9rem; }
         .settings-add-row { display: flex; gap: 0.65rem; flex-wrap: wrap; }
@@ -983,16 +1258,17 @@ export default function ChatbotPage() {
         .settings-chip button { width: 1.1rem; height: 1.1rem; border-radius: 9999px; background: #e2e8f0; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; flex-shrink: 0; border: none; cursor: pointer; }
         .settings-chip button:hover { background: #cbd5e1; }
         .parcelas-farm-card { border: 1px solid #eef2f7; border-radius: 22px; background: #fff; overflow: hidden; }
-        .parcelas-farm-header { border-bottom: 1px solid #eef2f7; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; }
-        .parcelas-farm-body { padding: 1rem; }
-        .parcelas-plots-table { width: 100%; border-collapse: collapse; }
+        .parcelas-farm-header { border-bottom: 1px solid #eef2f7; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+        .parcelas-farm-body { padding: 0.75rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .parcelas-plots-table { width: 100%; border-collapse: collapse; min-width: 480px; }
         .parcelas-plots-table thead { border-bottom: 1.5px solid #eef2f7; }
-        .parcelas-plots-table th { padding: 9px 10px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
-        .parcelas-plots-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; color: #0f172a; }
+        .parcelas-plots-table th { padding: 9px 10px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+        .parcelas-plots-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; color: #0f172a; white-space: nowrap; }
+        .parcelas-plots-table tbody tr:last-child td { border-bottom: none; }
         .parcelas-plots-table tbody tr:hover { background: #f8fafc; }
         .parcelas-select-btn { padding: 4px 10px; border-radius: 999px; border: 1px solid #dbe4ee; background: #fff; color: #16a34a; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 0.12s; white-space: nowrap; }
         .parcelas-select-btn:hover { background: #f0fdf4; border-color: #22c55e; }
-        .parcelas-empty-state { text-align: center; padding: 2rem 1rem; color: #94a3b8; }
+        .parcelas-empty-state { text-align: center; padding: 2.5rem 1rem; color: #94a3b8; display: flex; flex-direction: column; align-items: center; }
         .session-card { position: relative; }
         .session-card:hover .session-actions, .session-card:focus-within .session-actions, .session-card.menu-open .session-actions { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
         .session-actions { position: absolute; top: 50%; right: 0.7rem; transform: translateY(-50%) scale(0.98); opacity: 0; pointer-events: none; transition: opacity 0.14s ease, transform 0.14s ease; }
@@ -1046,7 +1322,19 @@ export default function ChatbotPage() {
         @media (min-width: 768px) { .plot-modal-body { grid-template-columns: 1fr 1fr; align-items: stretch; } }
         .plot-col { display: flex; flex-direction: column; gap: 1rem; }
         .plot-map-col { display: flex; flex-direction: column; gap: 0.75rem; }
-        .plot-map-fill { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; height: 320px; }
+        .plot-map-fill { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; height: 220px; }
+        @media (min-width: 768px) { .plot-map-fill { height: 320px; } }
+        /* ── Settings tabs & option cards ── */
+        .set-tab { border-radius: 9999px; border: 1px solid #e2e8f0; padding: 0.45rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.14s; background: #fff; color: #64748b; display: inline-flex; align-items: center; gap: 0.4rem; }
+        .set-tab.active { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+        .set-tab:hover:not(.active) { background: #f8fafc; border-color: #cbd5e1; }
+        .set-opt { border-radius: 12px; padding: 0.85rem 1rem; cursor: pointer; transition: all 0.14s; border: 1px solid #e2e8f0; background: #fff; text-align: left; width: 100%; display: block; }
+        .set-opt:hover { border-color: #86efac; box-shadow: 0 2px 6px rgba(0,0,0,.05); }
+        .set-opt.active { border-color: #bbf7d0 !important; background: #f0fdf4 !important; }
+        /* ── Suggested questions ── */
+        .suggested-q { background:#f3f4f6; border:1px solid #e5e7eb; border-radius:14px; padding:7px 14px; font-size:0.8rem; color:#374151; text-align:left; cursor:pointer; line-height:1.4; transition:background 0.15s,border-color 0.15s; max-width:90%; display:block; }
+        .suggested-q:hover { background:#e5e7eb; border-color:#d1d5db; }
+        .suggested-label { color:#9ca3af; }
       `}</style>
 
       {/* DRAWER OVERLAY */}
@@ -1129,7 +1417,7 @@ export default function ChatbotPage() {
       </div>
 
       {/* LAYOUT */}
-      <div className="h-screen flex overflow-hidden bg-white">
+      <div id="appLayout" className="h-screen flex overflow-hidden bg-white">
         {/* SIDEBAR */}
         <aside id="sidebar" className={sidebarOpen ? 'open' : ''}>
           <svg className="botanical-bg" viewBox="0 0 220 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1254,7 +1542,7 @@ export default function ChatbotPage() {
                       </div>
                     </div>
                     <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="context-save-btn w-full">
-                      <i className="fas fa-plus mr-2"></i>Registrar mi primera finca
+                      Registrar mi primera finca
                     </button>
                   </div>
                 ) : (
@@ -1300,7 +1588,7 @@ export default function ChatbotPage() {
                           <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="bot-text text-gray-800 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBotText(msg.content) }}></div>
+                          <div className="bot-text text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBotText(msg.content) }}></div>
                           <div className="flex gap-1 mt-2">
                             <button onClick={() => handleCopy(msg.content, i)} className="action-btn p-1.5 rounded-lg transition text-gray-400" title="Copiar" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                               {copiedIndex === i ? (
@@ -1333,6 +1621,27 @@ export default function ChatbotPage() {
                     </div>
                   </div>
                 )}
+                {!sending && suggestedQuestions.length > 0 && (
+                  <div className="flex gap-2 sm:gap-3 items-start animate-fade-up mt-1">
+                    <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="suggested-label" style={{ fontSize: '0.72rem', marginBottom: '6px', fontStyle: 'italic' }}>Preguntas sugeridas:</p>
+                      <div className="flex flex-col gap-1.5">
+                        {suggestedQuestions.map((q, qi) => (
+                          <button
+                            key={qi}
+                            onClick={() => handleSuggestionClick(q)}
+                            className="suggested-q"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1343,7 +1652,7 @@ export default function ChatbotPage() {
               {/* Hint: usuario sin fincas intenta interactuar */}
               {showNoFarmHint && farms.length === 0 && (
                 <div className="farm-hint mb-3 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
-                  <i className="fas fa-triangle-exclamation text-amber-500 flex-shrink-0"></i>
+                  <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu finca</p>
                     <p className="text-xs text-amber-700 mt-0.5">Necesitas al menos una parcela para empezar el análisis.</p>
@@ -1352,7 +1661,28 @@ export default function ChatbotPage() {
                     Crear finca
                   </button>
                   <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
-                    <i className="fas fa-xmark text-xs"></i>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Hint: tiene finca pero no ha seleccionado contexto (parcela) en esta sesión */}
+              {showNoContextHint && !savedContextIdRef.current && (
+                <div className="farm-hint mb-3 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
+                  <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-blue-900 leading-tight">Selecciona una parcela primero</p>
+                    <p className="text-xs text-blue-700 mt-0.5">Para analizar una imagen necesitas vincularla a una parcela de tu cultivo.</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowNoContextHint(false); setShowContextModal(true) }}
+                    className="flex-shrink-0 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-200 transition"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Seleccionar parcela
+                  </button>
+                  <button onClick={() => setShowNoContextHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-500 hover:bg-blue-200 flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                   </button>
                 </div>
               )}
@@ -1372,6 +1702,7 @@ export default function ChatbotPage() {
                 <button
                   onClick={() => {
                     if (farms.length === 0) { setShowNoFarmHint(true); return }
+                    if (!savedContextIdRef.current) { setShowNoContextHint(true); return }
                     fileInputRef.current?.click()
                   }}
                   title="Adjuntar imagen"
@@ -1384,7 +1715,7 @@ export default function ChatbotPage() {
                 <textarea
                   ref={inpRef}
                   value={inputValue}
-                  onChange={e => setInputValue(e.target.value)}
+                  onChange={e => { setInputValue(e.target.value); if (e.target.value) setSuggestedQuestions([]) }}
                   onKeyDown={handleKeyDown}
                   onFocus={() => { if (farms.length === 0) setShowNoFarmHint(true) }}
                   rows="1"
@@ -1412,16 +1743,24 @@ export default function ChatbotPage() {
       </div>
 
       {/* PROFILE MODAL */}
-      <div className={`context-overlay ${showProfileModal ? 'open' : ''}`} onClick={() => setShowProfileModal(false)}>
-        <div className="context-modal" onClick={e => e.stopPropagation()}>
-          <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+      <div className={`context-overlay ${showProfileModal ? 'open' : ''}`} onClick={() => animateClose(profileModalRef, () => setShowProfileModal(false))}>
+        <div className="context-modal" ref={profileModalRef} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
+          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <span className="context-badge">Perfil de usuario</span>
-                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Informacion personal</h3>
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Mantén tus datos actualizados y administra tu cuenta desde un solo panel.</p>
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
+                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                  <span className="context-badge">Perfil de usuario</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Información personal</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Mantén tus datos actualizados y gestiona tu cuenta.</p>
+                </div>
               </div>
-              <button onClick={() => setShowProfileModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500" style={{ border: 'none', cursor: 'pointer' }}><i className="fas fa-xmark"></i></button>
+              <button onClick={() => animateClose(profileModalRef, () => setShowProfileModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
           </div>
           <div className="context-modal-body px-4 sm:px-6 py-5">
@@ -1434,13 +1773,13 @@ export default function ChatbotPage() {
                         {(profilePhotoPreview || profilePhotoUrl) ? <img src={profilePhotoPreview || profilePhotoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover border-[3px] border-brand-500" /> : <div className="w-full h-full brand-avatar rounded-full flex items-center justify-center text-3xl font-bold text-white">{initials}</div>}
                       </div>
                     </div>
-                    <span className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-brand-500 text-white shadow-sm"><i className="fas fa-check text-[0.65rem]"></i></span>
+                    <span className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-brand-500 text-white shadow-sm"><svg className="w-3 h-3" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
                   </div>
                   <h2 className="text-lg font-semibold text-slate-900">{displayName}</h2>
                   <p className="text-sm text-slate-500">@{user?.username}</p>
                   <div className="mt-5 w-full">
                     <input id="profilePhotoInput" type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoSelect} />
-                    <label htmlFor="profilePhotoInput" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-600"><i className="fas fa-cloud-arrow-up text-base"></i><span>Cambiar foto</span></label>
+                    <label htmlFor="profilePhotoInput" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg><span>Cambiar foto</span></label>
                   </div>
                   <div className="mt-5 w-full space-y-2">
                     <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5"><span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Usuario</span><span className="text-sm font-semibold text-slate-800">{user?.username}</span></div>
@@ -1450,60 +1789,60 @@ export default function ChatbotPage() {
               </aside>
               <form className="space-y-5" onSubmit={handleUpdateProfile}>
                 <div className="context-section">
-                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><i className="fas fa-envelope text-slate-300"></i><span>Datos de cuenta</span><div className="h-px flex-1 bg-slate-200"></div></div>
+                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span>Datos de cuenta</span><div className="h-px flex-1 bg-slate-200"></div></div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Correo electronico</label>
                       <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <i className="fas fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
                         <input type="email" value={profileForm.email} onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Telefono</label>
                       <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <i className="fas fa-phone absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
                         <input type="tel" maxLength={10} value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
                       </div>
                     </div>
                   </div>
                 </div>
                 <div className="context-section">
-                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><i className="fas fa-user text-slate-300"></i><span>Datos personales</span><div className="h-px flex-1 bg-slate-200"></div></div>
+                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Datos personales</span><div className="h-px flex-1 bg-slate-200"></div></div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Nombre</label>
                       <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <i className="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                         <input type="text" value={profileForm.first_name} onChange={e => setProfileForm(p => ({ ...p, first_name: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Apellido</label>
                       <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <i className="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                         <input type="text" value={profileForm.last_name} onChange={e => setProfileForm(p => ({ ...p, last_name: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cedula</label>
                       <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <i className="fas fa-id-card absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 9.5h4M14 12.5h3"/></svg></span>
                         <input type="text" maxLength={10} value={profileForm.dni} onChange={e => setProfileForm(p => ({ ...p, dni: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Direccion</label>
                       <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <i className="fas fa-location-dot absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400"></i>
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg></span>
                         <input type="text" placeholder="Av. principal..." className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
                       </div>
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-                  <button type="button" onClick={() => setShowProfileModal(false)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer">Cancelar</button>
-                  <button type="submit" className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-green-600/20 transition-all hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-lg active:translate-y-0 cursor-pointer" style={{ border: 'none' }}><i className="fas fa-floppy-disk mr-1.5"></i>Guardar cambios</button>
+                  <button type="button" onClick={() => animateClose(profileModalRef, () => setShowProfileModal(false))} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer">Cancelar</button>
+                  <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-green-600/20 transition-all hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-lg active:translate-y-0 cursor-pointer" style={{ border: 'none' }}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar cambios</button>
                 </div>
               </form>
             </div>
@@ -1512,82 +1851,81 @@ export default function ChatbotPage() {
       </div>
 
       {/* SETTINGS MODAL */}
-      <div className={`context-overlay ${showSettingsModal ? 'open' : ''}`} onClick={() => setShowSettingsModal(false)}>
-        <div className="context-modal" onClick={e => e.stopPropagation()}>
-          <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+      <div className={`context-overlay ${showSettingsModal ? 'open' : ''}`} onClick={() => animateClose(settingsModalRef, () => setShowSettingsModal(false))}>
+        <div className="context-modal" ref={settingsModalRef} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
+          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <span className="context-badge">Configuraciones</span>
-                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Configuraciones y accesibilidad</h3>
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Personaliza la experiencia de la plataforma y administra las opciones de ubicacion para el formulario de analisis.</p>
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
+                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </div>
+                <div>
+                  <span className="context-badge">Preferencias</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Configuraciones</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Personaliza la apariencia, accesibilidad y realiza respaldos.</p>
+                </div>
               </div>
-              <button onClick={() => setShowSettingsModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500" style={{ border: 'none', cursor: 'pointer' }}><i className="fas fa-xmark"></i></button>
+              <button onClick={() => animateClose(settingsModalRef, () => setShowSettingsModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
           </div>
-          <div className="context-modal-body px-4 sm:px-6 py-5 space-y-5">
-            <div className="context-section">
-              <div className="mb-4">
-                <p className="context-section-title">Configuraciones generales</p>
-                <p className="text-sm text-slate-500 mt-1">Personaliza la apariencia y el comportamiento de la plataforma.</p>
+          <div className="context-modal-body px-4 sm:px-6 py-5 space-y-4">
+
+            {/* ── Tema de la interfaz ── */}
+            <div className="set-section rounded-2xl border border-slate-100 bg-slate-50 p-5">
+              <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <span>Apariencia</span>
+                <div className="set-divider h-px flex-1 bg-slate-200"/>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Tema de la interfaz</span><select ref={settingsThemeRef} className="context-select"><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Segun el sistema</option></select></label>
-                <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Tamaño de texto</span><select ref={settingsFontSizeRef} className="context-select"><option value="small">Pequeño</option><option value="medium">Mediano</option><option value="large">Grande</option></select></label>
-                <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Tipo de letra</span><select ref={settingsFontFamilyRef} className="context-select"><option value="inter">Inter (predeterminada)</option><option value="lexend">Lexend</option><option value="opendyslexic">OpenDyslexic</option><option value="roboto">Roboto</option><option value="comic-neue">Comic Neue</option><option value="courier-prime">Courier Prime</option><option value="atkinson">Atkinson Hyperlegible</option><option value="times-new-roman">Times New Roman</option></select></label>
-              </div>
-            </div>
-            <div className="context-section">
-              <div className="mb-4">
-                <p className="context-section-title">Accesibilidad del chat</p>
-                <p className="text-sm text-slate-500 mt-1">Controla como el chatbot presenta y entrega sus respuestas.</p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Modo de daltonismo</span><select ref={settingsColorBlindRef} className="context-select"><option value="none">Normal</option><option value="protanopia">Protanopia (dificultad rojo)</option><option value="deuteranopia">Deuteranopia (dificultad verde)</option><option value="tritanopia">Tritanopia (dificultad azul)</option></select></label>
-              </div>
-            </div>
-            <div className="context-section">
-              <div className="mb-4">
-                <p className="context-section-title">Accesibilidad visual</p>
-                <p className="text-sm text-slate-500 mt-1">Opciones visuales y de interaccion adicionales.</p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <label className="block flex items-start gap-3 pt-6"><input type="checkbox" ref={settingsHighContrastRef} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" /><div><span className="block text-sm font-medium text-slate-700">Alto contraste</span><p className="text-xs text-slate-500 mt-0.5">Mejora la legibilidad de los elementos.</p></div></label>
-                <label className="block flex items-start gap-3 pt-6"><input type="checkbox" ref={settingsReducedMotionRef} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" /><div><span className="block text-sm font-medium text-slate-700">Reducir animaciones</span><p className="text-xs text-slate-500 mt-0.5">Minimiza transiciones y movimientos.</p></div></label>
-                <label className="block flex items-start gap-3 pt-6"><input type="checkbox" ref={settingsDyslexicFontRef} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" /><div><span className="block text-sm font-medium text-slate-700">Tipografia amigable</span><p className="text-xs text-slate-500 mt-0.5">Fuente disenada para dislexia.</p></div></label>
-              </div>
-            </div>
-            <div className="context-section">
-              <div className="mb-4">
-                <p className="context-section-title">Opciones de ubicacion</p>
-                <p className="text-sm text-slate-500 mt-1">Administra las opciones disponibles en los selects del formulario de contexto.</p>
-              </div>
-              {['lotId', 'zone', 'rows'].map(field => (
-                <div key={field} className="settings-field mb-3">
-                  <div className="settings-add-row">
-                    <input ref={{ lotId: settingsLotInputRef, zone: settingsZoneInputRef, rows: settingsRowsInputRef }[field]} className="context-input" placeholder={`Agregar ${field === 'lotId' ? 'lote' : field === 'zone' ? 'zona' : 'parcela/hilera'}...`} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addContextOption(field) } }} />
-                    <button className="settings-add-btn" onClick={() => addContextOption(field)} style={{ border: 'none', cursor: 'pointer' }}>Agregar</button>
-                  </div>
-                  <div className="settings-chip-list">
-                    {contextOptions[field].length === 0 ? <p className="settings-empty">Todavia no hay opciones creadas.</p> : contextOptions[field].map((val, vi) => (
-                      <span key={vi} className="settings-chip"><span>{val}</span><button onClick={() => removeContextOption(field, val)}>&times;</button></span>
-                    ))}
-                  </div>
+              <div className="set-section-inner rounded-xl border border-slate-200 bg-white p-4">
+                <p className="font-cormorant text-xl font-semibold text-slate-900">Tema de la interfaz</p>
+                <p className="mb-4 text-sm text-slate-500 mt-0.5">Selecciona la apariencia visual de la plataforma.</p>
+                <div className="grid gap-3 grid-cols-3">
+                  {[
+                    { id: 'light', label: 'Claro', desc: 'Fondo blanco, modo día.', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> },
+                    { id: 'dark', label: 'Oscuro', desc: 'Modo noche elegante.', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> },
+                    { id: 'system', label: 'Automático', desc: 'Sigue al sistema.', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
+                  ].map(({ id, label, desc, icon }) => (
+                    <button key={id} onClick={() => setSTheme(id)} className={`set-opt ${sTheme === id ? 'active' : ''}`}>
+                      <span className={`block mb-2 ${sTheme === id ? 'text-brand-600' : 'text-slate-400'}`}>{icon}</span>
+                      <b className="block text-sm text-slate-900">{label}</b>
+                      <p className="mt-0.5 text-xs text-slate-500">{desc}</p>
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="context-section">
-              <div className="mb-4">
-                <p className="context-section-title">Respaldo de datos</p>
-                <p className="text-sm text-slate-500 mt-1">Exporta o importa toda tu informacion (sesiones, analisis, configuraciones).</p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button onClick={exportBackup} className="context-secondary-btn"><i className="fas fa-download mr-1.5"></i> Exportar respaldo</button>
-                <label className="context-secondary-btn cursor-pointer inline-flex items-center gap-2"><i className="fas fa-upload"></i> Importar respaldo<input type="file" accept=".json" className="hidden" onChange={importBackup} /></label>
               </div>
             </div>
+
+            {/* ── Respaldo de datos ── */}
+            <div className="set-section rounded-2xl border border-slate-100 bg-slate-50 p-5">
+              <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                <span>Datos</span>
+                <div className="set-divider h-px flex-1 bg-slate-200"/>
+              </div>
+              <div className="set-section-inner rounded-xl border border-slate-200 bg-white p-4">
+                <p className="font-cormorant text-xl font-semibold text-slate-900">Respaldo de datos</p>
+                <p className="mb-4 text-sm text-slate-500 mt-0.5">Exporta o importa toda tu información: sesiones, análisis y parcelas.</p>
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={exportBackup}
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer inline-flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Exportar respaldo
+                  </button>
+                  <label className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer inline-flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Importar respaldo<input type="file" accept=".json" className="hidden" onChange={importBackup} />
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-              <button onClick={resetSettings} className="context-secondary-btn">Restaurar valores</button>
-              <button onClick={() => setShowSettingsModal(false)} className="context-secondary-btn">Cerrar</button>
+              <button onClick={resetSettings} className="context-secondary-btn">Restaurar configuraciones</button>
+              <button onClick={() => animateClose(settingsModalRef, () => setShowSettingsModal(false))} className="context-secondary-btn">Cerrar</button>
               <button onClick={handleSaveSettings} className="context-save-btn">Guardar configuraciones</button>
             </div>
           </div>
@@ -1595,8 +1933,9 @@ export default function ChatbotPage() {
       </div>
 
       {/* CONTEXT MODAL */}
-      <div className={`context-overlay ${showContextModal ? 'open' : ''}`} onClick={() => setShowContextModal(false)}>
-        <div className="context-modal" onClick={e => e.stopPropagation()}>
+      <div className={`context-overlay ${showContextModal ? 'open' : ''}`} onClick={() => animateClose(contextSelModalRef, () => setShowContextModal(false))}>
+        <div className="context-modal" ref={contextSelModalRef} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
           <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1604,7 +1943,7 @@ export default function ChatbotPage() {
                 <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Registrar datos de la planta antes del escaneo</h3>
                 <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Guarda solo lo que ayuda a entender la planta enferma y a tomar decisiones futuras en el cultivo.</p>
               </div>
-              <button onClick={() => setShowContextModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500" style={{ border: 'none', cursor: 'pointer' }}><i className="fas fa-xmark"></i></button>
+              <button onClick={() => animateClose(contextSelModalRef, () => setShowContextModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div className="context-summary mt-5 grid gap-2 sm:grid-cols-2">
               <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Uso</p><p className="text-sm text-gray-700 mt-1">Conectar diagnostico, contexto del lote y resultado final.</p></div>
@@ -1620,7 +1959,7 @@ export default function ChatbotPage() {
                     <p className="text-sm text-slate-500 mt-1">Ubica con precision la planta afectada.</p>
                   </div>
                   <button type="button" onClick={() => { setShowContextModal(false); openParcelasModal() }} className="text-[0.7rem] font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition px-3 py-1.5 rounded-full flex items-center gap-1.5 flex-shrink-0 cursor-pointer" style={{ border: 'none' }}>
-                    <i className="fas fa-field" style={{ fontSize: '0.65rem' }}></i>Mis parcelas
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Mis parcelas
                   </button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1648,6 +1987,41 @@ export default function ChatbotPage() {
                   <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Planta / unidad</span><input type="text" ref={contextPlantRef} className="context-input" placeholder="Ej: Planta 0147, Unidad 12" /></label>
                   <label className="block lg:col-span-2"><span className="block text-sm font-medium text-slate-700 mb-2">GPS o ubicacion exacta</span><input type="text" ref={contextLocationRef} className="context-input" placeholder="Lat. -1.234567, Lon. -79.123456 o referencia en campo" /></label>
                 </div>
+                <div className="mt-4">
+                  <span className="block text-sm font-medium text-slate-700 mb-2">Condiciones climaticas recientes</span>
+                  {weatherLoading ? (
+                    <div className="context-input flex items-center gap-2.5 text-slate-400 text-sm">
+                      <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                      Consultando clima de la parcela...
+                    </div>
+                  ) : weatherData ? (
+                    <div className="rounded-xl border border-brand-200 bg-brand-50 p-3.5">
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-sm font-semibold text-brand-700">{weatherData.condition}</span>
+                        <span className="text-[0.68rem] text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5">Auto · últimos 3 días</span>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-slate-600 mb-3">
+                        <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/><line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/></svg>{weatherData.totalPrecip} mm lluvia</span>
+                        <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 0 12H7a5 5 0 1 1 4.9-6"/></svg>{weatherData.avgHumidity}% humedad</span>
+                        <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>{weatherData.avgTemp}°C temp.</span>
+                      </div>
+                      <select value={weatherCondition} onChange={e => setWeatherCondition(e.target.value)} className="context-select text-sm">
+                        <option value="Lluvioso">Lluvioso</option>
+                        <option value="Húmedo sin lluvia">Húmedo sin lluvia</option>
+                        <option value="Normal para la época">Normal para la época</option>
+                        <option value="Período seco">Período seco</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <select value={weatherCondition} onChange={e => setWeatherCondition(e.target.value)} className="context-select">
+                      <option value="">Seleccionar condición</option>
+                      <option value="Lluvioso">Lluvioso (últimos 3-5 días)</option>
+                      <option value="Húmedo sin lluvia">Húmedo sin lluvia</option>
+                      <option value="Normal para la época">Normal para la época</option>
+                      <option value="Período seco">Período seco</option>
+                    </select>
+                  )}
+                </div>
               </div>
               <div className="context-section">
                 <div className="mb-4">
@@ -1657,12 +2031,12 @@ export default function ChatbotPage() {
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <label className="block lg:col-span-2"><span className="block text-sm font-medium text-slate-700 mb-2">Sintoma principal</span><input type="text" ref={contextSymptomRef} className="context-input" placeholder="Manchas, clorosis, pudricion, marchitez, dano en tallo..." /></label>
                   <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Organo afectado</span>
-                    <select ref={contextPartRef} className="context-select"><option value="">Seleccionar</option><option>Tallo</option><option>Raiz</option><option>Cladodio / brazo</option><option>Flor</option><option>Fruto</option><option>Brote</option></select>
+                    <select ref={contextPartRef} className="context-select"><option value="">Seleccionar</option><option>Cladodio / brazo</option><option>Fruto</option><option>Tallo principal</option><option>Raíz</option><option>Ramita / brote joven</option><option>Flor</option></select>
                   </label>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 mt-4">
                   <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Fase fenologica</span>
-                    <select ref={contextStageRef} className="context-select"><option value="">Seleccionar</option><option>Brotacion floral</option><option>Antesis (Floracion)</option><option>Amarre o Cuajado</option><option>Madurez y Cosecha</option></select>
+                    <select ref={contextStageRef} className="context-select"><option value="">Seleccionar</option><option>Vegetativo / Crecimiento</option><option>Brotacion floral</option><option>Antesis (Floracion)</option><option>Amarre o Cuajado</option><option>Madurez y Cosecha</option><option>Post-cosecha</option></select>
                   </label>
                   <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Severidad observada</span>
                     <select ref={contextSeverityRef} className="context-select"><option value="">Seleccionar</option><option>Baja</option><option>Moderada</option><option>Alta</option><option>Critica</option></select>
@@ -1698,6 +2072,7 @@ export default function ChatbotPage() {
                     if (contextIrrigationRef.current) contextIrrigationRef.current.value = ''
                     if (contextPhytoRef.current) contextPhytoRef.current.value = ''
                     if (contextNotesRef.current) contextNotesRef.current.value = ''
+                    setWeatherData(null); setWeatherCondition('')
                   }}>Limpiar</button>
                   <button type="button" className="context-secondary-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false) }}>Guardar</button>
                   <button type="button" className="context-save-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false); setTimeout(() => fileInputRef.current?.click(), 300) }}>Guardar y cargar imagen</button>
@@ -1709,57 +2084,115 @@ export default function ChatbotPage() {
       </div>
 
       {/* PARCELAS MODAL */}
-      <div className={`context-overlay ${showParcelasModal ? 'open' : ''}`} onClick={closeParcelasModal}>
-        <div className="context-modal" onClick={e => e.stopPropagation()}>
-          <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+      <div className={`context-overlay ${showParcelasModal ? 'open' : ''}`} onClick={() => animateClose(parcelasModalRef, closeParcelasModal)}>
+        <div className="context-modal" ref={parcelasModalRef} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
+          {/* ── Header ── */}
+          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <span className="context-badge">Gestion de propiedades</span>
-                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Mis Parcelas</h3>
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Administra tus fincas y parcelas para asociarlas al contexto de analisis.</p>
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
+                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="context-badge">Gestión de propiedades</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Mis Parcelas</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Administra tus fincas y asocia parcelas al análisis.</p>
+                </div>
               </div>
-              <button onClick={closeParcelasModal} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500" style={{ border: 'none', cursor: 'pointer' }}><i className="fas fa-xmark"></i></button>
+              <button onClick={() => animateClose(parcelasModalRef, closeParcelasModal)} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
             </div>
           </div>
-          <div className="context-modal-body px-4 sm:px-6 py-5">
-            <div className="mb-5">
-              <button onClick={openAddFarmModal} className="w-full py-3 bg-white border-2 border-dashed border-gray-300 rounded-2xl text-brand-600 font-semibold flex items-center justify-center gap-3 transition-all hover:border-brand-500 hover:bg-brand-50 cursor-pointer" style={{ background: 'none' }}><i className="fas fa-plus"></i>Agregar nueva finca</button>
-            </div>
-            <div id="parcelasFarmsList" className="space-y-4">
+
+          {/* ── Body ── */}
+          <div className="context-modal-body px-5 sm:px-7 py-5">
+            {/* Botón agregar finca */}
+            <button onClick={openAddFarmModal} className="w-full mb-5 flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50 transition-all group cursor-pointer" style={{ background: 'none' }}>
+              <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 group-hover:bg-brand-100 transition flex-shrink-0">
+                <svg className="w-4 h-4 text-gray-500 group-hover:text-brand-600 transition" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              </span>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-gray-600 group-hover:text-brand-700 transition">Agregar nueva finca</p>
+                <p className="text-xs text-gray-400 group-hover:text-brand-500 transition">Registra una propiedad agrícola</p>
+              </div>
+            </button>
+
+            {/* Lista de fincas */}
+            <div id="parcelasFarmsList" className="space-y-3">
               {farms.length === 0 ? (
-                <div className="parcelas-empty-state"><i className="fas fa-tree text-2xl mb-3 block"></i><p>Aun no has registrado ninguna finca.</p><p className="text-xs mt-1">Crea una finca para empezar a administrar tus parcelas.</p></div>
+                <div className="parcelas-empty-state">
+                  <span className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-3" style={{ background: 'linear-gradient(135deg,#dcfce7,#bbf7d0)' }}>
+                    <svg className="w-7 h-7 text-brand-600" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 22v-3" /><circle cx="10" cy="10" r="3" /></svg>
+                  </span>
+                  <p className="font-medium text-gray-600">Aún no tienes fincas registradas</p>
+                  <p className="text-xs mt-1 text-gray-400">Crea tu primera finca para administrar tus parcelas.</p>
+                </div>
               ) : (
                 farms.map(farm => (
                   <div key={farm.id} className="parcelas-farm-card">
                     <div className="parcelas-farm-header">
-                      <div><p className="font-semibold text-gray-900 text-sm">{farm.name}</p><p className="text-xs text-gray-500">{farm.location || 'Sin ubicacion'}</p></div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openAddPlotModal(farm)} className="parcelas-select-btn">+ Parcela</button>
-                        <button onClick={() => handleDeleteFarm(farm.id)} className="text-xs text-red-400 hover:text-red-600 transition cursor-pointer" style={{ background: 'none', border: 'none' }}><i className="fas fa-trash"></i></button>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg,#dcfce7,#bbf7d0)' }}>
+                          <svg className="w-3.5 h-3.5 text-brand-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><circle cx="10" cy="10" r="3" /></svg>
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 text-sm truncate">{farm.name}</p>
+                          <p className="text-xs text-gray-400 flex items-center gap-1">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" /><circle cx="12" cy="10" r="3" /></svg>
+                            {farm.location || 'Sin ubicación'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => openAddPlotModal(farm)} className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition px-3 py-1.5 rounded-xl cursor-pointer" style={{ border: 'none' }}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                          Parcela
+                        </button>
+                        <button onClick={() => handleDeleteFarm(farm.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar finca">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                        </button>
                       </div>
                     </div>
                     {farm.plots && farm.plots.length > 0 && (
                       <div className="parcelas-farm-body">
                         <table className="parcelas-plots-table">
-                          <thead><tr><th>Parcela</th><th>Zona</th><th>Hilera</th><th>GPS</th><th>Hectareas</th><th></th></tr></thead>
+                          <thead>
+                            <tr>
+                              <th>Parcela</th><th>Zona</th><th>Hilera</th><th>GPS</th><th>Ha.</th><th></th>
+                            </tr>
+                          </thead>
                           <tbody>
                             {farm.plots.map(plot => (
                               <tr key={plot.id}>
                                 <td className="font-medium">{plot.name}</td>
-                                <td>{plot.zone || '---'}</td>
-                                <td>{plot.rows || '---'}</td>
-                                <td className="text-xs">{plot.gps_location || '---'}</td>
-                                <td>{plot.hectares || '---'}</td>
+                                <td>{plot.zone || '—'}</td>
+                                <td>{plot.rows || '—'}</td>
+                                <td className="text-xs">{plot.gps_location || '—'}</td>
+                                <td>{plot.hectares || '—'}</td>
                                 <td>
                                   <div className="flex items-center gap-1">
-                                    <button onClick={() => handleSelectPlot(plot, farm)} className="text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition px-2 py-1 rounded-full cursor-pointer" style={{ border: 'none' }}><i className="fas fa-check mr-0.5"></i></button>
-                                    <button onClick={() => handleDeletePlot(plot.id)} className="text-xs text-red-400 hover:text-red-600 transition cursor-pointer" style={{ background: 'none', border: 'none' }}><i className="fas fa-times"></i></button>
+                                    <button onClick={() => handleSelectPlot(plot, farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition cursor-pointer" style={{ border: 'none' }} title="Seleccionar parcela">
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                                    </button>
+                                    <button onClick={() => handleDeletePlot(plot.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar parcela">
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                    </button>
                                   </div>
                                 </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                    {(!farm.plots || farm.plots.length === 0) && (
+                      <div className="px-4 py-3 flex items-center gap-2 text-xs text-gray-400 border-t border-gray-100">
+                        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                        Sin parcelas. Añade una para iniciar análisis.
                       </div>
                     )}
                   </div>
@@ -1770,28 +2203,38 @@ export default function ChatbotPage() {
         </div>
       </div>
 
-      {/* ADD FARM MODAL — Rediseñado */}
-      <div className={`context-overlay ${showAddFarmModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => setShowAddFarmModal(false)}>
-        <div className="context-modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
-          <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+      {/* ADD FARM MODAL */}
+      <div className={`context-overlay ${showAddFarmModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))}>
+        <div className="context-modal" ref={addFarmModalRef} style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
+          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <span className="context-badge"><i className="fas fa-map-location-dot mr-1.5"></i>Nueva finca</span>
-                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Registrar finca</h3>
-                <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">Ingresa los datos básicos de tu propiedad agrícola.<br />Después podrás agregar parcelas.</p>
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
+                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="context-badge">Nueva finca</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Registrar finca</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Después podrás agregar parcelas.</p>
+                </div>
               </div>
-              <button onClick={() => setShowAddFarmModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <i className="fas fa-xmark"></i>
+              <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
           </div>
-          <div className="context-modal-body px-5 sm:px-8 py-6">
+          <div className="context-modal-body px-5 sm:px-7 py-6">
             <div className="context-section space-y-4">
               <p className="context-section-title">Datos de la finca</p>
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-2">Nombre de la finca <span className="text-red-400">*</span></span>
                 <div className="relative">
-                  <i className="fas fa-tree-city absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><circle cx="10" cy="10" r="3" /></svg>
+                  </span>
                   <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Finca El Paraíso" value={farmName}
                     onChange={e => { setFarmName(e.target.value); if (farmError) setFarmError('') }}
                     onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
@@ -1800,7 +2243,9 @@ export default function ChatbotPage() {
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-2">Ubicación / Sector</span>
                 <div className="relative">
-                  <i className="fas fa-location-dot absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" /><circle cx="12" cy="10" r="3" /></svg>
+                  </span>
                   <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Machala, El Oro, Ecuador" value={farmLocation}
                     onChange={e => setFarmLocation(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
@@ -1808,38 +2253,47 @@ export default function ChatbotPage() {
               </label>
               {farmError && (
                 <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                  <i className="fas fa-circle-exclamation flex-shrink-0"></i>{farmError}
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  {farmError}
                 </p>
               )}
-              <div className="flex items-start gap-2 bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
-                <i className="fas fa-circle-info text-brand-500 mt-0.5 text-sm flex-shrink-0"></i>
+              <div className="flex items-start gap-2.5 bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
+                <svg className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
                 <p className="text-xs text-brand-700 leading-relaxed">Al crear la finca, podrás agregar parcelas de inmediato. Necesitas al menos una parcela para iniciar un análisis.</p>
               </div>
             </div>
           </div>
-          <div className="px-5 sm:px-8 py-5 border-t border-gray-100 flex justify-end gap-3">
-            <button onClick={() => setShowAddFarmModal(false)} className="context-secondary-btn">Cancelar</button>
-            <button onClick={handleCreateFarm} className="context-save-btn">
-              <i className="fas fa-plus mr-2"></i>Crear finca y agregar parcela
+          <div className="px-5 sm:px-7 py-5 border-t border-gray-100 modal-footer-btns">
+            <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="context-secondary-btn">Cancelar</button>
+            <button onClick={handleCreateFarm} className="context-save-btn flex items-center justify-center gap-2">
+              Crear finca y agregar parcela
             </button>
           </div>
         </div>
       </div>
 
       {/* ADD PLOT MODAL — Rediseñado con mapa GPS */}
-      <div className={`context-overlay ${showAddPlotModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => setShowAddPlotModal(false)}>
-        <div className="context-modal" style={{ maxWidth: '960px' }} onClick={e => e.stopPropagation()}>
-          <div className="context-modal-header px-5 py-4 sm:px-8 sm:py-5">
+      <div className={`context-overlay ${showAddPlotModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))}>
+        <div className="context-modal" ref={addPlotModalRef} style={{ maxWidth: '960px' }} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
+          <div className="context-modal-header px-5 py-4 sm:px-7 sm:py-5">
             <div className="flex items-center justify-between gap-4">
-              <div>
-                <span className="context-badge"><i className="fas fa-seedling mr-1.5"></i>Nueva parcela</span>
-                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-2 leading-tight">
-                  Registrar parcela
-                  {selectedFarmForPlot && <span className="font-cormorant text-brand-600"> — {selectedFarmForPlot.name}</span>}
-                </h3>
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
+                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M12 2a9.5 9.5 0 0 0 0 19c1.6 0 3-.4 4.2-1" /><path d="M12 2c2 4 4 6 4 9a4 4 0 0 1-8 0c0-3 2-5 4-9z" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="context-badge">Nueva parcela</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">
+                    Registrar parcela
+                    {selectedFarmForPlot && <span className="font-cormorant text-brand-600"> — {selectedFarmForPlot.name}</span>}
+                  </h3>
+                </div>
               </div>
-              <button onClick={() => setShowAddPlotModal(false)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <i className="fas fa-xmark"></i>
+              <button onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
           </div>
@@ -1854,7 +2308,9 @@ export default function ChatbotPage() {
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-2">Nombre <span className="text-red-400">*</span></span>
                 <div className="relative">
-                  <i className="fas fa-map absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
+                  </span>
                   <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Parcela A, Hilera 1-5" value={plotName}
                     onChange={e => { setPlotName(e.target.value); if (plotError) setPlotError('') }} />
                 </div>
@@ -1863,7 +2319,9 @@ export default function ChatbotPage() {
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-2">Zona</span>
                 <div className="relative">
-                  <i className="fas fa-compass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><path d="m12 16 .01 0" /></svg>
+                  </span>
                   <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Zona norte" value={plotZone} onChange={e => setPlotZone(e.target.value)} />
                 </div>
               </label>
@@ -1871,7 +2329,9 @@ export default function ChatbotPage() {
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-2">Hileras</span>
                 <div className="relative">
-                  <i className="fas fa-list-ol absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+                  </span>
                   <input type="text" className="context-input ctx-icon-input" placeholder="Ej: 1-10" value={plotRows} onChange={e => setPlotRows(e.target.value)} />
                 </div>
               </label>
@@ -1879,19 +2339,22 @@ export default function ChatbotPage() {
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-2">Hectáreas</span>
                 <div className="relative">
-                  <i className="fas fa-ruler-combined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none z-10"></i>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 3H3" /><path d="M21 21H3" /><path d="M3 3v18" /><path d="M21 3v18" /><path d="m3 12 5-5 4 4 5-6 4 5" /></svg>
+                  </span>
                   <input type="number" className="context-input ctx-icon-input" placeholder="Ej: 2.5" step="0.1" min="0" value={plotHectares} onChange={e => setPlotHectares(e.target.value)} />
                 </div>
               </label>
 
               {plotError && (
                 <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                  <i className="fas fa-circle-exclamation flex-shrink-0"></i>{plotError}
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  {plotError}
                 </p>
               )}
               <div className="mt-auto pt-3 border-t border-gray-100">
                 <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                  <i className="fas fa-circle-info text-brand-400"></i>
+                  <svg className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
                   Solo el nombre es obligatorio. Puedes editar los demás datos después.
                 </p>
               </div>
@@ -1907,8 +2370,8 @@ export default function ChatbotPage() {
                 </div>
                 <button onClick={handleGetLocation} disabled={geoLoading} className="geo-btn">
                   {geoLoading
-                    ? <><i className="fas fa-spinner fa-spin text-brand-500"></i><span>Obteniendo...</span></>
-                    : <><i className="fas fa-location-crosshairs text-brand-500"></i><span>Mi ubicación</span></>
+                    ? <><svg className="w-4 h-4 text-brand-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg><span>Obteniendo...</span></>
+                    : <><svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><path d="M12 5a7 7 0 1 0 7 7" /></svg><span>Mi ubicación</span></>
                   }
                 </button>
               </div>
@@ -1918,7 +2381,7 @@ export default function ChatbotPage() {
                 <label className="block">
                   <span className="block text-xs font-semibold text-slate-600 mb-1.5">Latitud</span>
                   <div className="relative">
-                    <i className="fas fa-arrows-up-down absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none z-10"></i>
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10"><svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2v20M5 9l7-7 7 7M5 15l7 7 7-7" /></svg></span>
                     <input
                       type="number" step="any" className="context-input ctx-icon-input text-sm" placeholder="-2.123456"
                       value={plotGpsCoords.lat}
@@ -1941,7 +2404,7 @@ export default function ChatbotPage() {
                 <label className="block">
                   <span className="block text-xs font-semibold text-slate-600 mb-1.5">Longitud</span>
                   <div className="relative">
-                    <i className="fas fa-arrows-left-right absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none z-10"></i>
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10"><svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M2 12h20M9 5l-7 7 7 7M15 5l7 7-7 7" /></svg></span>
                     <input
                       type="number" step="any" className="context-input ctx-icon-input text-sm" placeholder="-79.123456"
                       value={plotGpsCoords.lng}
@@ -1966,14 +2429,14 @@ export default function ChatbotPage() {
               {/* Badge coordenadas */}
               {plotGps
                 ? <div className="gps-badge mb-3">
-                    <i className="fas fa-location-dot text-brand-500 flex-shrink-0"></i>
+                    <svg className="w-3.5 h-3.5 text-brand-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" /><circle cx="12" cy="10" r="3" /></svg>
                     <span className="truncate text-xs"><strong>{plotGps}</strong></span>
                     <button onClick={() => { setPlotGps(''); setPlotGpsCoords({ lat:'', lng:'' }); if (mapMarkerRef.current && leafletMapRef.current) { mapMarkerRef.current.remove(); mapMarkerRef.current = null } }} className="ml-auto flex-shrink-0 text-slate-400 hover:text-red-400 transition" style={{ background:'none', border:'none', cursor:'pointer' }}>
-                      <i className="fas fa-xmark text-xs"></i>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                     </button>
                   </div>
                 : <div className="mb-3 text-xs text-gray-400 flex items-center gap-1.5" style={{ height: '2rem' }}>
-                    <i className="fas fa-hand-pointer text-gray-300"></i>
+                    <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>
                     Haz clic en el mapa para fijar la ubicación exacta
                   </div>
               }
@@ -1985,10 +2448,10 @@ export default function ChatbotPage() {
             </div>
           </div>
 
-          <div className="px-5 sm:px-8 py-4 border-t border-gray-100 flex justify-end gap-3">
-            <button onClick={() => setShowAddPlotModal(false)} className="context-secondary-btn">Cancelar</button>
-            <button onClick={handleCreatePlot} className="context-save-btn">
-              <i className="fas fa-plus mr-2"></i>Guardar parcela
+          <div className="px-5 sm:px-7 py-4 border-t border-gray-100 modal-footer-btns">
+            <button onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))} className="context-secondary-btn">Cancelar</button>
+            <button onClick={handleCreatePlot} className="context-save-btn flex items-center justify-center gap-2">
+              Guardar parcela
             </button>
           </div>
         </div>

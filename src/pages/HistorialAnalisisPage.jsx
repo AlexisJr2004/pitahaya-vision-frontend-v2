@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getAnalyses } from '../services/analysisService'
@@ -56,13 +56,23 @@ function normArr(v) {
   return Array.isArray(v) ? v : (v && v.results ? v.results : [])
 }
 
+const filters = [
+  { key: 'all', label: 'Todos' },
+  { key: 'critical', label: 'Críticos' },
+  { key: 'high', label: 'Altos' },
+  { key: 'medium', label: 'Moderados' },
+  { key: 'low', label: 'Leves' },
+]
+
 export default function HistorialAnalisisPage() {
-  const { user } = useAuth()
+  useAuth()
   const navigate = useNavigate()
   const fichaRef = useRef(null)
+  const trazModalRef = useRef(null)
+  const fichaModalRef = useRef(null)
+  const animatedModalRefs = useRef(new Set())
 
   const [analyses, setAnalyses] = useState([])
-  const [enrichedPhs, setEnrichedPhs] = useState([])
   const [groupCount, setGroupCount] = useState({})
   const [farms, setFarms] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -71,14 +81,6 @@ export default function HistorialAnalisisPage() {
   const [showTrazabilidad, setShowTrazabilidad] = useState(false)
   const [showFicha, setShowFicha] = useState(false)
   const [activeGroupKey, setActiveGroupKey] = useState('')
-
-  const filters = [
-    { key: 'all', label: 'Todos' },
-    { key: 'critical', label: 'Críticos' },
-    { key: 'high', label: 'Altos' },
-    { key: 'medium', label: 'Moderados' },
-    { key: 'low', label: 'Leves' },
-  ]
 
   useEffect(() => {
     Promise.all([
@@ -198,7 +200,6 @@ export default function HistorialAnalisisPage() {
       })
 
       setFarms(farmsArr)
-      setEnrichedPhs(enrichedPhArr)
       setAnalyses(enrichedArr)
       setGroupCount(gc)
     }).catch(err => {
@@ -273,6 +274,63 @@ export default function HistorialAnalisisPage() {
       })
     })
   }
+
+  const animateClose = useCallback((modalRef, closeFn) => {
+    if (window.innerWidth >= 640 || !modalRef.current) { closeFn(); return }
+    const m = modalRef.current
+    m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
+    m.style.transform = 'translateY(110%)'
+    setTimeout(() => { m.style.transform = ''; m.style.transition = ''; animatedModalRefs.current.delete(modalRef); closeFn() }, 340)
+  }, [])
+
+  useEffect(() => {
+    if (window.innerWidth >= 640) return
+    const setups = [
+      { ref: trazModalRef, open: showTrazabilidad, close: () => setShowTrazabilidad(false) },
+      { ref: fichaModalRef, open: showFicha, close: () => setShowFicha(false) },
+    ]
+    const cleanups = []
+    setups.forEach(({ ref, open, close }) => {
+      if (!open || !ref.current) return
+      const modal = ref.current
+      const handle = modal.querySelector('.drag-handle-hist')
+      if (!handle) return
+      if (!animatedModalRefs.current.has(ref)) {
+        animatedModalRefs.current.add(ref)
+        modal.style.transition = 'none'
+        modal.style.transform = 'translateY(100%)'
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
+            modal.style.transform = 'translateY(0)'
+          })
+        })
+      }
+      let sy = 0, dy = 0
+      const onStart = e => { sy = e.touches[0].clientY; dy = 0; modal.style.transition = 'none' }
+      const onMove = e => { dy = Math.max(0, e.touches[0].clientY - sy); modal.style.transform = `translateY(${dy}px)` }
+      const onEnd = () => {
+        if (dy > 80) {
+          modal.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
+          modal.style.transform = 'translateY(110%)'
+          setTimeout(() => { modal.style.transform = ''; modal.style.transition = ''; animatedModalRefs.current.delete(ref); close() }, 340)
+        } else {
+          modal.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)'
+          modal.style.transform = 'translateY(0)'
+          setTimeout(() => { modal.style.transition = '' }, 320)
+        }
+      }
+      handle.addEventListener('touchstart', onStart, { passive: true })
+      handle.addEventListener('touchmove', onMove, { passive: true })
+      handle.addEventListener('touchend', onEnd, { passive: true })
+      cleanups.push(() => {
+        handle.removeEventListener('touchstart', onStart)
+        handle.removeEventListener('touchmove', onMove)
+        handle.removeEventListener('touchend', onEnd)
+      })
+    })
+    return () => cleanups.forEach(fn => fn())
+  }, [showTrazabilidad, showFicha])
 
   function renderAnalysisCard(a, idx) {
     const ph = a._ph
@@ -427,9 +485,10 @@ export default function HistorialAnalisisPage() {
         *{box-sizing:border-box}
         body{font-family:'Inter',sans-serif;color:#0f172a;margin:0}
         .font-cormorant{font-family:'Cormorant Garamond',serif}
-        .page-shell{position:relative;overflow:hidden;min-height:100vh}
-        .botanical{position:absolute;inset:auto auto -4rem -4rem;width:20rem;opacity:.08;pointer-events:none}
-        .botanical-right{position:absolute;inset:0 -4rem auto auto;width:18rem;opacity:.08;pointer-events:none;transform:scaleX(-1)}
+        .page-shell{position:relative;min-height:100vh}
+        .botanical-wrap{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+        .botanical{position:absolute;inset:auto auto -4rem -4rem;width:20rem;opacity:.08}
+        .botanical-right{position:absolute;inset:0 -4rem auto auto;width:18rem;opacity:.08;transform:scaleX(-1)}
         .glass-card{background:#fff;border:1px solid #eef2f7;border-radius:1rem}
         .stat-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px}
         .analysis-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;transition:border-color .16s ease,background .16s ease}
@@ -448,10 +507,22 @@ export default function HistorialAnalisisPage() {
         .detail-field{display:flex;flex-direction:column;gap:.15rem}
         .detail-field-label{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8}
         .detail-field-value{font-size:.9rem;color:#0f172a;line-height:1.4}
+        .hist-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center;padding:0;background:rgba(15,23,42,.45);backdrop-filter:blur(4px)}
+        .hist-overlay.open{display:flex}
+        .hist-modal{width:100%;max-height:92dvh;border-radius:28px 28px 0 0;background:#fff;border:1px solid #eef2f7;box-shadow:0 -8px 48px rgba(15,23,42,.18);overflow:hidden;display:flex;flex-direction:column}
+        .hist-modal-body{overflow-y:auto;flex:1;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+        .drag-handle-hist{display:none}
+        @media(min-width:640px){
+          .hist-overlay{align-items:center;padding:1rem}
+          .hist-modal{border-radius:24px;box-shadow:0 24px 48px rgba(15,23,42,.18);max-height:min(92dvh,960px)}
+        }
+        @media(max-width:639px){
+          .drag-handle-hist{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0;touch-action:none;cursor:grab}
+        }
       `}</style>
 
-      <div className="page-shell">
-        <svg className="botanical" viewBox="0 0 220 280" aria-hidden="true">
+      <div className="botanical-wrap" aria-hidden="true">
+        <svg className="botanical" viewBox="0 0 220 280">
           <path d="M40 270 C40 190 80 160 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
           <path d="M65 70 C65 70 20 50 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
           <path d="M65 70 C65 70 115 45 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
@@ -461,7 +532,7 @@ export default function HistorialAnalisisPage() {
           <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
           <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
         </svg>
-        <svg className="botanical-right" viewBox="0 0 220 280" aria-hidden="true">
+        <svg className="botanical-right" viewBox="0 0 220 280">
           <path d="M40 270 C40 190 80 160 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
           <path d="M65 70 C65 70 20 50 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
           <path d="M65 70 C65 70 115 45 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
@@ -471,7 +542,9 @@ export default function HistorialAnalisisPage() {
           <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
           <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
         </svg>
+      </div>
 
+      <div className="page-shell">
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between gap-4">
@@ -599,9 +672,10 @@ export default function HistorialAnalisisPage() {
 
       {/* ── TRAZABILIDAD MODAL ── */}
       {showTrazabilidad && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTrazabilidad(false)}>
-          <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white z-10">
+        <div className="hist-overlay open" onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}>
+          <div ref={trazModalRef} className="hist-modal" style={{maxWidth:'min(100%,1024px)'}} onClick={e => e.stopPropagation()}>
+            <div className="drag-handle-hist" />
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
               <div>
                 <h2 className="font-cormorant text-xl font-semibold text-slate-900">
                   Trazabilidad
@@ -613,14 +687,14 @@ export default function HistorialAnalisisPage() {
                   {tzPh?._farmName ? ` · Finca ${tzPh._farmName}` : ''}
                 </p>
               </div>
-              <button onClick={() => setShowTrazabilidad(false)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center flex-shrink-0 cursor-pointer"
-                style={{ border: 'none', background: 'none' }}>
-                <i className="fas fa-times text-slate-500"></i>
+              <button onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0"
+                style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
 
-            <div className="p-6 space-y-2">
+            <div className="hist-modal-body p-6 space-y-2">
               {tzAnalyses.length === 0 ? (
                 <div className="text-center text-slate-500 py-8">No hay registros de trazabilidad para esta planta.</div>
               ) : (
@@ -712,8 +786,8 @@ export default function HistorialAnalisisPage() {
               )}
             </div>
 
-            <div className="p-5 border-t border-slate-200 text-center">
-              <button onClick={() => setShowTrazabilidad(false)}
+            <div className="p-5 border-t border-slate-200 text-center flex-shrink-0">
+              <button onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}
                 className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
                 style={{ border: 'none' }}>
                 Cerrar
@@ -725,9 +799,10 @@ export default function HistorialAnalisisPage() {
 
       {/* ── FICHA TÉCNICA MODAL ── */}
       {showFicha && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowFicha(false)}>
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white z-10">
+        <div className="hist-overlay open" onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}>
+          <div ref={fichaModalRef} className="hist-modal" style={{maxWidth:'min(100%,896px)'}} onClick={e => e.stopPropagation()}>
+            <div className="drag-handle-hist" />
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
               <div>
                 <h2 className="font-cormorant text-xl font-semibold text-slate-900">
                   Ficha técnica{fichaPh?._plantId ? ` — Planta ${fichaPh._plantId}` : ''}
@@ -736,14 +811,15 @@ export default function HistorialAnalisisPage() {
                   {fichaTotal} análisis · {fichaDiseases.length} enfermedad{fichaDiseases.length !== 1 ? 'es' : ''} · Último: {fichaLastDate}
                 </p>
               </div>
-              <button onClick={() => setShowFicha(false)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center flex-shrink-0 cursor-pointer"
-                style={{ border: 'none', background: 'none' }}>
-                <i className="fas fa-times text-slate-500"></i>
+              <button onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0"
+                style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
 
-            <div ref={fichaRef} className="p-5 space-y-4">
+            <div className="hist-modal-body">
+              <div ref={fichaRef} className="p-5 space-y-4">
 
               {/* Finca / Parcela */}
               <div className="detail-section">
@@ -937,15 +1013,15 @@ export default function HistorialAnalisisPage() {
                 </div>
               )}
 
+              </div>
             </div>
-
-            <div className="p-5 border-t border-slate-200 flex items-center gap-3 justify-center">
+            <div className="p-5 border-t border-slate-200 flex items-center gap-3 justify-center flex-shrink-0">
               <button onClick={downloadPDF}
                 className="px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer"
                 style={{ border: 'none' }}>
                 <i className="fas fa-file-pdf mr-1.5"></i> Descargar PDF
               </button>
-              <button onClick={() => setShowFicha(false)}
+              <button onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}
                 className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
                 style={{ border: 'none' }}>
                 Cerrar
