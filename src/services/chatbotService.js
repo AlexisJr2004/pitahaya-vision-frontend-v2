@@ -107,3 +107,4 @@ export async function getSuggestions({ bot_response }) {
   const res = await API.post('/suggest/', { bot_response })
   return res.data
 }
+

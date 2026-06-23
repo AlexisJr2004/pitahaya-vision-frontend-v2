@@ -4,8 +4,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, getProfilePreferences, updateProfilePreferences, changePassword } from '../services/authService'
 import { getFarms, createFarm, deleteFarm, createPlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, getSuggestions } from '../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../services/analysisService'
+import WeatherWidget from '../components/WeatherWidget'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+
 export default function ChatbotPage() {
   const PLANT_HISTORY_STORAGE_KEY = 'pitahayaVision.plantHistory.v1'
   const { user, logout } = useAuth()
@@ -497,9 +499,32 @@ export default function ChatbotPage() {
       let imageUrl = ''
       let analysisResult = null
       if (imgFile) {
+        // Coordenadas: leer del campo GPS del formulario de contexto
+        let geoCoords = null
+        const locationVal = contextLocationRef.current?.value || ''
+        const nums = locationVal.match(/-?\d+\.?\d+/g)
+        if (nums && nums.length >= 2) {
+          const lat = parseFloat(nums[0])
+          const lon = parseFloat(nums[1])
+          if (!isNaN(lat) && !isNaN(lon)) geoCoords = { lat, lon }
+        }
+        // Si el campo de contexto no tiene coordenadas, intentar GPS del dispositivo
+        if (!geoCoords && navigator.geolocation) {
+          geoCoords = await new Promise(resolve => {
+            navigator.geolocation.getCurrentPosition(
+              ({ coords }) => resolve({ lat: coords.latitude, lon: coords.longitude }),
+              () => resolve(null),
+              { timeout: 10000, maximumAge: 0, enableHighAccuracy: true }
+            )
+          })
+        }
         const formData = new FormData()
         formData.append('image_path', imgFile)
         formData.append('conversation', convId)
+        if (geoCoords) {
+          formData.append('latitude',  geoCoords.lat)
+          formData.append('longitude', geoCoords.lon)
+        }
         analysisResult = await uploadImage(formData)
         imageUrl = analysisResult.image_url || ''
       }
@@ -892,7 +917,7 @@ export default function ChatbotPage() {
   const openAddFarmModal = () => { setFarmName(''); setFarmLocation(''); setFarmError(''); setShowAddFarmModal(true) }
 
   const handleCreateFarm = async () => {
-    if (!farmName.trim()) { setFarmError('El nombre de la finca es obligatorio.'); return }
+    if (!farmName.trim()) { setFarmError('El nombre de la corporación agrícola es obligatorio.'); return }
     setFarmError('')
     try {
       const newFarm = await createFarm({ name: farmName.trim(), location: farmLocation.trim() })
@@ -900,11 +925,11 @@ export default function ChatbotPage() {
       setShowAddFarmModal(false)
       await loadFarms()
       openAddPlotModal(newFarm)
-    } catch { setFarmError('No se pudo crear la finca. Verifica tu conexión e inténtalo de nuevo.') }
+    } catch { setFarmError('No se pudo crear la corporación agrícola. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
   const handleDeleteFarm = async (id) => {
-    if (confirmDelete === id) { try { await deleteFarm(id); setConfirmDelete(null); loadFarms() } catch { alert('Error al eliminar la finca') } }
+    if (confirmDelete === id) { try { await deleteFarm(id); setConfirmDelete(null); loadFarms() } catch { alert('Error al eliminar la corporación agrícola') } }
     else { setConfirmDelete(id) }
   }
 
@@ -1436,6 +1461,10 @@ export default function ChatbotPage() {
             </div>
             <span className="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
           </div>
+          <button onClick={() => navigate('/dashboard')} className="sidebar-btn" style={{ position: 'relative', zIndex: 1 }}>
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
+            Dashboard
+          </button>
           <button onClick={openParcelasModal} className="sidebar-btn" style={{ position: 'relative', zIndex: 1 }}>
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
@@ -1519,18 +1548,18 @@ export default function ChatbotPage() {
                 <svg className="absolute bottom-0 right-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none scale-x-[-1]" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
 
                 {farms.length === 0 ? (
-                  /* ── ONBOARDING: usuario nuevo sin fincas ── */
+                  /* ── ONBOARDING: usuario nuevo sin corporaciones agrícolas ── */
                   <div className="w-full max-w-sm animate-fade-up">
                     <div className="brand-avatar w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4 mx-auto">
                       <svg className="w-7 h-7 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
                     </div>
                     <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Bienvenido al sistema</p>
                     <h2 className="font-cormorant text-3xl font-medium text-gray-900 mb-2 leading-tight">¡Hola, {displayName.split(' ')[0]}!<br /><em className="text-brand-600">Comencemos</em></h2>
-                    <p className="text-gray-400 text-sm mb-7 font-light leading-relaxed">Para analizar tu cultivo primero necesitas<br />registrar tu finca y una parcela.</p>
+                    <p className="text-gray-400 text-sm mb-7 font-light leading-relaxed">Para analizar tu cultivo primero necesitas<br />registrar tu corporación agrícola y una parcela.</p>
                     <div className="space-y-2.5 mb-7 text-left">
                       <div className="onboard-step active">
                         <div className="onboard-num active">1</div>
-                        <div><p className="text-sm font-semibold text-gray-800 leading-tight">Registra tu finca</p><p className="text-xs text-gray-500 mt-0.5">Nombre y ubicación de tu propiedad</p></div>
+                        <div><p className="text-sm font-semibold text-gray-800 leading-tight">Registra tu corporación agrícola</p><p className="text-xs text-gray-500 mt-0.5">Nombre y ubicación de tu propiedad</p></div>
                       </div>
                       <div className="onboard-step inactive">
                         <div className="onboard-num inactive">2</div>
@@ -1542,7 +1571,7 @@ export default function ChatbotPage() {
                       </div>
                     </div>
                     <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="context-save-btn w-full">
-                      Registrar mi primera finca
+                      Registrar mi primera corporación agrícola
                     </button>
                   </div>
                 ) : (
@@ -1649,16 +1678,16 @@ export default function ChatbotPage() {
           {/* INPUT ZONE */}
           <div className="input-zone px-3 sm:px-4 pt-2 bg-white border-t border-gray-100 flex-shrink-0">
             <div className="max-w-2xl mx-auto">
-              {/* Hint: usuario sin fincas intenta interactuar */}
+              {/* Hint: usuario sin corporaciones agrícolas intenta interactuar */}
               {showNoFarmHint && farms.length === 0 && (
                 <div className="farm-hint mb-3 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
                   <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu finca</p>
+                    <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu corporación agrícola</p>
                     <p className="text-xs text-amber-700 mt-0.5">Necesitas al menos una parcela para empezar el análisis.</p>
                   </div>
                   <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="flex-shrink-0 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100 transition" style={{ cursor: 'pointer' }}>
-                    Crear finca
+                    Crear corporación agrícola
                   </button>
                   <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -1666,7 +1695,7 @@ export default function ChatbotPage() {
                 </div>
               )}
 
-              {/* Hint: tiene finca pero no ha seleccionado contexto (parcela) en esta sesión */}
+              {/* Hint: tiene corporación agrícola pero no ha seleccionado contexto (parcela) en esta sesión */}
               {showNoContextHint && !savedContextIdRef.current && (
                 <div className="farm-hint mb-3 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
                   <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
@@ -1719,7 +1748,7 @@ export default function ChatbotPage() {
                   onKeyDown={handleKeyDown}
                   onFocus={() => { if (farms.length === 0) setShowNoFarmHint(true) }}
                   rows="1"
-                  placeholder={farms.length === 0 ? 'Registra una finca para comenzar...' : 'Escribe sobre tu cultivo...'}
+                  placeholder={farms.length === 0 ? 'Registra una corporación agrícola para comenzar...' : 'Escribe sobre tu cultivo...'}
                   className="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"
                 />
                 <button ref={micRef} onClick={toggleMic} title="Usar microfono" className="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200" style={{ border: 'none', cursor: 'pointer' }}>
@@ -1989,38 +2018,23 @@ export default function ChatbotPage() {
                 </div>
                 <div className="mt-4">
                   <span className="block text-sm font-medium text-slate-700 mb-2">Condiciones climaticas recientes</span>
-                  {weatherLoading ? (
-                    <div className="context-input flex items-center gap-2.5 text-slate-400 text-sm">
-                      <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
-                      Consultando clima de la parcela...
-                    </div>
-                  ) : weatherData ? (
-                    <div className="rounded-xl border border-brand-200 bg-brand-50 p-3.5">
-                      <div className="flex items-center justify-between mb-2.5">
-                        <span className="text-sm font-semibold text-brand-700">{weatherData.condition}</span>
-                        <span className="text-[0.68rem] text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5">Auto · últimos 3 días</span>
-                      </div>
-                      <div className="flex flex-wrap gap-3 text-xs text-slate-600 mb-3">
-                        <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/><line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/></svg>{weatherData.totalPrecip} mm lluvia</span>
-                        <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 0 12H7a5 5 0 1 1 4.9-6"/></svg>{weatherData.avgHumidity}% humedad</span>
-                        <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>{weatherData.avgTemp}°C temp.</span>
-                      </div>
-                      <select value={weatherCondition} onChange={e => setWeatherCondition(e.target.value)} className="context-select text-sm">
-                        <option value="Lluvioso">Lluvioso</option>
+                  <WeatherWidget
+                    data={weatherData}
+                    loading={weatherLoading}
+                    variant="panel"
+                    pastDaysLimit={3}
+                    conditionValue={weatherCondition}
+                    onConditionChange={v => setWeatherCondition(v)}
+                    fallback={
+                      <select value={weatherCondition} onChange={e => setWeatherCondition(e.target.value)} className="context-select">
+                        <option value="">Seleccionar condición</option>
+                        <option value="Lluvioso">Lluvioso (últimos 3-5 días)</option>
                         <option value="Húmedo sin lluvia">Húmedo sin lluvia</option>
                         <option value="Normal para la época">Normal para la época</option>
                         <option value="Período seco">Período seco</option>
                       </select>
-                    </div>
-                  ) : (
-                    <select value={weatherCondition} onChange={e => setWeatherCondition(e.target.value)} className="context-select">
-                      <option value="">Seleccionar condición</option>
-                      <option value="Lluvioso">Lluvioso (últimos 3-5 días)</option>
-                      <option value="Húmedo sin lluvia">Húmedo sin lluvia</option>
-                      <option value="Normal para la época">Normal para la época</option>
-                      <option value="Período seco">Período seco</option>
-                    </select>
-                  )}
+                    }
+                  />
                 </div>
               </div>
               <div className="context-section">
@@ -2081,7 +2095,7 @@ export default function ChatbotPage() {
             </form>
           </div>
         </div>
-      </div> 
+      </div>
 
       {/* PARCELAS MODAL */}
       <div className={`context-overlay ${showParcelasModal ? 'open' : ''}`} onClick={() => animateClose(parcelasModalRef, closeParcelasModal)}>
@@ -2099,7 +2113,7 @@ export default function ChatbotPage() {
                 <div>
                   <span className="context-badge">Gestión de propiedades</span>
                   <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Mis Parcelas</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Administra tus fincas y asocia parcelas al análisis.</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Administra tus corporaciones agrícolas y asocia parcelas al análisis.</p>
                 </div>
               </div>
               <button onClick={() => animateClose(parcelasModalRef, closeParcelasModal)} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
@@ -2110,26 +2124,26 @@ export default function ChatbotPage() {
 
           {/* ── Body ── */}
           <div className="context-modal-body px-5 sm:px-7 py-5">
-            {/* Botón agregar finca */}
+            {/* Botón agregar corporación agrícola */}
             <button onClick={openAddFarmModal} className="w-full mb-5 flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50 transition-all group cursor-pointer" style={{ background: 'none' }}>
               <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 group-hover:bg-brand-100 transition flex-shrink-0">
                 <svg className="w-4 h-4 text-gray-500 group-hover:text-brand-600 transition" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               </span>
               <div className="text-left">
-                <p className="text-sm font-semibold text-gray-600 group-hover:text-brand-700 transition">Agregar nueva finca</p>
+                <p className="text-sm font-semibold text-gray-600 group-hover:text-brand-700 transition">Agregar nueva corporación agrícola</p>
                 <p className="text-xs text-gray-400 group-hover:text-brand-500 transition">Registra una propiedad agrícola</p>
               </div>
             </button>
 
-            {/* Lista de fincas */}
+            {/* Lista de corporaciones agrícolas */}
             <div id="parcelasFarmsList" className="space-y-3">
               {farms.length === 0 ? (
                 <div className="parcelas-empty-state">
                   <span className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-3" style={{ background: 'linear-gradient(135deg,#dcfce7,#bbf7d0)' }}>
                     <svg className="w-7 h-7 text-brand-600" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 22v-3" /><circle cx="10" cy="10" r="3" /></svg>
                   </span>
-                  <p className="font-medium text-gray-600">Aún no tienes fincas registradas</p>
-                  <p className="text-xs mt-1 text-gray-400">Crea tu primera finca para administrar tus parcelas.</p>
+                  <p className="font-medium text-gray-600">Aún no tienes corporaciones agrícolas registradas</p>
+                  <p className="text-xs mt-1 text-gray-400">Crea tu primera corporación agrícola para administrar tus parcelas.</p>
                 </div>
               ) : (
                 farms.map(farm => (
@@ -2152,7 +2166,7 @@ export default function ChatbotPage() {
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                           Parcela
                         </button>
-                        <button onClick={() => handleDeleteFarm(farm.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar finca">
+                        <button onClick={() => handleDeleteFarm(farm.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar corporación agrícola">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
                       </div>
@@ -2216,8 +2230,8 @@ export default function ChatbotPage() {
                   </svg>
                 </div>
                 <div>
-                  <span className="context-badge">Nueva finca</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Registrar finca</h3>
+                  <span className="context-badge">Nueva corporación agrícola</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Registrar corporación agrícola</h3>
                   <p className="text-xs text-gray-400 mt-0.5">Después podrás agregar parcelas.</p>
                 </div>
               </div>
@@ -2228,14 +2242,14 @@ export default function ChatbotPage() {
           </div>
           <div className="context-modal-body px-5 sm:px-7 py-6">
             <div className="context-section space-y-4">
-              <p className="context-section-title">Datos de la finca</p>
+              <p className="context-section-title">Datos de la corporación agrícola</p>
               <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Nombre de la finca <span className="text-red-400">*</span></span>
+                <span className="block text-sm font-medium text-slate-700 mb-2">Nombre de la corporación agrícola <span className="text-red-400">*</span></span>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
                     <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><circle cx="10" cy="10" r="3" /></svg>
                   </span>
-                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Finca El Paraíso" value={farmName}
+                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Corporación agrícola El Paraíso" value={farmName}
                     onChange={e => { setFarmName(e.target.value); if (farmError) setFarmError('') }}
                     onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
                 </div>
@@ -2259,14 +2273,14 @@ export default function ChatbotPage() {
               )}
               <div className="flex items-start gap-2.5 bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
                 <svg className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                <p className="text-xs text-brand-700 leading-relaxed">Al crear la finca, podrás agregar parcelas de inmediato. Necesitas al menos una parcela para iniciar un análisis.</p>
+                <p className="text-xs text-brand-700 leading-relaxed">Al crear la corporación agrícola, podrás agregar parcelas de inmediato. Necesitas al menos una parcela para iniciar un análisis.</p>
               </div>
             </div>
           </div>
           <div className="px-5 sm:px-7 py-5 border-t border-gray-100 modal-footer-btns">
             <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="context-secondary-btn">Cancelar</button>
             <button onClick={handleCreateFarm} className="context-save-btn flex items-center justify-center gap-2">
-              Crear finca y agregar parcela
+              Crear corporación agrícola y agregar parcela
             </button>
           </div>
         </div>
@@ -2461,8 +2475,8 @@ export default function ChatbotPage() {
       <div className={`delete-overlay ${confirmDelete ? 'open' : ''}`} onClick={() => setConfirmDelete(null)}>
         <div className="delete-modal" onClick={e => e.stopPropagation()}>
           <div className="px-6 pt-6 pb-4">
-            <h3 className="delete-modal-title">¿Eliminar finca?</h3>
-            <p className="delete-modal-text mt-3">Se eliminaran todas las parcelas asociadas a esta finca.</p>
+            <h3 className="delete-modal-title">¿Eliminar corporación agrícola?</h3>
+            <p className="delete-modal-text mt-3">Se eliminaran todas las parcelas asociadas a esta corporación agrícola.</p>
           </div>
           <div className="px-6 pb-6">
             <div className="delete-modal-actions">

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getAnalyses } from '../services/analysisService'
 import { getFarms, getPlantHistories, getConversations, getContexts } from '../services/chatbotService'
+import ProfileModal from '../components/ProfileModal'
+import SettingsModal from '../components/SettingsModal'
+import AIAnalysisPanel from '../components/AIAnalysisPanel'
+import { downloadFichaTecnicaPDF } from '../components/FichaTecnicaPDF'
 
 // Normalize: lowercase + remove diacritics so "Crítica" = "Critica" = "critica"
 function normSev(val) {
@@ -65,12 +69,13 @@ const filters = [
 ]
 
 export default function HistorialAnalisisPage() {
-  useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const fichaRef = useRef(null)
   const trazModalRef = useRef(null)
   const fichaModalRef = useRef(null)
   const animatedModalRefs = useRef(new Set())
+  const triggerRef = useRef(null)
+  const menuRef = useRef(null)
 
   const [analyses, setAnalyses] = useState([])
   const [groupCount, setGroupCount] = useState({})
@@ -81,6 +86,11 @@ export default function HistorialAnalisisPage() {
   const [showTrazabilidad, setShowTrazabilidad] = useState(false)
   const [showFicha, setShowFicha] = useState(false)
   const [activeGroupKey, setActiveGroupKey] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ left: 0, bottom: 0 })
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -250,29 +260,27 @@ export default function HistorialAnalisisPage() {
     setShowFicha(true)
   }
 
-  function downloadPDF() {
-    const el = fichaRef.current
-    if (!el) return
-    import('html2canvas').then(h2c => {
-      h2c.default(el, { scale: 2, backgroundColor: '#ffffff', logging: false }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png')
-        import('jspdf').then(({ jsPDF }) => {
-          const pdf = new jsPDF('p', 'mm', 'a4')
-          const pw = pdf.internal.pageSize.getWidth()
-          const ph = (canvas.height * pw) / canvas.width
-          let hl = ph, pos = 0
-          pdf.addImage(imgData, 'PNG', 0, pos, pw, ph)
-          hl -= pdf.internal.pageSize.getHeight()
-          while (hl > 0) {
-            pos = hl - ph
-            pdf.addPage()
-            pdf.addImage(imgData, 'PNG', 0, pos, pw, ph)
-            hl -= pdf.internal.pageSize.getHeight()
-          }
-          pdf.save('ficha_tecnica.pdf')
-        })
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  async function downloadPDF() {
+    setPdfLoading(true)
+    try {
+      await downloadFichaTecnicaPDF({
+        fichaPh,
+        fichaAnalyses,
+        fichaTotal,
+        fichaDiseases,
+        fichaTopDisease,
+        fichaLastDate,
+        avgSeverityLabel,
+        severityTrend,
+        sevDistEntries,
+        maxSevCount,
+        user,
       })
-    })
+    } finally {
+      setPdfLoading(false)
+    }
   }
 
   const animateClose = useCallback((modalRef, closeFn) => {
@@ -331,6 +339,36 @@ export default function HistorialAnalisisPage() {
     })
     return () => cleanups.forEach(fn => fn())
   }, [showTrazabilidad, showFicha])
+
+  const displayName = user?.full_name || user?.username || 'Usuario'
+  const userEmail = user?.email || ''
+  const profilePhotoUrl = user?.profile_photo_url || null
+  const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+
+  const handleLogout = useCallback(async () => { await logout(); navigate('/login') }, [logout, navigate])
+
+  const toggleUserMenu = useCallback(() => {
+    if (!triggerRef.current) return
+    if (menuOpen) { setMenuOpen(false); return }
+    const rect = triggerRef.current.getBoundingClientRect()
+    const W = 310, M = 10
+    let left = rect.left
+    let bottom = window.innerHeight - rect.top + 10
+    if (left + W > window.innerWidth - M) left = window.innerWidth - W - M
+    if (left < M) left = M
+    setMenuPos({ left, bottom })
+    setMenuOpen(true)
+  }, [menuOpen])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const fn = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target) && !triggerRef.current?.contains(e.target))
+        setMenuOpen(false)
+    }
+    document.addEventListener('click', fn)
+    return () => document.removeEventListener('click', fn)
+  }, [menuOpen])
 
   function renderAnalysisCard(a, idx) {
     const ph = a._ph
@@ -485,10 +523,24 @@ export default function HistorialAnalisisPage() {
         *{box-sizing:border-box}
         body{font-family:'Inter',sans-serif;color:#0f172a;margin:0}
         .font-cormorant{font-family:'Cormorant Garamond',serif}
-        .page-shell{position:relative;min-height:100vh}
-        .botanical-wrap{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
-        .botanical{position:absolute;inset:auto auto -4rem -4rem;width:20rem;opacity:.08}
-        .botanical-right{position:absolute;inset:0 -4rem auto auto;width:18rem;opacity:.08;transform:scaleX(-1)}
+        #drawerOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40}
+        #drawerOverlay.open{display:block}
+        #hist-sidebar{position:fixed;top:0;left:0;bottom:0;width:272px;background:#fff;border-right:1px solid #f3f4f6;display:flex;flex-direction:column;padding:1rem;gap:0.75rem;z-index:50;overflow:hidden;transform:translateX(0);transition:transform 0.28s cubic-bezier(0.22,1,0.36,1)}
+        @media(max-width:767px){#hist-sidebar{transform:translateX(-100%)}#hist-sidebar.open{transform:translateX(0)}}
+        @media(min-width:768px){#hist-sidebar{position:relative;flex-shrink:0}#drawerOverlay{display:none!important}#histMenuBtn{display:none!important}}
+        .hist-botanical-bg{position:absolute;bottom:-0.75rem;left:-0.75rem;width:11rem;opacity:0.08;pointer-events:none}
+        .brand-avatar-h{background:linear-gradient(135deg,#16a34a,#22c55e,#4ade80)}
+        .h-nav-btn{display:flex;align-items:center;gap:0.65rem;padding:0.6rem 0.75rem;border-radius:0.75rem;font-size:0.875rem;color:#4b5563;transition:all 0.14s ease;border:1px solid #d1d5dba0;cursor:pointer;width:100%;text-align:left;background:none}
+        .h-nav-btn:hover{background:#f0fdf4;border-color:#22c55e}
+        .h-nav-btn.active{background:#f0fdf4;color:#166534;border-color:#bbf7d0;font-weight:500}
+        .trigger-ring-h{transition:box-shadow 0.15s;}
+        #userTriggerH:hover .trigger-ring-h{box-shadow:0 0 0 2px #4ade80;}
+        .um-option-h{display:flex;align-items:center;gap:13px;padding:11px 18px;cursor:pointer;transition:background 0.12s}
+        .um-option-h:hover{background:#f9fafb}
+        .um-option-h:hover .um-icon-h{background:#dcfce7;color:#16a34a}
+        .um-icon-h{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.78rem;transition:background 0.15s,color 0.15s}
+        #userMenuH{animation:popUpH 0.22s cubic-bezier(0.34,1.18,0.64,1) both}
+        @keyframes popUpH{from{opacity:0;transform:scale(0.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
         .glass-card{background:#fff;border:1px solid #eef2f7;border-radius:1rem}
         .stat-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px}
         .analysis-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;transition:border-color .16s ease,background .16s ease}
@@ -521,53 +573,136 @@ export default function HistorialAnalisisPage() {
         }
       `}</style>
 
-      <div className="botanical-wrap" aria-hidden="true">
-        <svg className="botanical" viewBox="0 0 220 280">
-          <path d="M40 270 C40 190 80 160 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
-          <path d="M65 70 C65 70 20 50 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-          <path d="M65 70 C65 70 115 45 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-          <path d="M52 155 C52 155 8 142 -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M52 155 C52 155 96 130 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" />
-          <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
-          <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
-        </svg>
-        <svg className="botanical-right" viewBox="0 0 220 280">
-          <path d="M40 270 C40 190 80 160 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
-          <path d="M65 70 C65 70 20 50 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-          <path d="M65 70 C65 70 115 45 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-          <path d="M52 155 C52 155 8 142 -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M52 155 C52 155 96 130 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" />
-          <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
-          <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
-        </svg>
-      </div>
+      {/* drawer overlay */}
+      <div id="drawerOverlay" className={sidebarOpen ? 'open' : ''} onClick={() => setSidebarOpen(false)}></div>
 
-      <div className="page-shell">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-600 via-green-500 to-emerald-400 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-green-700">Pitahaya Vision</p>
-                  <h1 className="font-cormorant text-2xl sm:text-[2rem] font-semibold text-slate-900 leading-tight">Historial de análisis</h1>
-                </div>
+      {/* user menu */}
+      {menuOpen && (
+        <div id="userMenuH" ref={menuRef} style={{ position: 'fixed', zIndex: 200, width: '383px', background: '#fff', borderRadius: '18px', overflow: 'hidden', border: '1px solid #f3f4f6', boxShadow: '0 24px 48px rgba(15,23,42,.18)', left: menuPos.left + 'px', bottom: menuPos.bottom + 'px', top: 'auto' }}>
+          <div className="flex items-center justify-center px-5 pt-4 pb-2">
+            <p className="text-[0.75rem] font-medium text-gray-500 truncate text-center w-full">{userEmail}</p>
+          </div>
+          <div className="flex flex-col items-center px-6 pt-1 pb-6">
+            <div className="mb-3 flex-shrink-0" style={{ padding: 3, background: 'linear-gradient(135deg,#16a34a,#4ade80)', borderRadius: '9999px', boxShadow: '0 4px 18px rgba(22,163,74,.25)' }}>
+              <div className="w-[78px] h-[78px] rounded-full overflow-hidden bg-white p-0.5">
+                {profilePhotoUrl
+                  ? <img src={profilePhotoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover select-none" />
+                  : <div className="w-full h-full rounded-full flex items-center justify-center text-2xl font-bold text-white select-none brand-avatar-h">{initials}</div>}
               </div>
-              <button onClick={() => navigate('/chatbot')}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                style={{ border: 'none' }}>
-                <i className="fas fa-arrow-left text-[0.8rem]"></i>
-                Volver al chat
-              </button>
+            </div>
+            <p className="text-[1.1rem] font-semibold text-gray-800 mb-0.5">¡Hola, {displayName.split(' ')[0]}!</p>
+            <p className="text-[0.72rem] text-gray-400 mb-4 text-center">{displayName}</p>
+            <button onClick={() => { setMenuOpen(false); setShowProfileModal(true) }} className="w-full text-center border border-brand-600 text-brand-700 rounded-full py-2 px-4 text-[0.82rem] font-medium hover:bg-brand-50 active:bg-brand-100 transition-colors cursor-pointer" style={{ background: 'none' }}>
+              Gestionar mi perfil
+            </button>
+          </div>
+          <div className="h-px bg-gray-100"></div>
+          <div className="py-1.5">
+            <div onClick={() => { setMenuOpen(false); setShowProfileModal(true) }} className="um-option-h">
+              <div className="um-icon-h bg-gray-100 text-gray-500"><i className="fas fa-user"></i></div>
+              <div><p className="text-sm font-medium text-gray-700 leading-tight">Perfil</p><p className="text-[0.68rem] text-gray-400 mt-0.5">Ver y editar tu perfil</p></div>
+            </div>
+            <div onClick={() => { setMenuOpen(false); setShowSettingsModal(true) }} className="um-option-h">
+              <div className="um-icon-h bg-gray-100 text-gray-500"><i className="fas fa-gear"></i></div>
+              <div><p className="text-sm font-medium text-gray-700 leading-tight">Configuraciones</p><p className="text-[0.68rem] text-gray-400 mt-0.5">Preferencias y ajustes</p></div>
             </div>
           </div>
-        </header>
+          <div className="h-px bg-gray-100"></div>
+          <div className="py-1.5">
+            <div onClick={handleLogout} className="um-option-h">
+              <div className="um-icon-h bg-red-50 text-red-400"><i className="fas fa-arrow-right-from-bracket"></i></div>
+              <p className="text-sm font-semibold text-red-500">Cerrar sesión</p>
+            </div>
+          </div>
+          <div className="h-px bg-gray-100"></div>
+          <div className="py-3 flex items-center justify-center gap-2.5">
+            <span className="text-[0.63rem] text-gray-400">Política de privacidad</span>
+            <span className="text-gray-300 select-none text-xs">·</span>
+            <span className="text-[0.63rem] text-gray-400">Términos de servicio</span>
+          </div>
+        </div>
+      )}
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="h-screen flex overflow-hidden bg-white">
+
+        {/* ── SIDEBAR ── */}
+        <aside id="hist-sidebar" className={sidebarOpen ? 'open' : ''}>
+          <svg className="hist-botanical-bg" viewBox="0 0 220 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+            <path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+            <path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
+            <path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
+            <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" />
+            <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
+            <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
+          </svg>
+
+          <div className="flex items-center gap-2 mb-1" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="brand-avatar-h w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+            </div>
+            <span className="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
+          </div>
+
+          <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1" style={{ position: 'relative', zIndex: 1 }}>Navegación</p>
+
+          <div className="flex flex-col gap-1 flex-1 overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
+            <button onClick={() => navigate('/dashboard')} className="h-nav-btn">
+              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
+              Dashboard
+            </button>
+            <button className="h-nav-btn active">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M7 6h10" /><path d="M7 18h10" /></svg>
+              Historial de análisis
+            </button>
+            <button onClick={() => navigate('/chatbot')} className="h-nav-btn">
+              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+              Chatbot
+            </button>
+          </div>
+
+          <div className="border-t border-gray-100 pt-3 mt-1" style={{ position: 'relative', zIndex: 1 }}>
+            <button id="userTriggerH" ref={triggerRef} onClick={toggleUserMenu} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left group" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              <div className="trigger-ring-h w-9 h-9 rounded-full flex-shrink-0 p-0.5" style={{ background: 'linear-gradient(135deg,#16a34a,#4ade80)', boxShadow: '0 0 0 2px white' }}>
+                {profilePhotoUrl
+                  ? <img src={profilePhotoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover select-none" />
+                  : <div className="w-full h-full rounded-full flex items-center justify-center text-[0.6rem] font-bold text-white brand-avatar-h select-none">{initials}</div>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[0.82rem] font-semibold text-gray-800 truncate leading-tight">{displayName}</p>
+                <p className="text-[0.68rem] text-gray-400 truncate leading-tight">{userEmail}</p>
+              </div>
+              <i className={`fas fa-chevron-up text-[0.62rem] text-gray-400 flex-shrink-0 transition-transform duration-200 ${menuOpen ? '' : 'rotate-180'}`}></i>
+            </button>
+          </div>
+        </aside>
+
+        {/* ── MAIN ── */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
+
+          {/* top bar */}
+          <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <button id="histMenuBtn" onClick={() => setSidebarOpen(true)} className="p-2 -ml-1 rounded-xl hover:bg-green-50 transition text-gray-500" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+              </button>
+              <div className="brand-avatar-h w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+              </div>
+              <div>
+                <h1 className="font-cormorant text-base font-semibold text-gray-900 leading-none">Historial de análisis</h1>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-green-600 leading-none mt-0.5">Pitahaya Vision</p>
+              </div>
+            </div>
+            <button onClick={() => navigate('/chatbot')} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition" style={{ background: 'none', border: '1px solid #e2e8f0', cursor: 'pointer' }}>
+              <i className="fas fa-comments text-[0.78rem]"></i>
+              <span className="hidden sm:inline">Ir al chat</span>
+            </button>
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-4 md:p-7">
+          <div className="space-y-6 pb-8">
           <section className="glass-card rounded-2xl p-4 sm:p-5 mb-5">
             <div className="grid gap-5 lg:grid-cols-[1.25fr_.85fr] lg:items-center">
               <div>
@@ -618,7 +753,7 @@ export default function HistorialAnalisisPage() {
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <section className="grid gap-4 lg:grid-cols-[3fr_2fr]">
             <div>
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-400">Análisis recientes</h3>
@@ -659,16 +794,46 @@ export default function HistorialAnalisisPage() {
                   <p><span className="font-semibold text-slate-900">Trazabilidad:</span> evolución cronológica por planta con imágenes y recomendaciones.</p>
                 </div>
               </div>
-              <div className="stat-card p-4">
-                <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-400">Decisión rápida</h4>
-                <p className="text-slate-600 mt-3 leading-relaxed text-sm">
-                  Usa esta pantalla para identificar patrones por parcela y revisar qué plantas requieren seguimiento antes de volver a escanear.
-                </p>
+              <div className="stat-card overflow-hidden" style={{ height: 400 }}>
+                <AIAnalysisPanel
+                  analyses={analyses}
+                  buildSummary={() => {
+                    const sick = analyses.filter(a => (a.severity || '').toLowerCase() !== 'sana').length
+                    const pctSick = analyses.length ? Math.round(sick / analyses.length * 100) : 0
+                    const diseaseCounts = {}
+                    const plantSet = new Set()
+                    analyses.forEach(a => {
+                      const d = a.disease_name_predicted || 'Desconocido'
+                      diseaseCounts[d] = (diseaseCounts[d] || 0) + 1
+                      if (a.plant_id) plantSet.add(a.plant_id)
+                    })
+                    const topDiseases = Object.entries(diseaseCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => `- ${name}: ${count} caso${count > 1 ? 's' : ''}`).join('\n')
+                    const sevCounts = { Baja: 0, Media: 0, Alta: 0, Crítica: 0 }
+                    analyses.forEach(a => {
+                      const s = (a.severity || '').toLowerCase(); const d = (a.disease_name_predicted || '').toLowerCase()
+                      if (s === 'sana' || d.includes('sana')) sevCounts.Baja++
+                      else if (d.includes('pudric')) sevCounts.Crítica++
+                      else if (d.includes('cancro') || d.includes('tiz') || d.includes('antrac')) sevCounts.Alta++
+                      else if (d.includes('mancha')) sevCounts.Media++
+                      else sevCounts.Alta++
+                    })
+                    return `Historial de análisis fitosanitarios del agricultor:\n- Total de análisis: ${analyses.length}\n- Plantas distintas analizadas: ${plantSet.size}\n- Plantas con enfermedad: ${sick} (${pctSick}%)\n- Severidad: Baja=${sevCounts.Baja}, Media=${sevCounts.Media}, Alta=${sevCounts.Alta}, Crítica=${sevCounts.Crítica}\n\nEnfermedades encontradas:\n${topDiseases || '- Sin datos'}\n\nDecide: ¿qué plantas priorizar para seguimiento? ¿hay patrones preocupantes?`
+                  }}
+                  title="Decisión rápida"
+                  buttonLabel="Analizar historial"
+                  emptyText="Gemma 3 revisará tu historial e indicará qué plantas priorizar"
+                />
               </div>
             </aside>
           </section>
-        </main>
-      </div>
+          </div>{/* closes max-w-7xl */}
+          </div>{/* closes flex-1 overflow-y-auto */}
+
+          <footer className="hidden md:flex flex-shrink-0 items-center justify-center px-6 py-3 border-t border-gray-100 text-sm text-slate-400">
+            Pitahaya Vision © 2026. Todos los derechos reservados.
+          </footer>
+        </main>{/* closes new main */}
+      </div>{/* closes h-screen flex */}
 
       {/* ── TRAZABILIDAD MODAL ── */}
       {showTrazabilidad && (
@@ -819,7 +984,7 @@ export default function HistorialAnalisisPage() {
             </div>
 
             <div className="hist-modal-body">
-              <div ref={fichaRef} className="p-5 space-y-4">
+              <div className="p-5 space-y-4">
 
               {/* Finca / Parcela */}
               <div className="detail-section">
@@ -1016,10 +1181,12 @@ export default function HistorialAnalisisPage() {
               </div>
             </div>
             <div className="p-5 border-t border-slate-200 flex items-center gap-3 justify-center flex-shrink-0">
-              <button onClick={downloadPDF}
-                className="px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer"
+              <button onClick={downloadPDF} disabled={pdfLoading}
+                className="px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 style={{ border: 'none' }}>
-                <i className="fas fa-file-pdf mr-1.5"></i> Descargar PDF
+                {pdfLoading
+                  ? <><i className="fas fa-spinner fa-spin mr-1.5"></i> Generando PDF...</>
+                  : <><i className="fas fa-file-pdf mr-1.5"></i> Descargar PDF</>}
               </button>
               <button onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}
                 className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
@@ -1030,6 +1197,9 @@ export default function HistorialAnalisisPage() {
           </div>
         </div>
       )}
+
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </>
   )
 }
