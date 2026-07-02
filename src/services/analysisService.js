@@ -29,6 +29,10 @@ export async function updateAnalysis(id, data) {
   return res.data
 }
 
+export async function deleteAnalysis(id) {
+  await API.delete(`/${id}/`)
+}
+
 export async function getWeather(lat, lon) {
   const res = await API.get('/weather/', { params: { lat, lon } })
   return res.data

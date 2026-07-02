@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { getAnalyses } from '../services/analysisService'
+import { getAnalyses, updateAnalysis, deleteAnalysis } from '../services/analysisService'
 
 const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
 
@@ -108,6 +108,12 @@ export default function HistorialAdminPage() {
   const detailModalRef = useRef(null)
   const detailAnimated = useRef(false)
 
+  // ── edit / delete ─────────────────────────────────────────────────────────────
+  const [editingObs,      setEditingObs]      = useState(false)
+  const [editText,        setEditText]        = useState('')
+  const [editSaving,      setEditSaving]      = useState(false)
+  const [deleteConfirm,   setDeleteConfirm]   = useState(false)
+
   const load = useCallback((params) => {
     setLoading(true)
     getAnalyses(params)
@@ -182,6 +188,30 @@ export default function HistorialAdminPage() {
   const clearFilters = () => {
     setRange('all'); setDateFrom(''); setDateTo(''); setUserQuery('')
     setApplied({ range: 'all', dateFrom: '', dateTo: '', userQuery: '' })
+  }
+
+  const openDetail = (a) => {
+    setDetail(a); setEditingObs(false); setEditText(''); setDeleteConfirm(false)
+    detailAnimated.current = false
+  }
+
+  const handleSaveEdit = async () => {
+    setEditSaving(true)
+    try {
+      await updateAnalysis(detail.id, { analysis_text: editText })
+      const updated = { ...detail, analysis_text: editText }
+      setAnalyses(prev => prev.map(a => a.id === detail.id ? updated : a))
+      setDetail(updated)
+      setEditingObs(false)
+    } catch {} finally { setEditSaving(false) }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await deleteAnalysis(detail.id)
+      setAnalyses(prev => prev.filter(a => a.id !== detail.id))
+      closeDetail()
+    } catch {}
   }
 
   const kpis = useMemo(() => {
@@ -366,14 +396,72 @@ export default function HistorialAdminPage() {
                   </div>
                 )}
 
-                {detail.analysis_text && (
-                  <div className="mt-3 pt-3 border-t border-slate-100">
-                    <div className="ha-detail-field">
-                      <span className="ha-detail-label">Análisis completo del modelo</span>
-                      <div className="ha-detail-value mt-1 text-sm leading-relaxed whitespace-pre-line">{detail.analysis_text}</div>
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <div className="ha-detail-field">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="ha-detail-label">Observaciones</span>
+                      {!editingObs && (
+                        <button onClick={() => { setEditingObs(true); setEditText(detail.analysis_text || '') }}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 cursor-pointer"
+                          style={{ background: 'none', border: 'none' }}>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          Editar
+                        </button>
+                      )}
                     </div>
+                    {editingObs ? (
+                      <>
+                        <textarea rows={4} value={editText} onChange={e => setEditText(e.target.value)}
+                          className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-brand-500 resize-none mt-1"
+                          style={{ background: '#f8fafc' }} />
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={handleSaveEdit} disabled={editSaving}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer disabled:opacity-60"
+                            style={{ border: 'none' }}>
+                            {editSaving ? 'Guardando…' : 'Guardar'}
+                          </button>
+                          <button onClick={() => setEditingObs(false)}
+                            className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                            style={{ background: 'none' }}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="ha-detail-value mt-1 text-sm leading-relaxed whitespace-pre-line">
+                        {detail.analysis_text || <span className="text-slate-400 italic">Sin observaciones</span>}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* ── Zona de peligro: eliminar ── */}
+                <div className="mt-4 pt-4 border-t border-red-100">
+                  {!deleteConfirm ? (
+                    <button onClick={() => setDeleteConfirm(true)}
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-700 cursor-pointer"
+                      style={{ background: 'none', border: 'none' }}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      Eliminar este análisis
+                    </button>
+                  ) : (
+                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+                      <p className="text-sm font-semibold text-red-700 mb-2">¿Eliminar este análisis? No se puede deshacer.</p>
+                      <div className="flex gap-2">
+                        <button onClick={handleDelete}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition cursor-pointer"
+                          style={{ border: 'none' }}>
+                          Confirmar eliminación
+                        </button>
+                        <button onClick={() => setDeleteConfirm(false)}
+                          className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                          style={{ background: 'none' }}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Recomendaciones */}
@@ -545,7 +633,7 @@ export default function HistorialAdminPage() {
                         </td>
                       </tr>
                     ) : analyses.map(a => (
-                      <tr key={a.id} className="ha-tr transition" onClick={() => setDetail(a)}>
+                      <tr key={a.id} className="ha-tr transition" onClick={() => openDetail(a)}>
                         <td className="px-4 py-3">
                           {a.image_url
                             ? <img src={a.image_url} alt="" className="w-14 h-14 object-cover rounded-xl border border-slate-200" />
@@ -614,7 +702,7 @@ export default function HistorialAdminPage() {
                 ) : (
                   <ul className="ha-timeline-list">
                     {recent.map((a, i) => (
-                      <li key={a.id ?? i} className="ha-timeline-item" style={{ cursor: 'pointer' }} onClick={() => setDetail(a)}>
+                      <li key={a.id ?? i} className="ha-timeline-item" style={{ cursor: 'pointer' }} onClick={() => openDetail(a)}>
                         {(() => {
                           const s = computeSev(a)
                           return <>

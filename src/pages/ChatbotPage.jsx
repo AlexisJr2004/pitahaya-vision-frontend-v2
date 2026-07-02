@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { updateProfile, getProfilePreferences, updateProfilePreferences, changePassword } from '../services/authService'
-import { getFarms, createFarm, deleteFarm, createPlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, getSuggestions } from '../services/chatbotService'
+import ProfileModal from '../components/ProfileModal'
+import SettingsModal from '../components/SettingsModal'
+import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../services/analysisService'
 import WeatherWidget from '../components/WeatherWidget'
 import L from 'leaflet'
@@ -33,6 +34,8 @@ export default function ChatbotPage() {
   const [showAddFarmModal, setShowAddFarmModal] = useState(false)
   const [showAddPlotModal, setShowAddPlotModal] = useState(false)
   const [selectedFarmForPlot, setSelectedFarmForPlot] = useState(null)
+  const [editingFarm, setEditingFarm] = useState(null)
+  const [editingPlot, setEditingPlot] = useState(null)
   const [showContextModal, setShowContextModal] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [confirmDeleteConv, setConfirmDeleteConv] = useState(null)
@@ -46,9 +49,6 @@ export default function ChatbotPage() {
   const [plotHectares, setPlotHectares] = useState('')
   const [plotZone, setPlotZone] = useState('')
   const [plotRows, setPlotRows] = useState('')
-  const [profileForm, setProfileForm] = useState({ email: '', phone: '', first_name: '', last_name: '', dni: '' })
-  const [profilePhotoFile, setProfilePhotoFile] = useState(null)
-  const [profilePhotoPreview, setProfilePhotoPreview] = useState(null)
   const [sessionMenuState, setSessionMenuState] = useState({ sessionId: null, left: 0, top: 0, open: false })
   const [contextOptions, setContextOptions] = useState({ lotId: [], zone: [], rows: [] })
   const [plantHistories, setPlantHistories] = useState([])
@@ -56,13 +56,13 @@ export default function ChatbotPage() {
   const [showNoFarmHint, setShowNoFarmHint] = useState(false)
   const [showNoContextHint, setShowNoContextHint] = useState(false)
   const [geoLoading, setGeoLoading] = useState(false)
-  const [sTheme, setSTheme] = useState('light')
   const [weatherData, setWeatherData] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherCondition, setWeatherCondition] = useState('')
   const [plotGpsCoords, setPlotGpsCoords] = useState({ lat: '', lng: '' })
   const [farmError, setFarmError] = useState('')
   const [plotError, setPlotError] = useState('')
+  const [streamDoneIds, setStreamDoneIds] = useState(new Set())
   const mapContainerRef = useRef(null)
   const leafletMapRef = useRef(null)
   const mapMarkerRef = useRef(null)
@@ -91,8 +91,6 @@ export default function ChatbotPage() {
   const addFarmModalRef = useRef(null)
   const addPlotModalRef = useRef(null)
   const contextSelModalRef = useRef(null)
-  const profileModalRef = useRef(null)
-  const settingsModalRef = useRef(null)
   const animatedModalRefs = useRef(new Set())
   const displayName = user?.full_name || user?.username || 'Usuario'
   const userEmail = user?.email || ''
@@ -108,8 +106,6 @@ export default function ChatbotPage() {
   const loadPlantHistories = async () => { try { const d = await getPlantHistories(); setPlantHistories(Array.isArray(d) ? d : d.results || []) } catch { setPlantHistories([]) } }
 
   useEffect(() => { loadFarms(); loadConversations(); loadPlantHistories() }, [])
-
-  useEffect(() => { if (user?.id) loadSettings() }, [user?.id])
 
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -187,39 +183,89 @@ export default function ChatbotPage() {
       }
       return
     }
-    const GEO_KEY = '9d07134f01f14f54929ca9f76e55c516'
+
+    const TILE_CFGS = {
+      street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',    attribution: '© OpenStreetMap contributors', subdomains: 'abc',  maxNativeZoom: 19, maxZoom: 21 },
+      satellite: { url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: '© Google',                     subdomains: '0123', maxNativeZoom: 20, maxZoom: 21 },
+      terrain:   { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',      attribution: '© OpenTopoMap contributors',   subdomains: 'abc',  maxNativeZoom: 17, maxZoom: 21 },
+    }
+
     const mkIcon = () => L.divIcon({
-      html: '<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.45)"></div>',
-      iconSize: [20, 20], iconAnchor: [10, 10], className: '',
+      html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))">
+        <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#16a34a,#22c55e);border:3px solid #fff"></div>
+        <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #16a34a;margin-top:-2px"></div>
+      </div>`,
+      iconSize: [22, 30], iconAnchor: [11, 30], className: '',
     })
-    const tileOpts = (style) => ({
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://www.geoapify.com/">Geoapify</a>',
-      maxZoom: 20,
-      tileSize: 256,
-      zoomOffset: 0,
-    })
+
+    // Parse existing GPS if editing a plot
+    const parts = plotGps ? plotGps.split(',').map(s => parseFloat(s.trim())) : []
+    const hasExisting = parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])
+
     const timer = setTimeout(() => {
       if (!mapContainerRef.current || leafletMapRef.current) return
-      const lat = -2.0
-      const lng = -79.0
-      const zoom = 7
 
-      const map = L.map(mapContainerRef.current, { center: [lat, lng], zoom, zoomControl: true })
+      const initLat  = hasExisting ? parts[0] : -2.0
+      const initLng  = hasExisting ? parts[1] : -79.0
+      const initZoom = hasExisting ? 15 : 7
+
+      const map = L.map(mapContainerRef.current, { center: [initLat, initLng], zoom: initZoom, zoomControl: true, maxZoom: 21 })
       map.getContainer().style.background = '#e8f4ea'
 
-      // Capas de mapa
-      const layerStreet = L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, tileOpts('osm-bright'))
-      const layerLight  = L.tileLayer(`https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, tileOpts('positron'))
-      const layerDark   = L.tileLayer(`https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, tileOpts('dark-matter'))
-      layerStreet.addTo(map)
+      // Build tile layers
+      const tileLayers = {}
+      Object.entries(TILE_CFGS).forEach(([key, cfg]) => {
+        tileLayers[key] = L.tileLayer(cfg.url, {
+          attribution: cfg.attribution,
+          subdomains:  cfg.subdomains,
+          maxNativeZoom: cfg.maxNativeZoom,
+          maxZoom:       cfg.maxZoom,
+        })
+      })
+      tileLayers.street.addTo(map)
 
-      L.control.layers(
-        { '🗺️ Callejero': layerStreet, '⬜ Claro': layerLight, '🌙 Oscuro': layerDark },
-        {}, { position: 'topright', collapsed: true }
-      ).addTo(map)
+      // Custom styled layer switcher (matches dashboard toolbar)
+      const LayerSwitcher = L.Control.extend({
+        onAdd() {
+          const wrap = L.DomUtil.create('div', '')
+          wrap.style.cssText = 'display:flex;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1);'
+          L.DomEvent.disableClickPropagation(wrap)
+          L.DomEvent.disableScrollPropagation(wrap)
+          const items = [['street', 'Mapa'], ['satellite', 'Satélite'], ['terrain', 'Terreno']]
+          const btns = {}
+          const activate = (activeKey) => {
+            items.forEach(([k]) => {
+              if (!btns[k]) return
+              btns[k].style.background = k === activeKey ? '#16a34a' : '#fff'
+              btns[k].style.color      = k === activeKey ? '#fff'    : '#64748b'
+            })
+          }
+          items.forEach(([key, label], idx) => {
+            const btn = L.DomUtil.create('button', '', wrap)
+            btn.textContent = label
+            btn.style.cssText = `padding:0.3rem 0.75rem;font-size:0.68rem;font-weight:600;border:none;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s;${idx < items.length - 1 ? 'border-right:1px solid #e2e8f0;' : ''}`
+            btns[key] = btn
+            L.DomEvent.on(btn, 'click', () => {
+              Object.values(tileLayers).forEach(l => { if (map.hasLayer(l)) map.removeLayer(l) })
+              tileLayers[key].addTo(map)
+              activate(key)
+            })
+          })
+          activate('street')
+          return wrap
+        },
+        onRemove() {},
+      })
+      new LayerSwitcher({ position: 'topleft' }).addTo(map)
 
       L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map)
 
+      // Pre-place marker when editing a plot with existing coordinates
+      if (hasExisting) {
+        mapMarkerRef.current = L.marker([initLat, initLng], { icon: mkIcon() }).addTo(map)
+      }
+
+      // Click anywhere to place / move the location pin
       map.on('click', e => {
         const clat = e.latlng.lat.toFixed(6)
         const clng = e.latlng.lng.toFixed(6)
@@ -233,7 +279,6 @@ export default function ChatbotPage() {
       })
 
       leafletMapRef.current = map
-      // Forzar recalculo de tamaño después de que el DOM finaliza el layout
       setTimeout(() => map.invalidateSize(), 100)
     }, 200)
     return () => clearTimeout(timer)
@@ -250,14 +295,17 @@ export default function ChatbotPage() {
         setPlotGpsCoords({ lat, lng })
         if (leafletMapRef.current) {
           leafletMapRef.current.setView([parseFloat(lat), parseFloat(lng)], 15)
-          const mkIcon = L.divIcon({
-            html: '<div style="width:18px;height:18px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>',
-            iconSize: [18, 18], iconAnchor: [9, 9], className: '',
+          const geoIcon = L.divIcon({
+            html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))">
+              <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#16a34a,#22c55e);border:3px solid #fff"></div>
+              <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #16a34a;margin-top:-2px"></div>
+            </div>`,
+            iconSize: [22, 30], iconAnchor: [11, 30], className: '',
           })
           if (mapMarkerRef.current) {
             mapMarkerRef.current.setLatLng([parseFloat(lat), parseFloat(lng)])
           } else {
-            mapMarkerRef.current = L.marker([parseFloat(lat), parseFloat(lng)], { icon: mkIcon }).addTo(leafletMapRef.current)
+            mapMarkerRef.current = L.marker([parseFloat(lat), parseFloat(lng)], { icon: geoIcon }).addTo(leafletMapRef.current)
           }
         }
         setGeoLoading(false)
@@ -545,21 +593,38 @@ export default function ChatbotPage() {
         const confidence = analysisResult.confidence_percent || '---'
         const recs = analysisResult.recommendations_text || ''
 
+        // Tarjeta de resultados del modelo de visi\u00f3n
+        const cardContent = JSON.stringify({ __type: 'analysis_card', disease, severity, confidence, recs })
+        setMessages(prev => [...prev, { id: `card-${Date.now()}`, role: 'assistant', type: 'analysis-card', disease, severity, confidence, recs, content: cardContent }])
+        await sendMessage({ conversation: convId, role: 'assistant', content: cardContent })
+
         // Mensaje 1: Comprensi\u00f3n de la enfermedad e impacto
+        const weatherCtx = weatherData
+          ? `Condiciones clim\u00e1ticas actuales en la parcela: ${weatherData.condition || weatherCondition}${weatherData.temperature !== undefined ? `, ${weatherData.temperature}\u00b0C` : ''}${weatherData.humidity !== undefined ? `, humedad relativa ${weatherData.humidity}%` : ''}.`
+          : weatherCondition
+          ? `Condici\u00f3n clim\u00e1tica en la parcela: ${weatherCondition}.`
+          : ''
+
         const diseasePrompt = [
           `Pitahaya Vision detect\u00f3: ${disease} \u2014 severidad ${severity} \u2014 confianza ${confidence}%.\n`,
           recs ? `Observaci\u00f3n del modelo: ${recs}\n` : '',
+          weatherCtx ? `${weatherCtx}\n` : '',
           text ? `El agricultor pregunta: "${text}"\n` : '',
           `\nComo fitopat\u00f3logo de pitahaya, explica en m\u00e1ximo 4 oraciones: qu\u00e9 es esta enfermedad, `,
-          `sus causas principales y el impacto agron\u00f3mico concreto para severidad ${severity}. `,
+          `sus causas principales${weatherCtx ? ' considerando las condiciones clim\u00e1ticas indicadas' : ''} y el impacto agron\u00f3mico concreto para severidad ${severity}. `,
           `Sin tratamiento, solo diagn\u00f3stico e impacto.`,
         ].join('')
 
+        const _sid1 = `stream-d-${Date.now()}`
+        setMessages(prev => [...prev, { id: _sid1, role: 'assistant', content: '' }])
         let botReply = ''
         try {
-          const aiResult = await askChatbot({ message: diseasePrompt, conversation_id: convId, max_length: 300 })
-          botReply = aiResult.response || ''
+          botReply = await askChatbotStream({
+            message: diseasePrompt, conversation_id: convId, max_length: 180,
+            onToken: (full) => setMessages(prev => prev.map(m => m.id === _sid1 ? { ...m, content: `**Resultados del análisis**\n\n${full}` } : m)),
+          })
         } catch {}
+        setStreamDoneIds(prev => new Set([...prev, _sid1]))
         if (!botReply) {
           botReply = `**Diagn\u00f3stico:** ${disease}\n**Severidad:** ${severity}\n**Confianza:** ${confidence}%\n\n${recs || 'Consulta con un ingeniero agr\u00f3nomo.'}`
         }
@@ -568,15 +633,23 @@ export default function ChatbotPage() {
         // Mensaje 2: Plan de tratamiento
         const treatmentPrompt = [
           `Pitahaya con "${disease}", severidad "${severity}".\n`,
+          weatherCtx ? `${weatherCtx}\n` : '',
           `Como especialista fitosanitario, indica en forma de lista numerada (m\u00e1ximo 5 pasos) `,
-          `el plan de tratamiento inmediato y las medidas preventivas clave. S\u00e9 directo y espec\u00edfico.`,
+          `el plan de tratamiento inmediato y las medidas preventivas clave`,
+          weatherCtx ? `, adaptadas a las condiciones clim\u00e1ticas indicadas (por ejemplo: si hay lluvia, evitar aplicaciones foliares; si hay alta humedad, priorizar fungicidas preventivos; si hay sequ\u00eda, reforzar riego).` : '.',
+          ` S\u00e9 directo y espec\u00edfico.`,
         ].join('')
 
+        const _sid2 = `stream-t-${Date.now()}`
+        setMessages(prev => [...prev, { id: _sid2, role: 'assistant', content: '' }])
         let treatmentReply = ''
         try {
-          const treatResult = await askChatbot({ message: treatmentPrompt, conversation_id: convId, max_length: 550 })
-          treatmentReply = treatResult.response || ''
+          treatmentReply = await askChatbotStream({
+            message: treatmentPrompt, conversation_id: convId, max_length: 280,
+            onToken: (full) => setMessages(prev => prev.map(m => m.id === _sid2 ? { ...m, content: `**Plan de tratamiento**\n\n${full}` } : m)),
+          })
         } catch {}
+        setStreamDoneIds(prev => new Set([...prev, _sid2]))
         if (!treatmentReply) {
           treatmentReply = 'Consulte con un ingeniero agr\u00f3nomo para un plan de tratamiento espec\u00edfico seg\u00fan las condiciones locales del cultivo.'
         }
@@ -660,7 +733,7 @@ export default function ChatbotPage() {
               `En m\u00e1ximo 3 oraciones: \u00bfla condici\u00f3n mejor\u00f3, empeor\u00f3 o se mantuvo? \u00bfQu\u00e9 acci\u00f3n prioritaria debe tomar el agricultor?`
             )
             try {
-              const compResult = await askChatbot({ message: compPrompt, conversation_id: convId, no_rag: true, max_length: 250 })
+              const compResult = await askChatbot({ message: compPrompt, conversation_id: convId, no_rag: true, max_length: 160 })
               comparisonText = compHeader + (compResult.response || rawComp || '')
             } catch {
               comparisonText = compHeader + (rawComp || '')
@@ -672,13 +745,20 @@ export default function ChatbotPage() {
         }
         generateSuggestions(comparisonText || treatmentReply || botReply)
       } else {
+        const _sid = `stream-${Date.now()}`
+        setMessages(prev => [...prev, { id: _sid, role: 'assistant', content: '' }])
         let botReply = ''
         try {
-          const aiResult = await askChatbot({ message: text, conversation_id: convId, max_length: 450 })
-          botReply = aiResult.response || 'No pude generar una respuesta. Intenta de nuevo.'
+          botReply = await askChatbotStream({
+            message: text, conversation_id: convId, max_length: 250,
+            onToken: (full) => setMessages(prev => prev.map(m => m.id === _sid ? { ...m, content: full } : m)),
+          })
+          if (!botReply) botReply = 'No pude generar una respuesta. Intenta de nuevo.'
         } catch {
           botReply = 'Ocurri\u00f3 un error al consultar el asistente. Intenta de nuevo.'
+          setMessages(prev => prev.map(m => m.id === _sid ? { ...m, content: botReply } : m))
         }
+        setStreamDoneIds(prev => new Set([...prev, _sid]))
         await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
         generateSuggestions(botReply)
       }
@@ -713,8 +793,6 @@ export default function ChatbotPage() {
       { ref: addFarmModalRef, open: showAddFarmModal, close: () => setShowAddFarmModal(false) },
       { ref: addPlotModalRef, open: showAddPlotModal, close: () => setShowAddPlotModal(false) },
       { ref: contextSelModalRef, open: showContextModal, close: () => setShowContextModal(false) },
-      { ref: profileModalRef, open: showProfileModal, close: () => setShowProfileModal(false) },
-      { ref: settingsModalRef, open: showSettingsModal, close: () => setShowSettingsModal(false) },
     ]
     const cleanups = []
     setups.forEach(({ ref, open, close }) => {
@@ -766,7 +844,7 @@ export default function ChatbotPage() {
       })
     })
     return () => cleanups.forEach(fn => fn())
-  }, [showParcelasModal, showAddFarmModal, showAddPlotModal, showContextModal, showProfileModal, showSettingsModal])
+  }, [showParcelasModal, showAddFarmModal, showAddPlotModal, showContextModal])
   const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
   const closeSidebar = () => { setSidebarOpen(false); document.body.style.overflow = '' }
   const toggleUserMenu = () => {
@@ -824,13 +902,20 @@ export default function ChatbotPage() {
           convId = conv.id; setActiveConvId(convId); loadConversations()
         }
         await sendMessage({ conversation: convId, role: 'user', content: text })
+        const _sid = `stream-${Date.now()}`
+        setMessages(prev => [...prev, { id: _sid, role: 'assistant', content: '' }])
         let botReply = ''
         try {
-          const aiResult = await askChatbot({ message: text, conversation_id: convId, max_length: 450 })
-          botReply = aiResult.response || 'No pude generar una respuesta. Intenta de nuevo.'
+          botReply = await askChatbotStream({
+            message: text, conversation_id: convId, max_length: 250,
+            onToken: (full) => setMessages(prev => prev.map(m => m.id === _sid ? { ...m, content: full } : m)),
+          })
+          if (!botReply) botReply = 'No pude generar una respuesta. Intenta de nuevo.'
         } catch {
           botReply = 'Ocurri\u00f3 un error al consultar el asistente. Intenta de nuevo.'
+          setMessages(prev => prev.map(m => m.id === _sid ? { ...m, content: botReply } : m))
         }
+        setStreamDoneIds(prev => new Set([...prev, _sid]))
         await sendMessage({ conversation: convId, role: 'assistant', content: botReply })
         try {
           const full = await getConversation(convId)
@@ -914,18 +999,27 @@ export default function ChatbotPage() {
     })
     return sorted
   })()
-  const openAddFarmModal = () => { setFarmName(''); setFarmLocation(''); setFarmError(''); setShowAddFarmModal(true) }
+  const openAddFarmModal = () => { setEditingFarm(null); setFarmName(''); setFarmLocation(''); setFarmError(''); setShowAddFarmModal(true) }
+
+  const openEditFarmModal = (farm) => { setEditingFarm(farm); setFarmName(farm.name); setFarmLocation(farm.location || ''); setFarmError(''); setShowAddFarmModal(true) }
 
   const handleCreateFarm = async () => {
     if (!farmName.trim()) { setFarmError('El nombre de la corporación agrícola es obligatorio.'); return }
     setFarmError('')
     try {
-      const newFarm = await createFarm({ name: farmName.trim(), location: farmLocation.trim() })
-      setFarmName(''); setFarmLocation('')
-      setShowAddFarmModal(false)
-      await loadFarms()
-      openAddPlotModal(newFarm)
-    } catch { setFarmError('No se pudo crear la corporación agrícola. Verifica tu conexión e inténtalo de nuevo.') }
+      if (editingFarm) {
+        await updateFarm(editingFarm.id, { name: farmName.trim(), location: farmLocation.trim() })
+        setShowAddFarmModal(false)
+        setEditingFarm(null)
+        await loadFarms()
+      } else {
+        const newFarm = await createFarm({ name: farmName.trim(), location: farmLocation.trim() })
+        setFarmName(''); setFarmLocation('')
+        setShowAddFarmModal(false)
+        await loadFarms()
+        openAddPlotModal(newFarm)
+      }
+    } catch { setFarmError('No se pudo guardar la corporación agrícola. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
   const handleDeleteFarm = async (id) => {
@@ -938,6 +1032,7 @@ export default function ChatbotPage() {
   }
 
   const openAddPlotModal = (farm) => {
+    setEditingPlot(null)
     setSelectedFarmForPlot(farm)
     setPlotName(''); setPlotGps(''); setPlotHectares(''); setPlotZone(''); setPlotRows('')
     setPlotGpsCoords({ lat: '', lng: '' })
@@ -945,66 +1040,46 @@ export default function ChatbotPage() {
     setShowAddPlotModal(true)
   }
 
+  const openEditPlotModal = (plot, farm) => {
+    setEditingPlot(plot)
+    setSelectedFarmForPlot(farm)
+    setPlotName(plot.name || '')
+    setPlotGps(plot.gps_location || '')
+    setPlotHectares(plot.hectares != null ? String(plot.hectares) : '')
+    setPlotZone(plot.zone || '')
+    setPlotRows(plot.rows || '')
+    const coords = (plot.gps_location || '').split(',').map(s => s.trim())
+    setPlotGpsCoords({ lat: coords[0] || '', lng: coords[1] || '' })
+    setPlotError('')
+    setShowAddPlotModal(true)
+  }
+
   const handleCreatePlot = async () => {
     if (!plotName.trim()) { setPlotError('El nombre de la parcela es obligatorio.'); return }
-    if (!selectedFarmForPlot) return
     setPlotError('')
     try {
-      await createPlot({ farm: selectedFarmForPlot.id, name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
-      setShowAddPlotModal(false)
-      await loadFarms()
-      if (farms.flatMap(f => f.plots || []).length === 0) {
-        setShowParcelasModal(false)
-        setShowContextModal(true)
+      if (editingPlot) {
+        await updatePlot(editingPlot.id, { name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
+        setShowAddPlotModal(false)
+        setEditingPlot(null)
+        await loadFarms()
+      } else {
+        if (!selectedFarmForPlot) return
+        await createPlot({ farm: selectedFarmForPlot.id, name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
+        setShowAddPlotModal(false)
+        await loadFarms()
+        if (farms.flatMap(f => f.plots || []).length === 0) {
+          setShowParcelasModal(false)
+          setShowContextModal(true)
+        }
       }
     } catch { setPlotError('No se pudo guardar la parcela. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
   const handleDeletePlot = async (id) => { try { await deletePlot(id); loadFarms() } catch { alert('Error al eliminar la parcela') } }
 
-  const openProfileModal = () => {
-    setProfileForm({ email: user?.email || '', phone: user?.phone || '', first_name: user?.first_name || '', last_name: user?.last_name || '', dni: user?.dni || '' })
-    setProfilePhotoFile(null); setProfilePhotoPreview(null)
-    setShowProfileModal(true); setMenuOpen(false)
-  }
-
-  const handleProfilePhotoSelect = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    setProfilePhotoFile(file)
-    const reader = new FileReader()
-    reader.onload = (ev) => setProfilePhotoPreview(ev.target.result)
-    reader.readAsDataURL(file)
-  }
-
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault()
-    try {
-      const fd = new FormData()
-      fd.append('email', profileForm.email); fd.append('phone', profileForm.phone)
-      fd.append('first_name', profileForm.first_name); fd.append('last_name', profileForm.last_name); fd.append('dni', profileForm.dni)
-      if (profilePhotoFile) fd.append('profile_photo', profilePhotoFile)
-      await updateProfile(fd)
-      alert('Perfil actualizado correctamente.')
-      setShowProfileModal(false)
-      window.location.reload()
-    } catch { alert('Error al actualizar el perfil') }
-  }
-
-  const openSettingsModal = () => { setShowSettingsModal(true); setMenuOpen(false); loadSettings() }
-
-  const loadSettings = async () => {
-    try {
-      const prefs = await getProfilePreferences()
-      const s = prefs.preferences || {}
-      setSTheme(s.theme || 'light')
-    } catch {}
-  }
-
-  const handleSaveSettings = async () => {
-    const preferences = { theme: sTheme }
-    try { await updateProfilePreferences({ preferences }); animateClose(settingsModalRef, () => setShowSettingsModal(false)) } catch { alert('Error al guardar configuraciones') }
-  }
+  const openProfileModal  = () => { setShowProfileModal(true);  setMenuOpen(false) }
+  const openSettingsModal = () => { setShowSettingsModal(true); setMenuOpen(false) }
 
   const addContextOption = (field) => {
     const inputRef = { lotId: settingsLotInputRef, zone: settingsZoneInputRef, rows: settingsRowsInputRef }[field]
@@ -1016,33 +1091,6 @@ export default function ChatbotPage() {
 
   const removeContextOption = (field, value) => { setContextOptions(prev => ({ ...prev, [field]: prev[field].filter(v => v !== value) })) }
 
-  const exportBackup = () => {
-    const data = {}
-    const keys = ['auth_token', 'pitahayaVision.sessions.v2', 'pitahayaVision.plantHistory.v1', 'pitahayaVision.contextOptions.v1', 'pitahayaVision.settings.v1']
-    keys.forEach(key => { try { const raw = localStorage.getItem(key); if (raw) data[key] = JSON.parse(raw) } catch {} })
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), data }, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob); const a = document.createElement('a')
-    a.href = url; a.download = `pitahaya_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const importBackup = (e) => {
-    const file = e.target.files[0]; if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const parsed = JSON.parse(ev.target.result)
-        if (!parsed.data || typeof parsed.data !== 'object') throw new Error()
-        Object.entries(parsed.data).forEach(([key, value]) => { if (key !== 'auth_token') localStorage.setItem(key, JSON.stringify(value)) })
-        alert('Respaldo importado correctamente. Recarga la pagina.')
-      } catch { alert('Archivo invalido') }
-    }
-    reader.readAsText(file); e.target.value = ''
-  }
-
-  const resetSettings = () => {
-    setSTheme('light')
-  }
 
   const formatBotText = (text) => {
     if (!text) return ''
@@ -1331,7 +1379,7 @@ export default function ChatbotPage() {
         /* GPS map */
         .map-wrap { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; position: relative; }
         .leaflet-container { font-family: 'Inter', sans-serif !important; background: #e8f4ea !important; }
-        .leaflet-control-layers { border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 16px rgba(0,0,0,.1) !important; font-size: 0.8rem !important; font-family: 'Inter', sans-serif !important; }
+        .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;} .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;}
         .leaflet-control-layers-selector { accent-color: #16a34a; }
         .leaflet-control-scale-line { border-color: #16a34a; border-top: none; background: rgba(255,255,255,.85); color: #166534; font-size: 0.7rem; font-family: 'Inter', sans-serif; }
         .leaflet-bar a { border-color: #e2e8f0 !important; color: #374151 !important; font-size: 0.95rem !important; }
@@ -1602,23 +1650,95 @@ export default function ChatbotPage() {
               </div>
             ) : (
               <div id="msgs" className="max-w-2xl mx-auto flex flex-col gap-4 sm:gap-5">
-                {messages.map((msg, i) => (
+                {messages.map((msg, i) => {
+                  let cardData = null
+                  if (msg.type === 'analysis-card') {
+                    cardData = msg
+                  } else if (msg.content?.startsWith('{"__type":"analysis_card"')) {
+                    try { cardData = JSON.parse(msg.content) } catch {}
+                  }
+                  const getSevColors = (sev) => {
+                    const s = (sev || '').toLowerCase()
+                    if (s.includes('crít') || s.includes('critic')) return { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', dot: '#ef4444' }
+                    if (s.includes('alta') || s.includes('high') || s.includes('grave')) return { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c', dot: '#f97316' }
+                    if (s.includes('media') || s.includes('moder')) return { bg: '#fffbeb', border: '#fde68a', text: '#92400e', dot: '#f59e0b' }
+                    if (s.includes('baja') || s.includes('low') || s.includes('leve')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
+                    if (s.includes('sana') || s.includes('health') || s.includes('normal')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
+                    return { bg: '#f8fafc', border: '#e2e8f0', text: '#475569', dot: '#94a3b8' }
+                  }
+                  return (
                   <div key={i}>
-                    {msg.role === 'user' ? (
+                    {cardData ? (() => {
+                      const sev = getSevColors(cardData.severity)
+                      const confNum = Math.min(100, parseFloat(cardData.confidence) || 0)
+                      return (
+                      <div className="animate-fade-up" style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start' }}>
+                        <div className="brand-avatar" style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, boxShadow: '0 2px 8px rgba(22,163,74,.2)' }}>
+                          <svg style={{ width: 14, height: 14, fill: '#fff' }} viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, maxWidth: 360 }}>
+                          <div style={{ border: '1px solid #eef2f7', borderRadius: 22, background: '#fff', overflow: 'hidden' }}>
+                            {/* Header */}
+                            <div style={{ borderBottom: '1px solid #eef2f7', padding: '0.62rem 1rem', display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                              <div className="brand-avatar" style={{ width: 22, height: 22, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <svg style={{ width: 11, height: 11, fill: '#fff' }} viewBox="0 0 24 24"><path d="M9.5 2A7.5 7.5 0 0 1 17 9.5c0 2.11-.87 4.02-2.28 5.39l.28.61H17l4 4-1.5 1.5-4-4v-1.5l-.61-.28A7.47 7.47 0 0 1 9.5 17 7.5 7.5 0 0 1 2 9.5 7.5 7.5 0 0 1 9.5 2m0 2A5.5 5.5 0 0 0 4 9.5 5.5 5.5 0 0 0 9.5 15 5.5 5.5 0 0 0 15 9.5 5.5 5.5 0 0 0 9.5 4z"/></svg>
+                              </div>
+                              <span className="context-section-title" style={{ lineHeight: 1 }}>Pitahaya Vision · Análisis</span>
+                              <span className="context-badge" style={{ marginLeft: 'auto' }}>Completado</span>
+                            </div>
+                            {/* Body */}
+                            <div style={{ padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                              {/* Enfermedad */}
+                              <div>
+                                <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.2rem' }}>Enfermedad detectada</p>
+                                <p style={{ fontSize: '0.92rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.4, margin: 0 }}>{cardData.disease}</p>
+                              </div>
+                              {/* Severidad + Confianza */}
+                              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                                <div>
+                                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.38rem' }}>Severidad</p>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', borderRadius: 9999, border: `1px solid ${sev.border}`, background: sev.bg, color: sev.text, padding: '0.26rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: sev.dot, flexShrink: 0 }}></span>
+                                    {cardData.severity}
+                                  </span>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 120 }}>
+                                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.38rem' }}>Confianza del modelo</p>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <div style={{ flex: 1, height: 6, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
+                                      <div style={{ height: 6, background: 'linear-gradient(90deg, #16a34a, #22c55e)', borderRadius: 999, width: `${confNum}%`, transition: 'width .7s ease' }}></div>
+                                    </div>
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', minWidth: '2.6rem', textAlign: 'right' }}>{cardData.confidence}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Observación */}
+                              {cardData.recs && (
+                                <div style={{ borderTop: '1px dashed #dcfce7', paddingTop: '0.7rem' }}>
+                                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.25rem' }}>Observación del modelo</p>
+                                  <p style={{ fontSize: '0.81rem', color: '#475569', lineHeight: 1.55, margin: 0 }}>{cardData.recs}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      )
+                    })() : msg.role === 'user' ? (
                       <div className="flex justify-end animate-fade-up">
                         <div className="text-right">
                           {msg.image_path && <img src={msg.image_path} alt="Preview" className="max-w-[75vw] sm:max-w-xs w-full rounded-2xl mb-2 block ml-auto shadow-sm" style={{ maxHeight: '200px', objectFit: 'cover' }} />}
                           {msg.content && <div className="user-bubble text-white text-sm px-4 py-3 rounded-3xl rounded-tr-md leading-relaxed shadow-sm max-w-[80vw] sm:max-w-sm">{esc(msg.content)}</div>}
                         </div>
                       </div>
-                    ) : (
+                    ) : msg.content ? (
                       <div className="flex gap-2 sm:gap-3 items-start animate-fade-up">
                         <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
                           <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="bot-text text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBotText(msg.content) }}></div>
-                          <div className="flex gap-1 mt-2">
+                          {(!String(msg.id ?? '').startsWith('stream-') || streamDoneIds.has(msg.id)) && <div className="flex gap-1 mt-2">
                             <button onClick={() => handleCopy(msg.content, i)} className="action-btn p-1.5 rounded-lg transition text-gray-400" title="Copiar" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                               {copiedIndex === i ? (
                                 <svg className="w-3.5 h-3.5 text-brand-600" fill="none" stroke="#16a34a" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1632,12 +1752,13 @@ export default function ChatbotPage() {
                             <button className="action-btn p-1.5 rounded-lg transition text-gray-400" title="No util" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>
                             </button>
-                          </div>
+                          </div>}
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
-                ))}
+                  )
+                })}
                 {sending && (
                   <div className="flex gap-2 sm:gap-3 items-start animate-fade-up">
                     <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
@@ -1772,194 +1893,10 @@ export default function ChatbotPage() {
       </div>
 
       {/* PROFILE MODAL */}
-      <div className={`context-overlay ${showProfileModal ? 'open' : ''}`} onClick={() => animateClose(profileModalRef, () => setShowProfileModal(false))}>
-        <div className="context-modal" ref={profileModalRef} onClick={e => e.stopPropagation()}>
-          <div className="drag-handle" />
-          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </div>
-                <div>
-                  <span className="context-badge">Perfil de usuario</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Información personal</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Mantén tus datos actualizados y gestiona tu cuenta.</p>
-                </div>
-              </div>
-              <button onClick={() => animateClose(profileModalRef, () => setShowProfileModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-          </div>
-          <div className="context-modal-body px-4 sm:px-6 py-5">
-            <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-              <aside className="flex flex-col items-center text-center h-fit">
-                <div className="context-section w-full flex flex-col items-center text-center">
-                  <div className="relative inline-flex mb-3">
-                    <div style={{ padding: 3, background: 'linear-gradient(135deg,#16a34a,#4ade80)', borderRadius: '9999px', boxShadow: '0 4px 18px rgba(22,163,74,.25)' }}>
-                      <div className="w-28 h-28 rounded-full overflow-hidden bg-white p-0.5">
-                        {(profilePhotoPreview || profilePhotoUrl) ? <img src={profilePhotoPreview || profilePhotoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover border-[3px] border-brand-500" /> : <div className="w-full h-full brand-avatar rounded-full flex items-center justify-center text-3xl font-bold text-white">{initials}</div>}
-                      </div>
-                    </div>
-                    <span className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-brand-500 text-white shadow-sm"><svg className="w-3 h-3" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
-                  </div>
-                  <h2 className="text-lg font-semibold text-slate-900">{displayName}</h2>
-                  <p className="text-sm text-slate-500">@{user?.username}</p>
-                  <div className="mt-5 w-full">
-                    <input id="profilePhotoInput" type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoSelect} />
-                    <label htmlFor="profilePhotoInput" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg><span>Cambiar foto</span></label>
-                  </div>
-                  <div className="mt-5 w-full space-y-2">
-                    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5"><span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Usuario</span><span className="text-sm font-semibold text-slate-800">{user?.username}</span></div>
-                    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5"><span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Rol</span><span className="text-sm font-semibold text-brand-600">{roleLabel}</span></div>
-                  </div>
-                </div>
-              </aside>
-              <form className="space-y-5" onSubmit={handleUpdateProfile}>
-                <div className="context-section">
-                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span>Datos de cuenta</span><div className="h-px flex-1 bg-slate-200"></div></div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Correo electronico</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-                        <input type="email" value={profileForm.email} onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Telefono</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
-                        <input type="tel" maxLength={10} value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="context-section">
-                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400"><svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Datos personales</span><div className="h-px flex-1 bg-slate-200"></div></div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Nombre</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                        <input type="text" value={profileForm.first_name} onChange={e => setProfileForm(p => ({ ...p, first_name: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Apellido</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                        <input type="text" value={profileForm.last_name} onChange={e => setProfileForm(p => ({ ...p, last_name: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cedula</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 9.5h4M14 12.5h3"/></svg></span>
-                        <input type="text" maxLength={10} value={profileForm.dni} onChange={e => setProfileForm(p => ({ ...p, dni: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Direccion</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg></span>
-                        <input type="text" placeholder="Av. principal..." className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-                  <button type="button" onClick={() => animateClose(profileModalRef, () => setShowProfileModal(false))} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer">Cancelar</button>
-                  <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-green-600/20 transition-all hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-lg active:translate-y-0 cursor-pointer" style={{ border: 'none' }}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar cambios</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
       {/* SETTINGS MODAL */}
-      <div className={`context-overlay ${showSettingsModal ? 'open' : ''}`} onClick={() => animateClose(settingsModalRef, () => setShowSettingsModal(false))}>
-        <div className="context-modal" ref={settingsModalRef} onClick={e => e.stopPropagation()}>
-          <div className="drag-handle" />
-          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                </div>
-                <div>
-                  <span className="context-badge">Preferencias</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Configuraciones</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Personaliza la apariencia, accesibilidad y realiza respaldos.</p>
-                </div>
-              </div>
-              <button onClick={() => animateClose(settingsModalRef, () => setShowSettingsModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-          </div>
-          <div className="context-modal-body px-4 sm:px-6 py-5 space-y-4">
-
-            {/* ── Tema de la interfaz ── */}
-            <div className="set-section rounded-2xl border border-slate-100 bg-slate-50 p-5">
-              <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                <span>Apariencia</span>
-                <div className="set-divider h-px flex-1 bg-slate-200"/>
-              </div>
-              <div className="set-section-inner rounded-xl border border-slate-200 bg-white p-4">
-                <p className="font-cormorant text-xl font-semibold text-slate-900">Tema de la interfaz</p>
-                <p className="mb-4 text-sm text-slate-500 mt-0.5">Selecciona la apariencia visual de la plataforma.</p>
-                <div className="grid gap-3 grid-cols-3">
-                  {[
-                    { id: 'light', label: 'Claro', desc: 'Fondo blanco, modo día.', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> },
-                    { id: 'dark', label: 'Oscuro', desc: 'Modo noche elegante.', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> },
-                    { id: 'system', label: 'Automático', desc: 'Sigue al sistema.', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
-                  ].map(({ id, label, desc, icon }) => (
-                    <button key={id} onClick={() => setSTheme(id)} className={`set-opt ${sTheme === id ? 'active' : ''}`}>
-                      <span className={`block mb-2 ${sTheme === id ? 'text-brand-600' : 'text-slate-400'}`}>{icon}</span>
-                      <b className="block text-sm text-slate-900">{label}</b>
-                      <p className="mt-0.5 text-xs text-slate-500">{desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Respaldo de datos ── */}
-            <div className="set-section rounded-2xl border border-slate-100 bg-slate-50 p-5">
-              <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-                <span>Datos</span>
-                <div className="set-divider h-px flex-1 bg-slate-200"/>
-              </div>
-              <div className="set-section-inner rounded-xl border border-slate-200 bg-white p-4">
-                <p className="font-cormorant text-xl font-semibold text-slate-900">Respaldo de datos</p>
-                <p className="mb-4 text-sm text-slate-500 mt-0.5">Exporta o importa toda tu información: sesiones, análisis y parcelas.</p>
-                <div className="flex flex-wrap gap-3">
-                  <button onClick={exportBackup}
-                    className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer inline-flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Exportar respaldo
-                  </button>
-                  <label className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer inline-flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Importar respaldo<input type="file" accept=".json" className="hidden" onChange={importBackup} />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-              <button onClick={resetSettings} className="context-secondary-btn">Restaurar configuraciones</button>
-              <button onClick={() => animateClose(settingsModalRef, () => setShowSettingsModal(false))} className="context-secondary-btn">Cerrar</button>
-              <button onClick={handleSaveSettings} className="context-save-btn">Guardar configuraciones</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
 
       {/* CONTEXT MODAL */}
       <div className={`context-overlay ${showContextModal ? 'open' : ''}`} onClick={() => animateClose(contextSelModalRef, () => setShowContextModal(false))}>
@@ -2166,6 +2103,9 @@ export default function ChatbotPage() {
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                           Parcela
                         </button>
+                        <button onClick={() => openEditFarmModal(farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Editar corporación agrícola">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        </button>
                         <button onClick={() => handleDeleteFarm(farm.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar corporación agrícola">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
@@ -2192,8 +2132,11 @@ export default function ChatbotPage() {
                                     <button onClick={() => handleSelectPlot(plot, farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition cursor-pointer" style={{ border: 'none' }} title="Seleccionar parcela">
                                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
                                     </button>
+                                    <button onClick={() => openEditPlotModal(plot, farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Editar parcela">
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                    </button>
                                     <button onClick={() => handleDeletePlot(plot.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar parcela">
-                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                                     </button>
                                   </div>
                                 </td>
@@ -2230,9 +2173,9 @@ export default function ChatbotPage() {
                   </svg>
                 </div>
                 <div>
-                  <span className="context-badge">Nueva corporación agrícola</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Registrar corporación agrícola</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Después podrás agregar parcelas.</p>
+                  <span className="context-badge">{editingFarm ? 'Editar corporación agrícola' : 'Nueva corporación agrícola'}</span>
+                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">{editingFarm ? 'Editar corporación agrícola' : 'Registrar corporación agrícola'}</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{editingFarm ? 'Actualiza el nombre o la ubicación.' : 'Después podrás agregar parcelas.'}</p>
                 </div>
               </div>
               <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
@@ -2280,7 +2223,7 @@ export default function ChatbotPage() {
           <div className="px-5 sm:px-7 py-5 border-t border-gray-100 modal-footer-btns">
             <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="context-secondary-btn">Cancelar</button>
             <button onClick={handleCreateFarm} className="context-save-btn flex items-center justify-center gap-2">
-              Crear corporación agrícola y agregar parcela
+              {editingFarm ? 'Guardar cambios' : 'Crear corporación agrícola y agregar parcela'}
             </button>
           </div>
         </div>
@@ -2299,9 +2242,9 @@ export default function ChatbotPage() {
                   </svg>
                 </div>
                 <div>
-                  <span className="context-badge">Nueva parcela</span>
+                  <span className="context-badge">{editingPlot ? 'Editar parcela' : 'Nueva parcela'}</span>
                   <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">
-                    Registrar parcela
+                    {editingPlot ? 'Editar parcela' : 'Registrar parcela'}
                     {selectedFarmForPlot && <span className="font-cormorant text-brand-600"> — {selectedFarmForPlot.name}</span>}
                   </h3>
                 </div>
@@ -2465,7 +2408,7 @@ export default function ChatbotPage() {
           <div className="px-5 sm:px-7 py-4 border-t border-gray-100 modal-footer-btns">
             <button onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))} className="context-secondary-btn">Cancelar</button>
             <button onClick={handleCreatePlot} className="context-save-btn flex items-center justify-center gap-2">
-              Guardar parcela
+              {editingPlot ? 'Guardar cambios' : 'Guardar parcela'}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { updateProfile } from '../services/authService'
+import { updateProfile, deleteAccount } from '../services/authService'
 
 function animateCloseModal(modalRef, callback) {
   if (window.innerWidth >= 640 || !modalRef.current) { callback(); return }
@@ -11,11 +12,18 @@ function animateCloseModal(modalRef, callback) {
 }
 
 export default function ProfileModal({ isOpen, onClose }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const modalRef = useRef(null)
+
   const [profileForm, setProfileForm] = useState({ email: '', phone: '', first_name: '', last_name: '', dni: '' })
   const [profilePhotoFile, setProfilePhotoFile] = useState(null)
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const displayName = user?.full_name || user?.username || 'Usuario'
   const roleLabel = user?.role_label || (user?.is_admin ? 'Administrador' : 'Usuario')
@@ -30,22 +38,24 @@ export default function ProfileModal({ isOpen, onClose }) {
       setProfileForm({ email: user?.email || '', phone: user?.phone || '', first_name: user?.first_name || '', last_name: user?.last_name || '', dni: user?.dni || '' })
       setProfilePhotoFile(null)
       setProfilePhotoPreview(null)
+      setSaveError('')
+      setShowDeleteConfirm(false)
+      setDeleteInput('')
     }
   }, [isOpen, user])
 
+  // drag-to-dismiss on mobile
   useEffect(() => {
     if (!isOpen || !modalRef.current || window.innerWidth >= 640) return
     const modal = modalRef.current
     const handle = modal.querySelector('.pm-drag-handle')
     if (!handle) return
-
     modal.style.transition = 'none'
     modal.style.transform = 'translateY(100%)'
     requestAnimationFrame(() => requestAnimationFrame(() => {
       modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
       modal.style.transform = 'translateY(0)'
     }))
-
     let sy = 0, dy = 0
     const onStart = e => { sy = e.touches[0].clientY; dy = 0; modal.style.transition = 'none' }
     const onMove  = e => { dy = Math.max(0, e.touches[0].clientY - sy); modal.style.transform = `translateY(${dy}px)` }
@@ -85,19 +95,44 @@ export default function ProfileModal({ isOpen, onClose }) {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault()
+    setSaving(true)
+    setSaveError('')
     try {
       const fd = new FormData()
-      fd.append('email', profileForm.email)
-      fd.append('phone', profileForm.phone)
+      fd.append('email',      profileForm.email)
+      fd.append('phone',      profileForm.phone)
       fd.append('first_name', profileForm.first_name)
-      fd.append('last_name', profileForm.last_name)
-      fd.append('dni', profileForm.dni)
+      fd.append('last_name',  profileForm.last_name)
+      fd.append('dni',        profileForm.dni)
       if (profilePhotoFile) fd.append('profile_photo', profilePhotoFile)
       await updateProfile(fd)
-      alert('Perfil actualizado correctamente.')
       onClose()
       window.location.reload()
-    } catch { alert('Error al actualizar el perfil') }
+    } catch (err) {
+      const detail = err?.response?.data
+      if (detail && typeof detail === 'object') {
+        const msgs = Object.values(detail).flat().join(' ')
+        setSaveError(msgs || 'Error al actualizar el perfil.')
+      } else {
+        setSaveError('Error al actualizar el perfil.')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteInput.trim().toLowerCase() !== 'eliminar') return
+    setDeleting(true)
+    try {
+      await deleteAccount()
+      await logout()
+      navigate('/login')
+    } catch {
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+      setSaveError('Error al eliminar la cuenta. Intenta de nuevo.')
+    }
   }
 
   return (
@@ -113,20 +148,37 @@ export default function ProfileModal({ isOpen, onClose }) {
         @media(max-width:639px){.pm-drag-handle{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0}}
         .pm-badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:9999px;border:1px solid #dcfce7;background:#f0fdf4;color:#15803d;padding:.3rem .7rem;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
         .pm-section{border:1px solid #e5e7eb;background:#fff;border-radius:22px;padding:1rem}
+        .pm-section-danger{border:1px solid #fecaca;background:#fff5f5;border-radius:22px;padding:1rem}
         .pm-brand-avatar{background:linear-gradient(135deg,#16a34a,#22c55e,#4ade80)}
         .pm-save-btn{min-width:130px;padding:.82rem 1.15rem;border-radius:16px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:.9rem;font-weight:700;transition:transform .14s ease,box-shadow .14s ease;box-shadow:0 14px 26px rgba(22,163,74,.18);border:none;cursor:pointer}
-        .pm-save-btn:hover{transform:translateY(-1px)}
+        .pm-save-btn:hover:not(:disabled){transform:translateY(-1px)}
+        .pm-save-btn:disabled{opacity:.6;cursor:not-allowed}
         .pm-cancel-btn{min-width:90px;padding:.82rem 1.1rem;border-radius:16px;border:1px solid #dbe4ee;background:#fff;color:#334155;font-size:.9rem;font-weight:600;cursor:pointer;transition:background .14s}
         .pm-cancel-btn:hover{background:#f8fafc}
+        .pm-delete-btn{padding:.72rem 1.1rem;border-radius:14px;border:1px solid #fca5a5;background:#fff;color:#dc2626;font-size:.85rem;font-weight:600;cursor:pointer;transition:background .14s,border-color .14s}
+        .pm-delete-btn:hover{background:#fef2f2;border-color:#dc2626}
+        .pm-confirm-delete-btn{padding:.72rem 1.1rem;border-radius:14px;border:none;background:#dc2626;color:#fff;font-size:.85rem;font-weight:700;cursor:pointer;transition:background .14s,opacity .14s}
+        .pm-confirm-delete-btn:disabled{opacity:.5;cursor:not-allowed}
+        .pm-confirm-delete-btn:not(:disabled):hover{background:#b91c1c}
+        .pm-input-wrap{position:relative;border-radius:12px;border:1px solid #e2e8f0;background:#fff;transition:border-color .14s,box-shadow .14s}
+        .pm-input-wrap:focus-within{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+        .pm-input{width:100%;border:none;background:transparent;padding:.65rem .75rem .65rem 2.5rem;font-size:.875rem;color:#0f172a;outline:none}
+        .pm-input-icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);pointer-events:none;color:#94a3b8}
       `}</style>
+
       <div className={`pm-overlay ${isOpen ? 'open' : ''}`} onClick={handleClose}>
         <div className="pm-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
           <div className="pm-drag-handle" />
+
+          {/* Header */}
           <div className="pm-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                  style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
+                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                  </svg>
                 </div>
                 <div>
                   <span className="pm-badge">Perfil de usuario</span>
@@ -134,13 +186,21 @@ export default function ProfileModal({ isOpen, onClose }) {
                   <p className="text-xs text-gray-400 mt-0.5">Mantén tus datos actualizados y gestiona tu cuenta.</p>
                 </div>
               </div>
-              <button onClick={handleClose} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <button onClick={handleClose}
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0"
+                style={{ border: 'none', cursor: 'pointer' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
               </button>
             </div>
           </div>
+
+          {/* Body */}
           <div className="pm-modal-body px-4 sm:px-6 py-5">
             <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+
+              {/* Sidebar: avatar + info */}
               <aside className="flex flex-col items-center text-center h-fit">
                 <div className="pm-section w-full flex flex-col items-center text-center">
                   <div className="relative inline-flex mb-3">
@@ -159,8 +219,12 @@ export default function ProfileModal({ isOpen, onClose }) {
                   <p className="text-sm text-slate-500">@{user?.username}</p>
                   <div className="mt-5 w-full">
                     <input id="pmProfilePhotoInput" type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoSelect} />
-                    <label htmlFor="pmProfilePhotoInput" className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-600">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                    <label htmlFor="pmProfilePhotoInput"
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 transition-colors hover:border-brand-600 hover:bg-brand-50 hover:text-brand-600">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                        <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+                        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                      </svg>
                       <span>Cambiar foto</span>
                     </label>
                   </div>
@@ -176,74 +240,171 @@ export default function ProfileModal({ isOpen, onClose }) {
                   </div>
                 </div>
               </aside>
+
+              {/* Form */}
               <form className="space-y-5" onSubmit={handleUpdateProfile}>
+
+                {/* Datos de cuenta */}
                 <div className="pm-section">
                   <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
                     <span>Datos de cuenta</span>
                     <div className="h-px flex-1 bg-slate-200"/>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Correo electrónico</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-                        <input type="email" value={profileForm.email} onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                      <div className="pm-input-wrap">
+                        <span className="pm-input-icon">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                            <polyline points="22,6 12,13 2,6"/>
+                          </svg>
+                        </span>
+                        <input type="email" className="pm-input" value={profileForm.email}
+                          onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))} />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Teléfono</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
-                        <input type="tel" maxLength={10} value={profileForm.phone} onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                      <div className="pm-input-wrap">
+                        <span className="pm-input-icon">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                          </svg>
+                        </span>
+                        <input type="tel" maxLength={10} className="pm-input" value={profileForm.phone}
+                          onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} />
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Datos personales */}
                 <div className="pm-section">
                   <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                    </svg>
                     <span>Datos personales</span>
                     <div className="h-px flex-1 bg-slate-200"/>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Nombre</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                        <input type="text" value={profileForm.first_name} onChange={e => setProfileForm(p => ({ ...p, first_name: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                      <div className="pm-input-wrap">
+                        <span className="pm-input-icon">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                          </svg>
+                        </span>
+                        <input type="text" className="pm-input" value={profileForm.first_name}
+                          onChange={e => setProfileForm(p => ({ ...p, first_name: e.target.value }))} />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Apellido</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                        <input type="text" value={profileForm.last_name} onChange={e => setProfileForm(p => ({ ...p, last_name: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                      <div className="pm-input-wrap">
+                        <span className="pm-input-icon">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                          </svg>
+                        </span>
+                        <input type="text" className="pm-input" value={profileForm.last_name}
+                          onChange={e => setProfileForm(p => ({ ...p, last_name: e.target.value }))} />
                       </div>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600">Cédula</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 9.5h4M14 12.5h3"/></svg></span>
-                        <input type="text" maxLength={10} value={profileForm.dni} onChange={e => setProfileForm(p => ({ ...p, dni: e.target.value }))} className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-slate-600">Dirección</label>
-                      <div className="relative rounded-xl border border-slate-200 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg></span>
-                        <input type="text" placeholder="Av. principal..." className="w-full rounded-xl border-0 bg-transparent py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none" />
+                      <div className="pm-input-wrap">
+                        <span className="pm-input-icon">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/>
+                            <path d="M14 9.5h4M14 12.5h3"/>
+                          </svg>
+                        </span>
+                        <input type="text" maxLength={10} className="pm-input" value={profileForm.dni}
+                          onChange={e => setProfileForm(p => ({ ...p, dni: e.target.value }))} />
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {saveError && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveError}</p>
+                )}
+
                 <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
                   <button type="button" onClick={handleClose} className="pm-cancel-btn">Cancelar</button>
-                  <button type="submit" className="pm-save-btn inline-flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                    Guardar cambios
+                  <button type="submit" disabled={saving} className="pm-save-btn inline-flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    {saving ? 'Guardando…' : 'Guardar cambios'}
                   </button>
                 </div>
+
+                {/* ── Zona de peligro ── */}
+                <div className="pm-section-danger mt-2">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-red-400">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <span>Zona de peligro</span>
+                    <div className="h-px flex-1 bg-red-200"/>
+                  </div>
+
+                  {!showDeleteConfirm ? (
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">Eliminar cuenta permanentemente</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Esta acción no se puede deshacer. Se borrarán todos tus datos.</p>
+                      </div>
+                      <button type="button" onClick={() => setShowDeleteConfirm(true)} className="pm-delete-btn flex-shrink-0">
+                        Eliminar cuenta
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-700">
+                        Para confirmar, escribe <strong className="text-red-600">eliminar</strong> en el campo de abajo:
+                      </p>
+                      <div className="pm-input-wrap" style={{ borderColor: deleteInput.trim().toLowerCase() === 'eliminar' ? '#dc2626' : undefined }}>
+                        <input
+                          type="text"
+                          className="pm-input"
+                          style={{ paddingLeft: '.75rem' }}
+                          placeholder="eliminar"
+                          value={deleteInput}
+                          onChange={e => setDeleteInput(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex gap-3">
+                        <button type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }} className="pm-cancel-btn text-sm py-2 px-4" style={{ minWidth: 0, padding: '.55rem .9rem' }}>
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deleteInput.trim().toLowerCase() !== 'eliminar' || deleting}
+                          onClick={handleDeleteAccount}
+                          className="pm-confirm-delete-btn flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            <path d="M10 11v6"/><path d="M14 11v6"/>
+                          </svg>
+                          {deleting ? 'Eliminando…' : 'Confirmar eliminación'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </form>
             </div>
           </div>

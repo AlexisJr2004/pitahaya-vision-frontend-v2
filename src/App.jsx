@@ -6,8 +6,7 @@ import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import HomePage from './pages/HomePage'
 import ChatbotPage from './pages/ChatbotPage'
-import HistorialAnalisisPage from './pages/HistorialAnalisisPage'
-import DashboardPage from './pages/DashboardPage'
+import UserPage from './pages/UserPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function ProtectedRoute({ children }) {
@@ -41,8 +40,8 @@ export default function App() {
         <Route path="/verificar-correo" element={<VerifyEmailPage />} />
         <Route path="/" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
         <Route path="/chatbot" element={<ProtectedRoute><ChatbotPage /></ProtectedRoute>} />
-        <Route path="/historial" element={<ProtectedRoute><HistorialAnalisisPage /></ProtectedRoute>} />
-        <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+        <Route path="/historial" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>

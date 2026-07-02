@@ -4,11 +4,28 @@ Chart.register(BarController, CategoryScale, LinearScale, BarElement, Tooltip)
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.heat'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { getAnalyses } from '../services/analysisService'
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
 import DashboardReportPDF from '../components/DashboardReportPDF'
 
 const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
+
+function escapeHtml(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+const TILE_LAYERS = {
+  street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',  attribution: '© OpenStreetMap contributors', subdomains: 'abc',  maxNativeZoom: 19, maxZoom: 21 },
+  satellite: { url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: '© Google',                  subdomains: '0123', maxNativeZoom: 20, maxZoom: 21 },
+  terrain:   { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',    attribution: '© OpenTopoMap contributors',  subdomains: 'abc',  maxNativeZoom: 17, maxZoom: 21 },
+}
+
+const SEV_COLORS = { low: '#22c55e', medium: '#eab308', high: '#f97316', critical: '#ef4444' }
+const SEV_BG     = { low: '#ecfdf5', medium: '#fefce8', high: '#fff7ed', critical: '#fef2f2' }
+const SEV_LABELS = { low: 'Saludable', medium: 'Media', high: 'Alta', critical: 'Crítica' }
 
 /* ── Severity helpers (same logic as HistorialAdminPage) ── */
 function computeSev(a) {
@@ -111,129 +128,154 @@ function TrendLine({ data }) {
 }
 
 
-/* ── Leaflet heatmap de la finca ── */
-function FarmHeatmap({ analyses }) {
-  const mapRef  = useRef(null)
-  const tileRef = useRef(null)
-  const heatRef = useRef(null)
+/* ── Leaflet map con 7 features ── */
+function FarmHeatmap({ analyses, onSelectAnalysis }) {
+  const mapRef        = useRef(null)
+  const mapInstanceRef = useRef(null)
+  const tileLayerRef  = useRef(null)
+  const markerGroupRef = useRef(null)
+  const heatLayerRef  = useRef(null)
 
-  // Puntos con coordenadas válidas: [lat, lon, intensidad]
-  const points = useMemo(() => {
-    return analyses
-      .filter(a => a.latitude != null && a.longitude != null)
-      .map(a => {
-        const bucket = (() => {
-          const s = (a.severity || '').toLowerCase()
-          const d = (a.disease_name_predicted || '').toLowerCase()
-          if (s === 'sana' || d.includes('sana')) return 0.2
-          if (d.includes('pudric')) return 1.0
-          if (d.includes('cancro') || d.includes('tiz') || d.includes('antrac')) return 0.8
-          if (d.includes('mancha')) return 0.5
-          return 0.6
-        })()
-        return [a.latitude, a.longitude, bucket]
-      })
-  }, [analyses])
+  const [mapLayer,     setMapLayer]     = useState('street')
+  const [showHeatmap,  setShowHeatmap]  = useState(true)
+  const [showClusters, setShowClusters] = useState(false)
+  const [mapSevFilter, setMapSevFilter] = useState(new Set(['low', 'medium', 'high', 'critical']))
 
-  const center = useMemo(() => {
-    if (!points.length) return [-1.8312, -78.1834] // Ecuador centro
-    const lat = points.reduce((s, p) => s + p[0], 0) / points.length
-    const lon = points.reduce((s, p) => s + p[1], 0) / points.length
-    return [lat, lon]
-  }, [points])
+  const geoAnalyses = useMemo(() => analyses.filter(a => a.latitude != null && a.longitude != null), [analyses])
 
+  // ── init map (once) ──
   useEffect(() => {
-    if (!mapRef.current) return
-
-    // Inicializar mapa solo una vez
-    if (!tileRef.current) {
-      tileRef.current = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false })
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(tileRef.current)
-    }
-
-    const map = tileRef.current
-    map.setView(center, points.length ? 15 : 7)
-
-    // Actualizar capa de calor
-    if (heatRef.current) { map.removeLayer(heatRef.current); heatRef.current = null }
-
-    if (points.length) {
-      heatRef.current = L.heatLayer(points, {
-        radius: 35,
-        blur: 25,
-        maxZoom: 18,
-        max: 1.0,
-        gradient: { 0.2: '#22c55e', 0.4: '#86efac', 0.6: '#fbbf24', 0.8: '#f97316', 1.0: '#ef4444' },
-      }).addTo(map)
-
-      // Marcadores con popup por cada punto
-      analyses
-        .filter(a => a.latitude != null && a.longitude != null)
-        .forEach(a => {
-          const sev   = (a.severity || '').toLowerCase()
-          const isRisk = !sev.includes('sana')
-          const color = isRisk ? '#ef4444' : '#22c55e'
-          const icon = L.divIcon({
-            className: '',
-            html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.3)"></div>`,
-            iconSize: [10, 10],
-            iconAnchor: [5, 5],
-          })
-          L.marker([a.latitude, a.longitude], { icon })
-            .addTo(map)
-            .bindPopup(`
-              <div style="font-family:Inter,sans-serif;min-width:160px">
-                <p style="font-weight:600;font-size:.85rem;margin:0 0 4px">${a.disease_name_predicted || 'Análisis'}</p>
-                <p style="font-size:.75rem;color:#64748b;margin:0">${a.owner_name || '—'}</p>
-                <p style="font-size:.72rem;color:#94a3b8;margin:4px 0 0">${new Date(a.created_at).toLocaleDateString('es-EC')}</p>
-              </div>
-            `, { maxWidth: 220 })
-        })
-
-      const bounds = L.latLngBounds(points.map(p => [p[0], p[1]]))
-      map.fitBounds(bounds, { padding: [40, 40] })
-    }
-
-    return () => {}
-  }, [points, center])
-
-  useEffect(() => {
-    return () => {
-      if (tileRef.current) { tileRef.current.remove(); tileRef.current = null }
-      heatRef.current = null
-    }
+    if (!mapRef.current || mapInstanceRef.current) return
+    const map = L.map(mapRef.current, { zoomControl: true, maxZoom: 21 })
+    L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map)
+    map.setView([-1.8312, -78.1834], 7)
+    mapInstanceRef.current = map
+    return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null } }
   }, [])
 
-  if (!analyses.length) return null
+  // ── tile layer ──
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    if (tileLayerRef.current) { tileLayerRef.current.remove(); tileLayerRef.current = null }
+    const cfg = TILE_LAYERS[mapLayer] || TILE_LAYERS.street
+    tileLayerRef.current = L.tileLayer(cfg.url, { attribution: cfg.attribution, subdomains: cfg.subdomains || 'abc', maxZoom: cfg.maxZoom, maxNativeZoom: cfg.maxNativeZoom }).addTo(map)
+  }, [mapLayer])
+
+  // ── markers + heatmap ──
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    if (markerGroupRef.current) { markerGroupRef.current.remove(); markerGroupRef.current = null }
+    if (heatLayerRef.current)   { heatLayerRef.current.remove();   heatLayerRef.current = null }
+
+    const filtered = geoAnalyses.filter(a => mapSevFilter.has(computeSev(a).bucket))
+
+    const group = showClusters
+      ? L.markerClusterGroup({ maxClusterRadius: 60, showCoverageOnHover: false })
+      : L.featureGroup()
+
+    filtered.forEach(a => {
+      const sev   = computeSev(a)
+      const color = SEV_COLORS[sev.bucket] || '#94a3b8'
+      const marker = L.circleMarker([a.latitude, a.longitude], { radius: 11, fillColor: color, color: '#fff', weight: 2.5, opacity: 1, fillOpacity: 0.9 })
+      marker.bindTooltip(`<b>${escapeHtml(a.disease_name_predicted || 'Análisis')}</b> · ${escapeHtml(a.owner_name || '—')}`, { direction: 'top', offset: [0, -8] })
+      marker.on('click', () => onSelectAnalysis && onSelectAnalysis(a))
+      group.addLayer(marker)
+    })
+
+    group.addTo(map)
+    markerGroupRef.current = group
+
+    if (showHeatmap && geoAnalyses.length > 0) {
+      const pts = geoAnalyses.map(a => {
+        const s = (a.severity || '').toLowerCase()
+        const d = (a.disease_name_predicted || '').toLowerCase()
+        const intensity = s === 'sana' || d.includes('sana') ? 0.2 : d.includes('pudric') ? 1.0 : d.includes('cancro') || d.includes('tiz') || d.includes('antrac') ? 0.8 : d.includes('mancha') ? 0.5 : 0.6
+        return [a.latitude, a.longitude, intensity]
+      })
+      heatLayerRef.current = L.heatLayer(pts, { radius: 35, blur: 25, maxZoom: 17, max: 1.0, gradient: { 0.2: '#22c55e', 0.4: '#86efac', 0.6: '#fbbf24', 0.8: '#f97316', 1.0: '#ef4444' } }).addTo(map)
+    }
+
+    if (filtered.length > 0) {
+      try { map.fitBounds(group.getBounds().pad(0.3)) } catch { map.setView([-1.8312, -78.1834], 7) }
+    } else if (geoAnalyses.length === 0) {
+      map.setView([-1.8312, -78.1834], 7)
+    }
+  }, [analyses, mapSevFilter, showClusters, showHeatmap, geoAnalyses])
 
   return (
-    <div className="relative">
-      <div ref={mapRef} style={{ height: 400, borderRadius: 20, overflow: 'hidden', zIndex: 0 }} />
-      {points.length === 0 && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/90 rounded-[20px] gap-3">
-          <div className="w-16 h-16 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center">
-            <i className="fas fa-location-crosshairs text-brand-500 text-2xl"></i>
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-semibold text-slate-700">Sin puntos GPS registrados aún</p>
-            <p className="text-xs text-slate-400 mt-1">Los próximos análisis capturarán la ubicación automáticamente</p>
-          </div>
-        </div>
-      )}
-      {/* Leyenda */}
-      <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm rounded-xl px-3 py-2 shadow-md border border-slate-100 z-[1000]">
-        <p className="text-[0.62rem] font-bold uppercase tracking-[0.1em] text-slate-500 mb-1.5">Intensidad</p>
-        <div className="flex items-center gap-1.5">
-          {[['#22c55e','Baja'],['#fbbf24','Media'],['#f97316','Alta'],['#ef4444','Crítica']].map(([c,l]) => (
-            <div key={l} className="flex flex-col items-center gap-0.5">
-              <span className="w-4 h-4 rounded-sm" style={{ background: c }}></span>
-              <span className="text-[0.55rem] text-slate-500">{l}</span>
-            </div>
+    <div>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.65rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
+          {[['street', 'Mapa'], ['satellite', 'Satélite'], ['terrain', 'Terreno']].map(([key, label], idx, arr) => (
+            <button key={key} onClick={() => setMapLayer(key)}
+              style={{ padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                background: mapLayer === key ? '#16a34a' : '#fff', color: mapLayer === key ? '#fff' : '#64748b',
+                transition: 'all 0.15s', borderRight: idx < arr.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+              {label}
+            </button>
           ))}
         </div>
+        <button onClick={() => setShowHeatmap(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600,
+            border: `1px solid ${showHeatmap ? '#fbbf24' : '#e2e8f0'}`, borderRadius: 10, cursor: 'pointer',
+            background: showHeatmap ? '#fef9c3' : '#fff', color: showHeatmap ? '#92400e' : '#64748b', transition: 'all 0.15s' }}>
+          <svg style={{ width: 11, height: 11 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Mapa de calor
+        </button>
+        <button onClick={() => setShowClusters(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600,
+            border: `1px solid ${showClusters ? '#93c5fd' : '#e2e8f0'}`, borderRadius: 10, cursor: 'pointer',
+            background: showClusters ? '#eff6ff' : '#fff', color: showClusters ? '#1d4ed8' : '#64748b', transition: 'all 0.15s' }}>
+          <svg style={{ width: 11, height: 11 }} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="3"/><circle cx="12" cy="5" r="3"/><circle cx="19" cy="12" r="3"/><circle cx="12" cy="19" r="3"/></svg>
+          Agrupación
+        </button>
+      </div>
+
+      {/* Map */}
+      <div className="relative">
+        <div ref={mapRef} style={{ height: 400, borderRadius: 20, overflow: 'hidden', zIndex: 0, border: '1px solid #e2e8f0' }} />
+        {geoAnalyses.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/90 rounded-[20px] gap-3">
+            <div className="w-16 h-16 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center">
+              <i className="fas fa-location-crosshairs text-brand-500 text-2xl"></i>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-slate-700">Sin puntos GPS registrados aún</p>
+              <p className="text-xs text-slate-400 mt-1">Los próximos análisis capturarán la ubicación automáticamente</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Severity filter chips */}
+      <div style={{ marginTop: '0.6rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+        {(['low', 'medium', 'high', 'critical']).map(bucket => {
+          const active = mapSevFilter.has(bucket)
+          const color  = SEV_COLORS[bucket]
+          return (
+            <button key={bucket} onClick={() => setMapSevFilter(prev => {
+              const next = new Set(prev)
+              if (next.has(bucket)) next.delete(bucket); else next.add(bucket)
+              return next
+            })}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem',
+                borderRadius: 9999, border: `1.5px solid ${active ? color : '#e2e8f0'}`,
+                background: active ? `${color}18` : '#f8fafc', color: active ? color : '#94a3b8',
+                cursor: 'pointer', transition: 'all 0.15s', fontWeight: active ? 700 : 500,
+                fontSize: '0.68rem', opacity: active ? 1 : 0.65 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? color : '#cbd5e1', flexShrink: 0 }}></span>
+              {SEV_LABELS[bucket]}
+            </button>
+          )
+        })}
+        <button onClick={() => setMapSevFilter(new Set(['low', 'medium', 'high', 'critical']))}
+          style={{ padding: '0.2rem 0.55rem', borderRadius: 9999, border: '1.5px solid #e2e8f0',
+            background: '#f8fafc', color: '#94a3b8', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 500 }}>
+          Todos
+        </button>
       </div>
     </div>
   )
@@ -285,9 +327,10 @@ function HBarChart({ data }) {
 }
 
 export default function DashboardAdminPage() {
-  const [analyses, setAnalyses] = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [showPDF, setShowPDF] = useState(false)
+  const [analyses, setAnalyses]           = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [showPDF, setShowPDF]             = useState(false)
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null)
 
   useEffect(() => {
     getAnalyses({ page_size: 200 })
@@ -421,6 +464,8 @@ export default function DashboardAdminPage() {
         .da-sev-medium   { background:#fefce8; color:#a16207; }
         .da-sev-high     { background:#fff7ed; color:#c2410c; }
         .da-sev-critical { background:#fef2f2; color:#b91c1c; }
+        .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;}
+        .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;font-weight:700;font-size:0.72rem;}
       `}</style>
 
       <section className="mb-10 da-fade space-y-6">
@@ -596,40 +641,105 @@ export default function DashboardAdminPage() {
             </div>
           </header>
 
-          {/* Layout 2 columnas: mapa (izquierda) + IA (derecha) */}
+          {/* Layout 2 columnas: mapa (izquierda) + panel (derecha) */}
           <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-6 items-stretch">
             {/* Mapa */}
             <div className="min-w-0">
-              <FarmHeatmap analyses={analyses} />
+              <FarmHeatmap analyses={analyses} onSelectAnalysis={setSelectedAnalysis} />
             </div>
 
-            {/* Panel IA — misma altura que el mapa */}
-            <div className="min-w-0 rounded-[22px] border border-slate-200 bg-white overflow-hidden" style={{ height: 400 }}>
-              <AIAnalysisPanel
-                analyses={analyses}
-                buildSummary={() => {
-                  const geoPoints = analyses.filter(a => a.latitude != null && a.longitude != null)
-                  const sick = analyses.filter(a => (a.severity || '').toLowerCase() !== 'sana').length
-                  const pctSick = analyses.length ? Math.round(sick / analyses.length * 100) : 0
-                  const diseaseCounts = {}
-                  analyses.forEach(a => { const d = a.disease_name_predicted || 'Desconocido'; diseaseCounts[d] = (diseaseCounts[d] || 0) + 1 })
-                  const topDiseases = Object.entries(diseaseCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => `- ${name}: ${count} caso${count > 1 ? 's' : ''}`).join('\n')
-                  const sevCounts = { Baja: 0, Media: 0, Alta: 0, Crítica: 0 }
-                  analyses.forEach(a => {
-                    const s = (a.severity || '').toLowerCase(); const d = (a.disease_name_predicted || '').toLowerCase()
-                    if (s === 'sana' || d.includes('sana')) sevCounts.Baja++
-                    else if (d.includes('pudric')) sevCounts.Crítica++
-                    else if (d.includes('cancro') || d.includes('tiz') || d.includes('antrac')) sevCounts.Alta++
-                    else if (d.includes('mancha')) sevCounts.Media++
-                    else sevCounts.Alta++
-                  })
-                  return `Resumen del mapa de calor de la finca:\n- Total de análisis registrados: ${analyses.length}\n- Análisis con coordenadas GPS: ${geoPoints.length}\n- Plantas enfermas detectadas: ${sick} (${pctSick}%)\n- Distribución por severidad: Baja=${sevCounts.Baja}, Media=${sevCounts.Media}, Alta=${sevCounts.Alta}, Crítica=${sevCounts.Crítica}\n\nEnfermedades más frecuentes:\n${topDiseases}\n${geoPoints.length === 0 ? '\nNota: Aún no hay puntos GPS registrados en el mapa.' : ''}`
-                }}
-                title="Diagnóstico fitosanitario"
-                buttonLabel="Analizar mapa"
-                emptyText="Gemma 3 interpretará los patrones del mapa y entregará un reporte agronómico"
-                showGeoStats={true}
-              />
+            {/* Panel derecho: detalle de análisis seleccionado o IA */}
+            <div className="min-w-0 rounded-[22px] border border-slate-200 bg-white overflow-hidden" style={{ height: 484 }}>
+              {selectedAnalysis ? (() => {
+                const sev     = computeSev(selectedAnalysis)
+                const color   = SEV_COLORS[sev.bucket] || '#94a3b8'
+                const bg      = SEV_BG[sev.bucket]    || '#f8fafc'
+                const confPct = Math.min(100, parseFloat(selectedAnalysis.confidence_percent ?? (selectedAnalysis.confidence > 1 ? selectedAnalysis.confidence : (selectedAnalysis.confidence || 0) * 100)) || 0)
+                return (
+                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#16a34a' }}>Detalle del análisis</span>
+                      <button onClick={() => setSelectedAnalysis(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', lineHeight: 1, padding: '0.1rem 0.3rem', borderRadius: 6 }}>✕</button>
+                    </div>
+                    <div style={{ padding: '0.85rem 1rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {selectedAnalysis.image_url && (
+                        <img src={selectedAnalysis.image_url} alt="leaf"
+                          style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 12, border: '1px solid #e2e8f0' }} />
+                      )}
+                      <div>
+                        <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '0.2rem' }}>Diagnóstico</p>
+                        <p style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{selectedAnalysis.disease_name_predicted || 'Sin diagnóstico'}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.2rem' }}>Usuario</p>
+                        <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>{selectedAnalysis.owner_name || '—'}</p>
+                        {selectedAnalysis.owner_email && <p style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{selectedAnalysis.owner_email}</p>}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.3rem' }}>Severidad</p>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.6rem', borderRadius: 9999, background: bg, color, fontSize: '0.7rem', fontWeight: 700 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }}></span>
+                            {sev.label}
+                          </span>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.3rem' }}>Confianza</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <div style={{ flex: 1, height: 5, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
+                              <div style={{ height: 5, background: 'linear-gradient(90deg,#16a34a,#22c55e)', borderRadius: 999, width: `${confPct}%`, transition: 'width .6s ease' }}></div>
+                            </div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>{confPct.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ borderTop: '1px solid #eef2f7', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                          <span style={{ color: '#94a3b8', fontWeight: 600 }}>Fecha</span>
+                          <span style={{ color: '#334155', fontWeight: 600 }}>{new Date(selectedAnalysis.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                          <span style={{ color: '#94a3b8', fontWeight: 600 }}>GPS</span>
+                          <span style={{ color: '#334155', fontFamily: 'monospace', fontSize: '0.66rem' }}>{selectedAnalysis.latitude?.toFixed(5)}, {selectedAnalysis.longitude?.toFixed(5)}</span>
+                        </div>
+                      </div>
+                      {selectedAnalysis.analysis_text && (
+                        <div style={{ borderTop: '1px solid #eef2f7', paddingTop: '0.6rem' }}>
+                          <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.35rem' }}>Observaciones</p>
+                          <p style={{ fontSize: '0.72rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{selectedAnalysis.analysis_text}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })() : (
+                <AIAnalysisPanel
+                  analyses={analyses}
+                  buildSummary={() => {
+                    const geoPoints = analyses.filter(a => a.latitude != null && a.longitude != null)
+                    const sick = analyses.filter(a => (a.severity || '').toLowerCase() !== 'sana').length
+                    const pctSick = analyses.length ? Math.round(sick / analyses.length * 100) : 0
+                    const diseaseCounts = {}
+                    analyses.forEach(a => { const d = a.disease_name_predicted || 'Desconocido'; diseaseCounts[d] = (diseaseCounts[d] || 0) + 1 })
+                    const topDiseases = Object.entries(diseaseCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => `- ${name}: ${count} caso${count > 1 ? 's' : ''}`).join('\n')
+                    const sevCounts = { Baja: 0, Media: 0, Alta: 0, Crítica: 0 }
+                    analyses.forEach(a => {
+                      const s = (a.severity || '').toLowerCase(); const d = (a.disease_name_predicted || '').toLowerCase()
+                      if (s === 'sana' || d.includes('sana')) sevCounts.Baja++
+                      else if (d.includes('pudric')) sevCounts.Crítica++
+                      else if (d.includes('cancro') || d.includes('tiz') || d.includes('antrac')) sevCounts.Alta++
+                      else if (d.includes('mancha')) sevCounts.Media++
+                      else sevCounts.Alta++
+                    })
+                    return `Resumen del mapa de calor de la finca:\n- Total de análisis registrados: ${analyses.length}\n- Análisis con coordenadas GPS: ${geoPoints.length}\n- Plantas enfermas detectadas: ${sick} (${pctSick}%)\n- Distribución por severidad: Baja=${sevCounts.Baja}, Media=${sevCounts.Media}, Alta=${sevCounts.Alta}, Crítica=${sevCounts.Crítica}\n\nEnfermedades más frecuentes:\n${topDiseases}\n${geoPoints.length === 0 ? '\nNota: Aún no hay puntos GPS registrados en el mapa.' : ''}`
+                  }}
+                  title="Diagnóstico fitosanitario"
+                  buttonLabel="Analizar mapa"
+                  emptyText="Gemma 3 interpretará los patrones del mapa y entregará un reporte agronómico"
+                  showGeoStats={true}
+                />
+              )}
             </div>
           </div>
         </article>
@@ -802,7 +912,7 @@ export default function DashboardAdminPage() {
         isOpen={showPDF}
         onClose={() => setShowPDF(false)}
         mode="admin"
-        data={{ kpis, health, topDiseases, sevTotals, userCards, timeline }}
+        data={{ kpis, health, topDiseases, sevTotals, userCards, timeline, recentAlerts }}
       />
     </>
   )

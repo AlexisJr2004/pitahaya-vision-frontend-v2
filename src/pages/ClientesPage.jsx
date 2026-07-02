@@ -259,7 +259,7 @@ export default function ClientesPage() {
         </section>
 
         {/* ── Main grid ─────────────────────────────────────────── */}
-        <section className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
+        <section className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
 
           {/* ── Table panel ───────────────────────────────────────── */}
           <article className="cp-panel overflow-hidden">
@@ -327,6 +327,11 @@ export default function ClientesPage() {
                             <p className="font-bold text-slate-800 truncate">{c.full_name || c.username}</p>
                             <p className="text-xs text-slate-500 truncate">{c.email}</p>
                             {c.phone && <p className="text-xs text-green-600">{c.phone}</p>}
+                            {c.date_joined && (
+                              <p className="text-xs text-slate-400">
+                                Registro: {new Date(c.date_joined).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex justify-between items-center text-xs font-semibold mb-3">
@@ -383,6 +388,7 @@ export default function ClientesPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Correo</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Rol</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Estado</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Registro</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Acción</th>
                     </tr>
                   </thead>
@@ -416,6 +422,11 @@ export default function ClientesPage() {
                             <span className={`px-2 py-0.5 rounded ${c.is_active ? 'bg-brand-100 text-brand-700' : 'bg-red-100 text-red-700'}`}>
                               {c.is_active ? 'Activo' : 'Inactivo'}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                            {c.date_joined
+                              ? new Date(c.date_joined).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
+                              : '—'}
                           </td>
                           <td className="px-4 py-3">
                             {isMe ? (

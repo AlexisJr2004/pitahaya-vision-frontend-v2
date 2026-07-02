@@ -23,6 +23,11 @@ export async function createFarm(data) {
   return res.data
 }
 
+export async function updateFarm(id, data) {
+  const res = await API.patch(`/farms/${id}/`, data)
+  return res.data
+}
+
 export async function deleteFarm(id) {
   const res = await API.delete(`/farms/${id}/`)
   return res.data
@@ -31,6 +36,11 @@ export async function deleteFarm(id) {
 // ─── Plots ───
 export async function createPlot(data) {
   const res = await API.post('/plots/', data)
+  return res.data
+}
+
+export async function updatePlot(id, data) {
+  const res = await API.patch(`/plots/${id}/`, data)
   return res.data
 }
 
@@ -101,6 +111,50 @@ export async function getContexts() {
 export async function askChatbot({ message, conversation_id, max_length = 1024, no_rag = false }) {
   const res = await API.post('/chat/', { message, conversation_id, max_length, no_rag })
   return res.data
+}
+
+export async function askChatbotStream({ message, conversation_id, max_length = 250, no_rag = false, onToken }) {
+  const authToken = localStorage.getItem('auth_token')
+  const response = await fetch('/api/v2/chatbot/chat/stream/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${authToken}`,
+    },
+    body: JSON.stringify({ message, conversation_id, max_length, no_rag }),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let fullText = ''
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const raw = line.slice(6).trim()
+        if (!raw) continue
+        try {
+          const parsed = JSON.parse(raw)
+          if (parsed.done) return fullText
+          if (parsed.token) {
+            fullText += parsed.token
+            onToken && onToken(fullText)
+          }
+        } catch { /* chunk parcial */ }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return fullText
 }
 
 export async function getSuggestions({ bot_response }) {
