@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { validateLogin } from '../utils/validators'
+import { getRemainingSeconds, setCooldownFromWait, getCooldownType } from '../utils/cooldown'
+import CooldownModal from '../components/CooldownModal'
 
 // ─── Design tokens ────────────────────────────────────────────────
 const G = { 800: '#15803d', 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }
@@ -44,6 +46,15 @@ export default function LoginPage() {
   const [error, setError]             = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
+  const [cooldownActive, setCooldownActive] = useState(false)
+  const [cooldownType, setCooldownType] = useState('throttle')
+
+  useEffect(() => {
+    if (getRemainingSeconds() > 0) {
+      setCooldownType(getCooldownType())
+      setCooldownActive(true)
+    }
+  }, [])
 
   const successMsg = location.state?.registered
     ? 'Cuenta creada con éxito. Revisa tu correo para verificar tu cuenta.'
@@ -70,7 +81,18 @@ export default function LoginPage() {
         FIELD_NAMES.forEach(k => { if (data[k]) backendErrors[k] = Array.isArray(data[k]) ? data[k][0] : data[k] })
         if (Object.keys(backendErrors).length) { setFieldErrors(backendErrors); return }
       }
-      setError(data?.non_field_errors?.[0] || data?.detail || 'Error al iniciar sesión')
+      const extractStr = (v) => Array.isArray(v) ? v[0] : v
+      const errorMsg = extractStr(data?.non_field_errors?.[0] || data?.detail) || 'Error al iniciar sesión'
+      setError(errorMsg)
+      const rawWait = data?.wait
+      const wait = Array.isArray(rawWait) ? Number(rawWait[0]) : rawWait
+      if (wait && typeof wait === 'number' && wait > 0) {
+        const isLockout = errorMsg?.toLowerCase().includes('cuenta bloqueada')
+        const type = isLockout ? 'lockout' : 'throttle'
+        setCooldownFromWait(wait, type)
+        setCooldownType(type)
+        setCooldownActive(true)
+      }
     }
   }
 
@@ -293,6 +315,10 @@ export default function LoginPage() {
             stroke={G[600]} strokeWidth="1.5" fill="none" opacity=".35" vectorEffect="non-scaling-stroke" />
         </svg>
       </main>
+
+      {cooldownActive && (
+        <CooldownModal type={cooldownType} onComplete={() => { setCooldownActive(false); setError('') }} />
+      )}
     </>
   )
 }
