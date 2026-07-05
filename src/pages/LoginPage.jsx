@@ -176,14 +176,14 @@ export default function LoginPage() {
 
             {/* Banners */}
             {successMsg && (
-              <div style={{ background:'#f0fdf4', color:G[600], padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center', border:'1px solid #bbf7d0' }}>
+              <p style={{ background:'#f0fdf4', color:G[600], padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center', border:'1px solid #bbf7d0' }}>
                 {successMsg}
-              </div>
+              </p>
             )}
             {error && (
-              <div style={{ background:'#fef2f2', color:'#dc2626', padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center' }}>
+              <p style={{ background:'#fef2f2', color:'#dc2626', padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center' }}>
                 {error}
-              </div>
+              </p>
             )}
 
             {/* ═══ FORM ═══ */}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getAnalyses } from '../services/analysisService'
+import { getAnalyses, getWeather } from '../services/analysisService'
 import { getFarms, getPlantHistories } from '../services/chatbotService'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -15,14 +15,6 @@ import AIAnalysisPanel from '../components/AIAnalysisPanel'
 // ── helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(v) {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-function sevBucket(v) {
-  const n = (v || '').toLowerCase()
-  if (n.includes('crít')) return 4
-  if (n.includes('alta')) return 3
-  if (n.includes('moder')) return 2
-  if (n.includes('leve') || n.includes('baja')) return 1
-  return 0
 }
 function computeSevBucket(h) {
   const sev     = (h.severity || '').toLowerCase()
@@ -39,13 +31,6 @@ function isHighRisk(h) { return computeSevBucket(h) >= 2 }
 function riskLabelFromBucket(b) { return ['Sin riesgo', 'Baja', 'Moderada', 'Alta', 'Crítica'][b] ?? '—' }
 function riskColorFromBucket(b) { return ['#16a34a', '#84cc16', '#d97706', '#ea580c', '#dc2626'][b] ?? '#94a3b8' }
 function riskBgFromBucket(b) { return ['#f0fdf4', '#f7fee7', '#fff7ed', '#fff7ed', '#fef2f2'][b] ?? '#f8fafc' }
-function sevPillClass(v) {
-  const n = (v || '').toLowerCase()
-  if (n.includes('crít')) return 'sev-critical'
-  if (n.includes('alta')) return 'sev-high'
-  if (n.includes('moder')) return 'sev-medium'
-  return 'sev-low'
-}
 function formatDate(v) {
   if (!v) return '—'
   try { return new Intl.DateTimeFormat('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(v)) }
@@ -134,6 +119,80 @@ function DiseaseBarChart({ data, total }) {
   )
 }
 
+// ── SeverityTrendChart ─────────────────────────────────────────────────────────
+function SeverityTrendChart({ data }) {
+  if (!data?.length) return <div className="flex items-center justify-center h-56 text-slate-400 text-sm">Sin datos suficientes para mostrar tendencia</div>
+  const W = 620, H = 240, PX = 22, PY = 18, PB = 24
+  const chartH = H - PY - PB
+  const pts = data.map((d, i) => ({
+    x: PX + (i / Math.max(data.length - 1, 1)) * (W - PX * 2),
+    y: PY + (1 - d.pctRisk / 100) * chartH,
+    ...d,
+  }))
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const area = `${line} L${pts[pts.length - 1].x.toFixed(1)},${PY + chartH} L${pts[0].x.toFixed(1)},${PY + chartH} Z`
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="sev-trend-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#dc2626" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#dc2626" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0, 25, 50, 75, 100].map(v => {
+        const y = PY + (1 - v / 100) * chartH
+        return (
+          <g key={v}>
+            <line x1={PX} y1={y} x2={W - PX} y2={y} stroke="#f1f5f9" strokeWidth={1} strokeDasharray="4,3" />
+            <text x={PX - 4} y={y + 3} textAnchor="end" fontSize={8.5} fill="#94a3b8">{v}%</text>
+          </g>
+        )
+      })}
+      <path d={area} fill="url(#sev-trend-grad)" />
+      <path d={line} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r={3.5} fill="#dc2626" stroke="#fff" strokeWidth="1.5" />
+          <text x={p.x} y={H - 6} textAnchor="middle" fontSize={8} fill="#94a3b8">{p.label}</text>
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+// ── ClimateCorrelationChart ─────────────────────────────────────────────────────
+function ClimateCorrelationChart({ data }) {
+  if (!data?.length) return <div className="flex items-center justify-center h-56 text-slate-400 text-sm">Aún no hay datos de clima para correlacionar</div>
+  const W = 620, H = 240, PX = 22, PY = 18, PB = 24
+  const chartH = H - PY - PB
+  const step = (W - PX * 2) / data.length
+  const maxRisk = Math.max(...data.map(d => d.riskCount), 1)
+  const barW = Math.max(step - 2, 2)
+  const linePts = data.map((d, i) => ({
+    x: PX + i * step + step / 2,
+    y: PY + (1 - d.riskCount / maxRisk) * chartH,
+  }))
+  const line = linePts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const labelEvery = Math.ceil(data.length / 8)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', overflow: 'visible' }}>
+      {data.map((d, i) => {
+        const barH = (Math.min(d.humidity, 100) / 100) * chartH
+        const x = PX + i * step
+        const y = PY + chartH - barH
+        return <rect key={i} x={x} y={y} width={barW} height={barH} rx={2} fill="#93c5fd" opacity={0.75} />
+      })}
+      <path d={line} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {linePts.map((p, i) => (data[i].riskCount > 0 ? <circle key={i} cx={p.x} cy={p.y} r={3} fill="#dc2626" stroke="#fff" strokeWidth={1.2} /> : null))}
+      {data.map((d, i) => (i % labelEvery === 0 ? (
+        <text key={i} x={PX + i * step + step / 2} y={H - 6} textAnchor="middle" fontSize={8} fill="#94a3b8">
+          {new Date(d.date + 'T12:00:00').toLocaleDateString('es-EC', { day: '2-digit', month: 'short' })}
+        </text>
+      ) : null))}
+    </svg>
+  )
+}
+
 // ── ZoneCard ───────────────────────────────────────────────────────────────────
 function ZoneCard({ zone, idx }) {
   const color = riskColorFromBucket(zone.maxBucket)
@@ -193,6 +252,9 @@ export default function DashboardView({ onOpenSidebar }) {
   const [mapSevFilter, setMapSevFilter] = useState(new Set([0, 1, 2, 3, 4]))
   const [selectedAnalysis, setSelectedAnalysis] = useState(null)
 
+  const [climateWeather, setClimateWeather] = useState(null)
+  const [climateError, setClimateError] = useState('')
+
   const displayName = user?.full_name || user?.username || 'Usuario'
 
   // ── load data ────────────────────────────────────────────────────────────────
@@ -205,6 +267,21 @@ export default function DashboardView({ onOpenSidebar }) {
         setHistories(toArr(rh.value))
       })
       .finally(() => setLoading(false))
+  }, [])
+
+  // ── weather history (30 días, para correlación clima-enfermedad) ────────────
+  useEffect(() => {
+    if (!navigator.geolocation) { setClimateError('Tu navegador no permite obtener la ubicación.'); return }
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const data = await getWeather(coords.latitude, coords.longitude, 30)
+          setClimateWeather(data)
+        } catch { setClimateError('No se pudo obtener el historial de clima.') }
+      },
+      () => setClimateError('Activa la ubicación para ver la correlación con el clima.'),
+      { timeout: 10000 }
+    )
   }, [])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
@@ -287,6 +364,104 @@ export default function DashboardView({ onOpenSidebar }) {
       topDisease: { cur: topDis(cur),                     prev: topDis(prev) },
     }
   }, [histories])
+
+  // ── tendencia de severidad (últimas 10 semanas) ──────────────────────────────
+  const severityTrend = useMemo(() => {
+    const now = new Date()
+    const weeks = []
+    for (let i = 9; i >= 0; i--) {
+      const end = new Date(now); end.setDate(now.getDate() - i * 7)
+      const start = new Date(end); start.setDate(end.getDate() - 6)
+      weeks.push({ start, end, label: `${start.getDate()}/${start.getMonth() + 1}` })
+    }
+    return weeks.map(w => {
+      const inWeek = histories.filter(h => {
+        const d = new Date(h.created_at)
+        return d >= w.start && d <= new Date(w.end.getFullYear(), w.end.getMonth(), w.end.getDate(), 23, 59, 59)
+      })
+      const risk = inWeek.filter(isHighRisk).length
+      const total = inWeek.length
+      return { label: w.label, total, risk, pctRisk: total > 0 ? Math.round((risk / total) * 100) : 0 }
+    })
+  }, [histories])
+
+  const severityTrendInsight = useMemo(() => {
+    const withData = severityTrend.filter(w => w.total > 0)
+    if (withData.length < 2) return null
+    const firstHalf = withData.slice(0, Math.ceil(withData.length / 2))
+    const secondHalf = withData.slice(Math.ceil(withData.length / 2))
+    const avg = arr => arr.reduce((s, w) => s + w.pctRisk, 0) / arr.length
+    const before = avg(firstHalf), after = avg(secondHalf)
+    if (Math.abs(after - before) < 5) return { trend: 'Estable', color: '#64748b' }
+    return after > before ? { trend: 'Empeorando', color: '#dc2626' } : { trend: 'Mejorando', color: '#16a34a' }
+  }, [severityTrend])
+
+  // ── correlación clima-enfermedad (últimos 30 días) ───────────────────────────
+  const climateCorrelation = useMemo(() => {
+    if (!climateWeather?.days?.length) return []
+    return climateWeather.days.map(d => {
+      const dayHistories = histories.filter(h => (h.created_at || '').startsWith(d.date))
+      return { date: d.date, humidity: d.humidity, precip: d.precip, riskCount: dayHistories.filter(isHighRisk).length, total: dayHistories.length }
+    })
+  }, [climateWeather, histories])
+
+  // ── reincidencia de enfermedades por planta ──────────────────────────────────
+  const recurringDiseases = useMemo(() => {
+    const byPlant = new Map()
+    histories.forEach(h => {
+      const key = h.plant_key
+      if (!key) return
+      if (!byPlant.has(key)) byPlant.set(key, [])
+      byPlant.get(key).push(h)
+    })
+    const results = []
+    byPlant.forEach(entries => {
+      const byDisease = new Map()
+      entries.forEach(h => {
+        const d = h.disease_name_predicted || 'Sin diagnóstico'
+        if (!byDisease.has(d)) byDisease.set(d, [])
+        byDisease.get(d).push(h)
+      })
+      byDisease.forEach((occurrences, disease) => {
+        if (occurrences.length < 2) return
+        const sorted = [...occurrences].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        const ctx = sorted[0].context_detail || {}
+        results.push({
+          plantLabel: ctx.plant_key_or_id || 'Planta sin identificar',
+          plotName: ctx.plot_name || '',
+          farmName: ctx.farm_name || '',
+          disease,
+          count: occurrences.length,
+          lastDate: sorted[0].created_at,
+        })
+      })
+    })
+    return results.sort((a, b) => b.count - a.count).slice(0, 6)
+  }, [histories])
+
+  // ── parcelas descuidadas (más tiempo sin análisis) ───────────────────────────
+  const neglectedPlots = useMemo(() => {
+    const lastByPlot = new Map()
+    histories.forEach(h => {
+      const plotId = h.context_detail?.plot_id
+      if (!plotId) return
+      const cur = lastByPlot.get(plotId)
+      if (!cur || new Date(h.created_at) > new Date(cur)) lastByPlot.set(plotId, h.created_at)
+    })
+    const allPlots = []
+    farms.forEach(f => (f.plots || []).forEach(p => allPlots.push({ ...p, farmName: f.name })))
+    const now = new Date()
+    return allPlots.map(p => {
+      const last = lastByPlot.get(p.id) || null
+      const daysSince = last ? Math.floor((now - new Date(last)) / 86400000) : null
+      return { ...p, lastDate: last, daysSince }
+    }).sort((a, b) => {
+      if (a.daysSince == null && b.daysSince == null) return 0
+      if (a.daysSince == null) return -1
+      if (b.daysSince == null) return 1
+      return b.daysSince - a.daysSince
+    }).slice(0, 6)
+  }, [farms, histories])
 
   // ── Leaflet map: init (runs once) ────────────────────────────────────────────
   useEffect(() => {
@@ -625,6 +800,49 @@ export default function DashboardView({ onOpenSidebar }) {
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <article className="glass-card p-6">
+                <header className="flex items-start justify-between gap-4 mb-5">
+                  <hgroup>
+                    <p className="text-xs uppercase tracking-[0.25em] text-red-600 font-semibold">Tendencia</p>
+                    <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Severidad en el tiempo (10 semanas)</h3>
+                  </hgroup>
+                  {severityTrendInsight && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.08em] flex-shrink-0"
+                      style={{ background: `${severityTrendInsight.color}18`, color: severityTrendInsight.color }}>
+                      {severityTrendInsight.trend}
+                    </span>
+                  )}
+                </header>
+                <SeverityTrendChart data={severityTrend} />
+                <p className="mt-3 text-xs text-slate-500">% de análisis con severidad moderada o mayor, agrupados por semana. Te ayuda a ver si el cultivo mejora o empeora en el tiempo, más allá del último análisis.</p>
+              </article>
+
+              <article className="glass-card p-6">
+                <header className="flex items-start justify-between gap-4 mb-5">
+                  <hgroup>
+                    <p className="text-xs uppercase tracking-[0.25em] text-sky-600 font-semibold">Prevención</p>
+                    <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Clima vs. enfermedad (30 días)</h3>
+                  </hgroup>
+                </header>
+                {climateError && !climateWeather ? (
+                  <div className="flex flex-col items-center justify-center h-56 text-slate-400 gap-2 text-center px-4">
+                    <i className="fas fa-cloud-question text-3xl"></i>
+                    <p className="text-sm">{climateError}</p>
+                  </div>
+                ) : (
+                  <>
+                    <ClimateCorrelationChart data={climateCorrelation} />
+                    <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: '#93c5fd' }}></span>Humedad diaria (%)</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#dc2626' }}></span>Análisis en riesgo</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">Si los picos rojos coinciden con barras altas de humedad, el clima húmedo podría estar detonando los brotes: refuerza la prevención en esos días.</p>
+                  </>
+                )}
+              </article>
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <article className="glass-card p-6">
                 <header className="flex items-start justify-between gap-3 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-brand-600 font-semibold">Evolución</p>
@@ -741,7 +959,7 @@ export default function DashboardView({ onOpenSidebar }) {
                   <header className="flex items-center justify-between mb-5 gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-brand-600 font-semibold">Territorio</p>
-                      <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Mapa de calor por corporación</h3>
+                      <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Resumen de riesgo por corporación</h3>
                     </div>
                     <span className="text-xs px-2 py-1 bg-brand-50 text-brand-600 rounded-full border border-brand-100 flex-shrink-0">
                       {farmZones.length} corporación{farmZones.length !== 1 ? 'es' : ''}
@@ -754,9 +972,77 @@ export default function DashboardView({ onOpenSidebar }) {
               ) : (
                 <article className="glass-card p-6 flex flex-col items-center justify-center text-slate-400 gap-3">
                   <i className="fas fa-map text-3xl"></i>
-                  <p className="text-sm text-center">El mapa de calor aparecerá cuando tengas análisis vinculados a corporaciones</p>
+                  <p className="text-sm text-center">El resumen por corporación aparecerá cuando tengas análisis vinculados a corporaciones</p>
                 </article>
               )}
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <article className="glass-card p-6">
+                <header className="flex items-start justify-between gap-3 mb-5">
+                  <hgroup>
+                    <p className="text-xs uppercase tracking-[0.25em] text-amber-600 font-semibold">Efectividad de manejo</p>
+                    <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Enfermedades reincidentes</h3>
+                  </hgroup>
+                </header>
+                {recurringDiseases.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-3">
+                    <i className="fas fa-circle-check text-3xl text-brand-300"></i>
+                    <p className="text-sm text-center">Ninguna planta repite la misma enfermedad. Buena señal de manejo.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2.5 list-none p-0 m-0">
+                    {recurringDiseases.map((r, i) => (
+                      <li key={i} className="rounded-2xl border border-amber-100 bg-amber-50/40 p-3.5 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{r.disease}</p>
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">{r.plantLabel}{r.plotName ? ` · ${r.plotName}` : ''}{r.farmName ? ` · ${r.farmName}` : ''}</p>
+                          <p className="text-[0.68rem] text-slate-400 mt-0.5">Último: {formatDate(r.lastDate)}</p>
+                        </div>
+                        <span className="flex-shrink-0 text-center">
+                          <span className="block text-lg font-bold text-amber-600">{r.count}×</span>
+                          <span className="block text-[0.6rem] uppercase tracking-wide text-slate-400">veces</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-3 text-xs text-slate-500">La misma enfermedad reapareciendo en la misma planta sugiere que el tratamiento actual no está funcionando: considera cambiar de estrategia.</p>
+              </article>
+
+              <article className="glass-card p-6">
+                <header className="flex items-start justify-between gap-3 mb-5">
+                  <hgroup>
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500 font-semibold">Monitoreo</p>
+                    <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Parcelas descuidadas</h3>
+                  </hgroup>
+                </header>
+                {neglectedPlots.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-slate-400 gap-3">
+                    <i className="fas fa-seedling text-3xl"></i>
+                    <p className="text-sm text-center">Registra parcelas para hacerles seguimiento de monitoreo.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2.5 list-none p-0 m-0">
+                    {neglectedPlots.map((p, i) => {
+                      const stale = p.daysSince == null || p.daysSince > 14
+                      return (
+                        <li key={p.id ?? i} className="rounded-2xl border border-slate-200 bg-white p-3.5 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{p.name || 'Parcela'}</p>
+                            <p className="text-xs text-slate-500 mt-0.5 truncate">{p.farmName}{p.zone ? ` · Zona ${p.zone}` : ''}</p>
+                          </div>
+                          <span className="flex-shrink-0 text-[0.68rem] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                            style={{ background: stale ? '#fef2f2' : '#f0fdf4', color: stale ? '#b91c1c' : '#15803d' }}>
+                            {p.daysSince == null ? 'Nunca analizada' : `Hace ${p.daysSince} día${p.daysSince !== 1 ? 's' : ''}`}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                <p className="mt-3 text-xs text-slate-500">Parcelas sin análisis reciente pueden esconder problemas que aún no se han detectado. Prioriza revisarlas pronto.</p>
+              </article>
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">

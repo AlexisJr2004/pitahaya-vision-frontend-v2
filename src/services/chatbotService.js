@@ -101,6 +101,11 @@ export async function createPlantHistory(data) {
   return res.data
 }
 
+export async function updatePlantHistory(id, data) {
+  const res = await API.patch(`/plant-histories/${id}/`, data)
+  return res.data
+}
+
 // ─── Contexts (read) ───
 export async function getContexts() {
   const res = await API.get('/contexts/')

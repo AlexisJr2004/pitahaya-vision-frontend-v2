@@ -9,9 +9,87 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="icon" type="image/jpeg" href="https://images.vexels.com/media/users/3/207136/isolated/preview/dc6980a67acd5e2d4a13bc446e9e3378-gran-icono-de-hoja-verde.png">
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        opacity: 1;
+        transition: opacity 0.4s ease;
+      }
+      #app-splash.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .app-splash-inner {
+        position: relative;
+        width: 130px;
+        height: 130px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .app-splash-logo {
+        position: relative;
+        z-index: 2;
+        width: 40px;
+        height: 40px;
+        fill: #16a34a;
+      }
+      .app-splash-ring {
+        position: absolute;
+        border-radius: 50%;
+      }
+      .app-splash-ring-inner {
+        width: 76px;
+        height: 76px;
+        border: 3px solid transparent;
+        border-top-color: #16a34a;
+        border-right-color: #16a34a;
+        animation: app-splash-cw 0.9s linear infinite;
+      }
+      .app-splash-ring-outer {
+        width: 112px;
+        height: 112px;
+        border: 3px solid transparent;
+        border-bottom-color: #86efac;
+        border-left-color: #86efac;
+        animation: app-splash-ccw 1.2s linear infinite;
+      }
+      @keyframes app-splash-cw {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes app-splash-ccw {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(-360deg); }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-splash">
+      <div class="app-splash-inner">
+        <div class="app-splash-ring app-splash-ring-outer"></div>
+        <div class="app-splash-ring app-splash-ring-inner"></div>
+        <svg class="app-splash-logo" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z"/></svg>
+      </div>
+    </div>
     <div id="root"></div>
+    <script>
+      // Se oculta desde main.jsx apenas React monta la app (ver hideAppSplash).
+      // Salvavidas: si algo falla y nunca se llama, se oculta sola a los 8s.
+      window.hideAppSplash = function () {
+        var splash = document.getElementById('app-splash')
+        if (!splash) return
+        splash.classList.add('fade-out')
+        setTimeout(function () { splash.style.display = 'none' }, 420)
+      }
+      setTimeout(window.hideAppSplash, 8000)
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

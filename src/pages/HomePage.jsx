@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ProfileModal from '../components/ProfileModal'
@@ -6,85 +6,8 @@ import SettingsModal from '../components/SettingsModal'
 import ClientesPage from './ClientesPage'
 import HistorialAdminPage from './HistorialAdminPage'
 import DashboardAdminPage from './DashboardAdminPage'
-import { getAnalyses, getWeather } from '../services/analysisService'
+import { getWeather } from '../services/analysisService'
 import WeatherWidget from '../components/WeatherWidget'
-
-// ─── Helpers ─────────────────────────────────────────────────────────
-const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
-const fmtDate = (s) => {
-  if (!s) return '—'
-  return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-const SEV_RANK = { crítica: 4, critica: 4, alta: 3, media: 2, leve: 1, saludable: 0, desconocida: -1 }
-const sevBucket = (s) => {
-  const v = (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  if (v === 'critica') return 'critica'
-  if (v === 'alta') return 'alta'
-  if (v === 'media') return 'media'
-  if (v === 'leve') return 'leve'
-  return 'saludable'
-}
-const isRisk = (s) => { const b = sevBucket(s); return b === 'critica' || b === 'alta' }
-const sevColor = (s) => (({ critica: '#ef4444', alta: '#f97316', media: '#eab308', leve: '#22c55e', saludable: '#6b7280' })[sevBucket(s)] || '#6b7280')
-const sevBadge = (s) => (({ critica: 'sev-critica', alta: 'sev-alta', media: 'sev-media', leve: 'sev-leve', saludable: 'sev-sano' })[sevBucket(s)] || 'sev-sano')
-const sevLabel = (s) => (({ critica: 'Crítica', alta: 'Alta', media: 'Media', leve: 'Leve', saludable: 'Saludable' })[sevBucket(s)] || (s || '—'))
-
-// ─── SVG DonutChart ───────────────────────────────────────────────────
-function DonutChart({ segments, size = 120, thickness = 22 }) {
-  const r = (size - thickness) / 2
-  const circ = 2 * Math.PI * r
-  const cx = size / 2, cy = size / 2
-  const total = segments.reduce((a, s) => a + (s.value || 0), 0)
-  let offset = 0
-  const slices = total === 0
-    ? [{ color: '#e2e8f0', dash: circ, gap: 0, offset: 0 }]
-    : segments.filter(s => s.value > 0).map(s => {
-        const dash = (s.value / total) * circ
-        const sl = { color: s.color, dash, gap: circ - dash, offset }
-        offset += dash
-        return sl
-      })
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {slices.map((sl, i) => (
-        <circle key={i} cx={cx} cy={cy} r={r} fill="none"
-          stroke={sl.color} strokeWidth={thickness}
-          strokeDasharray={`${sl.dash} ${sl.gap}`}
-          strokeDashoffset={-(sl.offset) + circ / 4}
-        />
-      ))}
-    </svg>
-  )
-}
-
-// ─── Sparkline ────────────────────────────────────────────────────────
-function Sparkline({ data, color = '#16a34a', w = 100, h = 36 }) {
-  if (!data || data.length < 2) return <div style={{ width: w, height: h }} />
-  const max = Math.max(...data, 1)
-  const pts = data.map((v, i) =>
-    `${(i / (data.length - 1)) * w},${h - 2 - (v / max) * (h - 4)}`
-  ).join(' ')
-  return (
-    <svg width={w} height={h} style={{ display: 'block' }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5"
-        strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// ─── HBar ────────────────────────────────────────────────────────────
-function HBar({ label, value, max, color }) {
-  const pct = max > 0 ? (value / max) * 100 : 0
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-32 truncate text-slate-600 flex-shrink-0" title={label}>{label}</span>
-      <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-        <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: color }} />
-      </div>
-      <span className="w-6 text-right text-slate-500 flex-shrink-0">{value}</span>
-    </div>
-  )
-}
 
 export default function HomePage() {
   const { user, logout } = useAuth()
@@ -98,18 +21,6 @@ export default function HomePage() {
   const [menuPos, setMenuPos] = useState({ left: 0, bottom: 0 })
   const menuRef = useRef(null)
   const triggerRef = useRef(null)
-
-  // ─── Data state ────────────────────────────────────────────────────
-  const [analyses, setAnalyses] = useState([])
-  const [dashLoading, setDashLoading] = useState(true)
-  const [histLoading, setHistLoading] = useState(false)
-
-  // ─── History filters ───────────────────────────────────────────────
-  const [histPeriod, setHistPeriod] = useState('all')
-  const [histFrom, setHistFrom] = useState('')
-  const [histTo, setHistTo] = useState('')
-  const [histUser, setHistUser] = useState('')
-  const [histApplied, setHistApplied] = useState({ period: 'all', date_from: '', date_to: '', user_name: '' })
 
   // ─── Weather ──────────────────────────────────────────────────────
   const [weatherData, setWeatherData] = useState(null)
@@ -131,16 +42,6 @@ export default function HomePage() {
     )
   }, [])
 
-  // ─── Detail modal ─────────────────────────────────────────────────
-  const [detail, setDetail] = useState(null)
-
-  // ─── Toast ────────────────────────────────────────────────────────
-  const [toast, setToast] = useState(null)
-  const showToast = useCallback((msg, err = false) => {
-    setToast({ msg, err })
-    setTimeout(() => setToast(null), 3000)
-  }, [])
-
   // ─── Close menu on outside click ─────────────────────────────────
   useEffect(() => {
     const handleClick = (e) => {
@@ -151,106 +52,6 @@ export default function HomePage() {
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
   }, [menuOpen])
-
-  // ─── Data loading ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (view !== 'dashboard') return
-    setDashLoading(true)
-    getAnalyses()
-      .then(d => setAnalyses(toArr(d)))
-      .catch(() => {})
-      .finally(() => setDashLoading(false))
-  }, [view])
-
-  useEffect(() => {
-    if (view !== 'history') return
-    setHistLoading(true)
-    const p = {}
-    if (histApplied.period !== 'all') p.range = histApplied.period
-    if (histApplied.date_from) p.date_from = histApplied.date_from
-    if (histApplied.date_to) p.date_to = histApplied.date_to
-    if (histApplied.user_name) p.user_name = histApplied.user_name
-    getAnalyses(p)
-      .then(d => setAnalyses(toArr(d)))
-      .catch(() => {})
-      .finally(() => setHistLoading(false))
-  }, [view, histApplied])
-
-  // ─── Dashboard computed ────────────────────────────────────────────
-  const dashKpis = useMemo(() => {
-    const total = analyses.length
-    const risk = analyses.filter(a => isRisk(a.severity)).length
-    const healthy = analyses.filter(a => !isRisk(a.severity)).length
-    const byOwner = {}
-    analyses.forEach(a => {
-      const o = a.owner_name || 'Sin propietario'
-      if (!byOwner[o]) byOwner[o] = 0
-      if (isRisk(a.severity)) byOwner[o]++
-    })
-    let critZone = '—'; let maxR = 0
-    Object.entries(byOwner).forEach(([k, v]) => { if (v > maxR) { maxR = v; critZone = k } })
-    return { total, risk, healthy, critZone }
-  }, [analyses])
-
-  const topDiseases = useMemo(() => {
-    const c = {}
-    analyses.forEach(a => { const d = a.disease_name_predicted || 'Sin diagnóstico'; c[d] = (c[d] || 0) + 1 })
-    return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 6)
-  }, [analyses])
-
-  const sevDist = useMemo(() => {
-    const c = { critica: 0, alta: 0, media: 0, leve: 0, saludable: 0 }
-    analyses.forEach(a => { const b = sevBucket(a.severity); c[b] = (c[b] || 0) + 1 })
-    return c
-  }, [analyses])
-
-  const trendData = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(); d.setDate(d.getDate() - (6 - i))
-      return { label: d.toLocaleDateString('es-EC', { day: '2-digit', month: 'short' }), date: d.toISOString().slice(0, 10) }
-    })
-    return days.map(d => ({ ...d, count: analyses.filter(a => a.created_at?.startsWith(d.date)).length }))
-  }, [analyses])
-
-  const zoneData = useMemo(() => {
-    const map = {}
-    analyses.forEach(a => {
-      const o = a.owner_name || 'Sin propietario'
-      if (!map[o]) map[o] = { name: o, total: 0, risk: 0, maxSev: 'saludable' }
-      map[o].total++
-      if (isRisk(a.severity)) map[o].risk++
-      const cur = SEV_RANK[a.severity?.toLowerCase()] ?? -1
-      const prev = SEV_RANK[map[o].maxSev?.toLowerCase()] ?? -1
-      if (cur > prev) map[o].maxSev = a.severity
-    })
-    return Object.values(map).sort((a, b) => b.risk - a.risk)
-  }, [analyses])
-
-  const recentAlerts = useMemo(() => analyses.filter(a => isRisk(a.severity)).slice(0, 8), [analyses])
-
-  // ─── History computed ──────────────────────────────────────────────
-  const histSevDist = useMemo(() => {
-    const c = { critica: 0, alta: 0, media: 0, leve: 0, saludable: 0 }
-    analyses.forEach(a => { const b = sevBucket(a.severity); c[b] = (c[b] || 0) + 1 })
-    return c
-  }, [analyses])
-
-  const histInsights = useMemo(() => {
-    if (!analyses.length) return []
-    const total = analyses.length
-    const riskPct = Math.round((analyses.filter(a => isRisk(a.severity)).length / total) * 100)
-    const topDisease = (() => {
-      const c = {}
-      analyses.forEach(a => { const d = a.disease_name_predicted || 'Sin diagnóstico'; c[d] = (c[d] || 0) + 1 })
-      return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
-    })()
-    const owners = [...new Set(analyses.map(a => a.owner_name).filter(Boolean))].length
-    return [
-      { icon: 'fa-triangle-exclamation', color: '#ef4444', bg: '#fef2f2', title: 'Índice de riesgo', value: `${riskPct}%`, desc: 'de análisis con severidad alta o crítica' },
-      { icon: 'fa-bug', color: '#f97316', bg: '#fff7ed', title: 'Diagnóstico más frecuente', value: topDisease, desc: 'principal enfermedad detectada en el período' },
-      { icon: 'fa-users', color: '#6366f1', bg: '#eef2ff', title: 'Agricultores activos', value: `${owners}`, desc: 'usuarios con análisis en el período seleccionado' },
-    ]
-  }, [analyses])
 
   // ─── User info ────────────────────────────────────────────────────
   const displayName = user?.full_name || user?.username || 'Usuario'
@@ -284,328 +85,6 @@ export default function HomePage() {
   const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
   const closeSidebar = () => { setSidebarOpen(false); document.body.style.overflow = '' }
 
-  // ─── VIEW: DASHBOARD ──────────────────────────────────────────────
-  const renderDashboard = () => {
-    if (dashLoading) return (
-      <div className="flex items-center justify-center h-64 text-slate-400">
-        <i className="fas fa-spinner fa-spin mr-2"></i> Cargando datos…
-      </div>
-    )
-    const donutSegs = [
-      { color: '#ef4444', value: sevDist.critica },
-      { color: '#f97316', value: sevDist.alta },
-      { color: '#eab308', value: sevDist.media },
-      { color: '#22c55e', value: sevDist.leve },
-      { color: '#6b7280', value: sevDist.saludable },
-    ]
-    const maxDisease = topDiseases[0]?.[1] || 1
-    const trendCounts = trendData.map(d => d.count)
-    return (
-      <div className="space-y-5 fade-in pb-6">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="kpi-card">
-            <p className="kpi-label">Registros totales</p>
-            <p className="kpi-val text-slate-800">{dashKpis.total}</p>
-            <p className="kpi-sub">Análisis consolidados</p>
-          </div>
-          <div className="kpi-card">
-            <p className="kpi-label">Alertas de riesgo</p>
-            <p className="kpi-val text-red-500">{dashKpis.risk}</p>
-            <p className="kpi-sub">Severidad alta o crítica</p>
-          </div>
-          <div className="kpi-card">
-            <p className="kpi-label">Casos saludables</p>
-            <p className="kpi-val text-green-600">{dashKpis.healthy}</p>
-            <p className="kpi-sub">Sin riesgo detectado</p>
-          </div>
-          <div className="kpi-card">
-            <p className="kpi-label">Zona crítica</p>
-            <p className="text-sm font-bold text-slate-800 truncate leading-tight mt-1" title={dashKpis.critZone}>{dashKpis.critZone}</p>
-            <p className="kpi-sub">Mayor concentración</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Donut */}
-          <div className="admin-panel">
-            <p className="panel-sec-title">Distribución de salud</p>
-            <div className="flex items-center gap-4 mt-3">
-              <DonutChart segments={donutSegs} size={108} thickness={22} />
-              <div className="space-y-1.5 flex-1 min-w-0">
-                {[['Crítica','#ef4444'],['Alta','#f97316'],['Media','#eab308'],['Leve','#22c55e'],['Saludable','#6b7280']].map(([l, c], i) => (
-                  donutSegs[i].value > 0 && (
-                    <div key={l} className="flex items-center gap-2 text-xs">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c }}></span>
-                      <span className="text-slate-600 flex-1">{l}</span>
-                      <span className="font-semibold text-slate-700">{donutSegs[i].value}</span>
-                    </div>
-                  )
-                ))}
-                {analyses.length === 0 && <p className="text-xs text-slate-400">Sin datos</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* Top diseases */}
-          <div className="admin-panel">
-            <p className="panel-sec-title">Principales diagnósticos</p>
-            <div className="space-y-2 mt-3">
-              {topDiseases.length === 0
-                ? <p className="text-xs text-slate-400">Sin datos</p>
-                : topDiseases.map(([d, v]) => <HBar key={d} label={d} value={v} max={maxDisease} color="#16a34a" />)
-              }
-            </div>
-          </div>
-
-          {/* Trend */}
-          <div className="admin-panel">
-            <p className="panel-sec-title">Tendencia últimos 7 días</p>
-            <div className="mt-3">
-              <Sparkline data={trendCounts} color="#16a34a" w={218} h={58} />
-              <div className="flex justify-between mt-1.5">
-                {trendData.map(d => (
-                  <div key={d.date} className="text-center" style={{ minWidth: 0 }}>
-                    <p className="text-[0.58rem] text-slate-400 leading-none">{d.label}</p>
-                    <p className="text-[0.68rem] font-semibold text-slate-600">{d.count}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Zone heatmap */}
-        <div className="admin-panel">
-          <p className="panel-sec-title">Mapa de zonas por agricultor</p>
-          {zoneData.length === 0
-            ? <p className="text-xs text-slate-400 mt-3">Sin datos de zonas</p>
-            : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
-                {zoneData.map(z => (
-                  <div key={z.name} className={`heatmap-cell heatmap-${sevBucket(z.maxSev)}`}>
-                    <p className="font-semibold text-xs truncate text-slate-800" title={z.name}>{z.name}</p>
-                    <p className="text-[0.67rem] text-slate-500 mt-0.5">{z.total} análisis · {z.risk} riesgo</p>
-                    <span className={`sev-pill mt-1.5 inline-block ${sevBadge(z.maxSev)}`}>{sevLabel(z.maxSev)}</span>
-                  </div>
-                ))}
-              </div>
-          }
-        </div>
-
-        {/* Recent alerts */}
-        <div className="admin-panel">
-          <p className="panel-sec-title">Alertas recientes</p>
-          {recentAlerts.length === 0
-            ? <p className="text-xs text-slate-400 mt-3">Sin alertas de riesgo</p>
-            : <div className="space-y-2 mt-3">
-                {recentAlerts.map(a => (
-                  <div key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition"
-                    onClick={() => setDetail(a)}>
-                    {a.image_url
-                      ? <img src={a.image_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-slate-100" />
-                      : <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                          <i className="fas fa-leaf text-slate-300"></i>
-                        </div>
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-700 truncate">{a.disease_name_predicted || 'Sin diagnóstico'}</p>
-                      <p className="text-[0.67rem] text-slate-400">{a.owner_name || '—'} · {fmtDate(a.created_at)}</p>
-                    </div>
-                    <span className={`sev-pill flex-shrink-0 ${sevBadge(a.severity)}`}>{sevLabel(a.severity)}</span>
-                  </div>
-                ))}
-              </div>
-          }
-        </div>
-      </div>
-    )
-  }
-
-  // ─── VIEW: HISTORY ────────────────────────────────────────────────
-  const renderHistory = () => {
-    const total = analyses.length
-    const risk = analyses.filter(a => isRisk(a.severity)).length
-    const critica = analyses.filter(a => sevBucket(a.severity) === 'critica').length
-    const owners = [...new Set(analyses.map(a => a.owner_name).filter(Boolean))].length
-    const donutSegs = [
-      { color: '#ef4444', value: histSevDist.critica },
-      { color: '#f97316', value: histSevDist.alta },
-      { color: '#eab308', value: histSevDist.media },
-      { color: '#22c55e', value: histSevDist.leve },
-      { color: '#6b7280', value: histSevDist.saludable },
-    ]
-    return (
-      <div className="space-y-5 fade-in pb-6">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="kpi-card"><p className="kpi-label">Total período</p><p className="kpi-val text-slate-800">{total}</p><p className="kpi-sub">Análisis en el filtro</p></div>
-          <div className="kpi-card"><p className="kpi-label">Casos de riesgo</p><p className="kpi-val text-red-500">{risk}</p><p className="kpi-sub">Alta o crítica</p></div>
-          <div className="kpi-card"><p className="kpi-label">Casos críticos</p><p className="kpi-val text-red-700">{critica}</p><p className="kpi-sub">Severidad crítica</p></div>
-          <div className="kpi-card"><p className="kpi-label">Agricultores</p><p className="kpi-val text-indigo-600">{owners}</p><p className="kpi-sub">Usuarios activos</p></div>
-        </div>
-
-        {/* Filters */}
-        <div className="admin-panel">
-          <p className="panel-sec-title mb-3">Filtros de búsqueda</p>
-          <div className="flex flex-wrap gap-2 items-end">
-            <div>
-              <label className="block text-[0.67rem] text-slate-500 mb-1 font-medium">Período</label>
-              <select className="filter-input" value={histPeriod} onChange={e => setHistPeriod(e.target.value)}>
-                <option value="all">Todos</option>
-                <option value="today">Hoy</option>
-                <option value="last7">Últimos 7 días</option>
-                <option value="month">Este mes</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[0.67rem] text-slate-500 mb-1 font-medium">Desde</label>
-              <input type="date" className="filter-input" value={histFrom} onChange={e => setHistFrom(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-[0.67rem] text-slate-500 mb-1 font-medium">Hasta</label>
-              <input type="date" className="filter-input" value={histTo} onChange={e => setHistTo(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-[0.67rem] text-slate-500 mb-1 font-medium">Cliente</label>
-              <input type="text" className="filter-input" placeholder="Nombre del agricultor…"
-                value={histUser} onChange={e => setHistUser(e.target.value)} style={{ minWidth: 170 }} />
-            </div>
-            <button className="apply-btn"
-              onClick={() => setHistApplied({ period: histPeriod, date_from: histFrom, date_to: histTo, user_name: histUser })}>
-              <i className="fas fa-filter mr-1.5"></i>Aplicar
-            </button>
-            <button className="clear-btn"
-              onClick={() => {
-                setHistPeriod('all'); setHistFrom(''); setHistTo(''); setHistUser('')
-                setHistApplied({ period: 'all', date_from: '', date_to: '', user_name: '' })
-              }}>
-              <i className="fas fa-xmark mr-1.5"></i>Limpiar
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Table */}
-          <div className="admin-panel lg:col-span-2">
-            <p className="panel-sec-title mb-3">Registros de análisis</p>
-            {histLoading
-              ? <div className="flex justify-center py-8 text-slate-400"><i className="fas fa-spinner fa-spin mr-2"></i> Cargando…</div>
-              : analyses.length === 0
-                ? <p className="text-xs text-slate-400 py-4">No hay registros para los filtros seleccionados.</p>
-                : <div className="overflow-x-auto">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Imagen</th>
-                          <th>Usuario</th>
-                          <th>Diagnóstico</th>
-                          <th>Confianza</th>
-                          <th>Severidad</th>
-                          <th>Fecha</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analyses.map(a => (
-                          <tr key={a.id}>
-                            <td>
-                              {a.image_url
-                                ? <img src={a.image_url} alt="" className="w-9 h-9 rounded-lg object-cover border border-slate-100" />
-                                : <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><i className="fas fa-leaf text-slate-300 text-xs"></i></div>
-                              }
-                            </td>
-                            <td>
-                              <p className="font-medium text-slate-700">{a.owner_name || '—'}</p>
-                              <p className="text-[0.64rem] text-slate-400">{a.owner_email || ''}</p>
-                            </td>
-                            <td className="max-w-[150px]">
-                              <p className="truncate text-slate-600" title={a.disease_name_predicted}>{a.disease_name_predicted || '—'}</p>
-                            </td>
-                            <td>
-                              <span className="font-semibold text-slate-600">{a.confidence_percent ? `${a.confidence_percent}%` : '—'}</span>
-                            </td>
-                            <td>
-                              <span className={`sev-pill ${sevBadge(a.severity)}`}>{sevLabel(a.severity)}</span>
-                            </td>
-                            <td className="whitespace-nowrap text-slate-500">{fmtDate(a.created_at)}</td>
-                            <td>
-                              <button onClick={() => setDetail(a)}
-                                className="text-brand-600 hover:text-brand-800 font-medium px-2 py-0.5 rounded hover:bg-brand-50 transition"
-                                style={{ fontSize: '0.72rem', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                Ver
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <p className="text-[0.67rem] text-slate-400 mt-2">{analyses.length} registros</p>
-                  </div>
-            }
-          </div>
-
-          {/* Donut + insights */}
-          <div className="space-y-4">
-            <div className="admin-panel">
-              <p className="panel-sec-title">Distribución por severidad</p>
-              <div className="flex flex-col items-center mt-3 gap-3">
-                <DonutChart segments={donutSegs} size={96} thickness={19} />
-                <div className="w-full space-y-1">
-                  {[['Crítica','#ef4444','critica'],['Alta','#f97316','alta'],['Media','#eab308','media'],['Leve','#22c55e','leve'],['Saludable','#6b7280','saludable']].map(([l,c,k]) => (
-                    histSevDist[k] > 0 && (
-                      <div key={k} className="flex items-center gap-2 text-xs">
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c }}></span>
-                        <span className="flex-1 text-slate-600">{l}</span>
-                        <span className="font-semibold text-slate-700">{histSevDist[k]}</span>
-                      </div>
-                    )
-                  ))}
-                  {analyses.length === 0 && <p className="text-xs text-slate-400">Sin datos</p>}
-                </div>
-              </div>
-            </div>
-
-            {histInsights.map((ins, i) => (
-              <div key={i} className="insight-card">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: ins.bg }}>
-                    <i className={`fas ${ins.icon} text-xs`} style={{ color: ins.color }}></i>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[0.67rem] text-slate-400 font-medium">{ins.title}</p>
-                    <p className="text-sm font-bold text-slate-800 truncate" title={ins.value}>{ins.value}</p>
-                    <p className="text-[0.63rem] text-slate-400 mt-0.5">{ins.desc}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Timeline */}
-        {analyses.length > 0 && (
-          <div className="admin-panel">
-            <p className="panel-sec-title mb-3">Eventos recientes</p>
-            <div className="space-y-0">
-              {analyses.slice(0, 10).map((a, i) => (
-                <div key={a.id} className="flex gap-3 relative cursor-pointer hover:bg-slate-50 rounded-lg px-2 py-1 transition"
-                  onClick={() => setDetail(a)} style={{ paddingLeft: 24 }}>
-                  {i < 9 && <div className="tl-line"></div>}
-                  <span className="tl-dot absolute" style={{ left: 7, top: 8, background: sevColor(a.severity) }}></span>
-                  <div className="pb-2 min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-700">{a.disease_name_predicted || 'Análisis realizado'}</p>
-                    <p className="text-[0.67rem] text-slate-400">{a.owner_name || '—'} · {fmtDate(a.created_at)}</p>
-                  </div>
-                  <span className={`sev-pill flex-shrink-0 self-start mt-1 ${sevBadge(a.severity)}`}>{sevLabel(a.severity)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   // ─── Render content ───────────────────────────────────────────────
   const renderContent = () => {
     switch (view) {
@@ -637,7 +116,6 @@ export default function HomePage() {
         * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
         .font-cormorant { font-family: 'Cormorant Garamond', serif; }
         .brand-avatar { background: linear-gradient(135deg, #16a34a, #22c55e, #4ade80); }
-        .panel-title { font-family: 'Cormorant Garamond', serif; letter-spacing: -0.02em; }
         .nav-btn { display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; font-size: 0.875rem; color: #4b5563; transition: all 0.14s ease; border: 1px solid rgba(209,213,219,0.63); cursor: pointer; width: 100%; background: none; text-align: left; }
         .nav-btn:hover { background: #f0fdf4; border-color: #22c55e; }
         .nav-btn:active { background: #dcfce7; }
@@ -658,121 +136,8 @@ export default function HomePage() {
         @media (min-width: 768px) { #sidebar { position: relative; flex-shrink: 0; transform: none; } #drawerOverlay { display: none !important; } #menuBtn { display: none !important; } }
         #main-content::-webkit-scrollbar { width: 3px; }
         #main-content::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 4px; }
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .botanical-bg { position: absolute; bottom: -0.75rem; left: -0.75rem; width: 11rem; opacity: 0.08; pointer-events: none; }
-        /* Admin panels */
-        .admin-panel { background: #fff; border: 1px solid #e8edf2; border-radius: 16px; padding: 1.25rem; }
-        .panel-sec-title { font-size: 0.82rem; font-weight: 600; color: #374151; }
-        /* KPI */
-        .kpi-card { background: #fff; border: 1px solid #e8edf2; border-radius: 14px; padding: 1rem 1.25rem; }
-        .kpi-label { font-size: 0.64rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 2px; }
-        .kpi-val { font-size: 1.65rem; font-weight: 700; line-height: 1.1; }
-        .kpi-sub { font-size: 0.67rem; color: #94a3b8; margin-top: 2px; }
-        /* Pills */
-        .sev-pill { display: inline-block; font-size: 0.63rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
-        .sev-critica { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
-        .sev-alta { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
-        .sev-media { background: #fefce8; color: #a16207; border-color: #fde047; }
-        .sev-leve { background: #f0fdf4; color: #15803d; border-color: #86efac; }
-        .sev-sano { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
-        .role-admin { background: #eef2ff; color: #4338ca; border-color: #a5b4fc; }
-        .role-user { background: #f0fdf4; color: #15803d; border-color: #86efac; }
-        .status-active { background: #f0fdf4; color: #15803d; border-color: #86efac; }
-        .status-inactive { background: #f8fafc; color: #94a3b8; border-color: #cbd5e1; }
-        /* Table */
-        .admin-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-        .admin-table th { background: #f8fafc; color: #64748b; font-weight: 600; font-size: 0.63rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.5rem 0.625rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
-        .admin-table td { padding: 0.5rem 0.625rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-        .admin-table tr:last-child td { border-bottom: none; }
-        .admin-table tr:hover td { background: #fafafa; }
-        /* Action buttons */
-        .act-btn { font-size: 0.67rem; font-weight: 500; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid; cursor: pointer; transition: all 0.15s; white-space: nowrap; background: none; }
-        .act-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-        .btn-act { color: #15803d; border-color: #86efac; } .btn-act:hover:not(:disabled) { background: #f0fdf4; }
-        .btn-deact { color: #b91c1c; border-color: #fca5a5; } .btn-deact:hover:not(:disabled) { background: #fef2f2; }
-        .btn-promote { color: #4338ca; border-color: #a5b4fc; } .btn-promote:hover:not(:disabled) { background: #eef2ff; }
-        .btn-demote { color: #6b7280; border-color: #d1d5db; } .btn-demote:hover:not(:disabled) { background: #f3f4f6; }
-        /* Filters */
-        .filter-input { font-size: 0.8rem; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.375rem 0.75rem; outline: none; background: #fff; color: #374151; }
-        .filter-input:focus { border-color: #86efac; box-shadow: 0 0 0 2px rgba(134,239,172,.25); }
-        .apply-btn { font-size: 0.8rem; background: #16a34a; color: #fff; border: none; border-radius: 8px; padding: 0.375rem 0.875rem; cursor: pointer; font-weight: 500; white-space: nowrap; transition: background 0.15s; }
-        .apply-btn:hover { background: #15803d; }
-        .clear-btn { font-size: 0.8rem; background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.375rem 0.875rem; cursor: pointer; font-weight: 500; white-space: nowrap; }
-        .clear-btn:hover { background: #f1f5f9; }
-        /* Insight */
-        .insight-card { background: #f8fafc; border: 1px solid #e8edf2; border-radius: 12px; padding: 0.875rem; }
-        /* Timeline */
-        .tl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-        .tl-line { position: absolute; left: 11px; top: 16px; bottom: 0; width: 1px; background: #e2e8f0; }
-        /* Heatmap */
-        .heatmap-cell { border-radius: 10px; padding: 0.625rem 0.75rem; }
-        .heatmap-critica { background: #fef2f2; border: 1.5px solid #fca5a5; }
-        .heatmap-alta { background: #fff7ed; border: 1.5px solid #fdba74; }
-        .heatmap-media { background: #fefce8; border: 1.5px solid #fde047; }
-        .heatmap-leve { background: #f0fdf4; border: 1.5px solid #86efac; }
-        .heatmap-saludable { background: #f8fafc; border: 1.5px solid #e2e8f0; }
-        /* Detail modal */
-        .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 1rem; }
-        .detail-modal { background: #fff; border-radius: 20px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; }
-        /* Toast */
-        .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 400; padding: 0.75rem 1.25rem; border-radius: 12px; font-size: 0.82rem; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,.12); animation: popUp 0.25s ease; pointer-events: none; }
-        .toast-ok { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
-        .toast-err { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
       `}</style>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`toast ${toast.err ? 'toast-err' : 'toast-ok'}`}>
-          <i className={`fas ${toast.err ? 'fa-circle-exclamation' : 'fa-circle-check'} mr-2`}></i>
-          {toast.msg}
-        </div>
-      )}
-
-      {/* Detail modal */}
-      {detail && (
-        <div className="detail-overlay" onClick={() => setDetail(null)}>
-          <div className="detail-modal" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-green-600">Detalle del análisis</p>
-                <h3 style={{ fontFamily: "'Cormorant Garamond',serif" }} className="text-xl font-semibold text-slate-800 mt-0.5">
-                  {detail.disease_name_predicted || 'Sin diagnóstico'}
-                </h3>
-              </div>
-              <button onClick={() => setDetail(null)}
-                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 transition"
-                style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
-                <i className="fas fa-xmark"></i>
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              {detail.image_url && (
-                <img src={detail.image_url} alt="Imagen del análisis"
-                  className="w-full h-48 object-cover rounded-xl border border-gray-100" />
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="kpi-card py-2.5 px-3"><p className="kpi-label">Agricultor</p><p className="text-sm font-semibold text-slate-700 truncate">{detail.owner_name || '—'}</p></div>
-                <div className="kpi-card py-2.5 px-3"><p className="kpi-label">Fecha</p><p className="text-sm font-semibold text-slate-700">{fmtDate(detail.created_at)}</p></div>
-                <div className="kpi-card py-2.5 px-3"><p className="kpi-label">Severidad</p><span className={`sev-pill mt-1 inline-block ${sevBadge(detail.severity)}`}>{sevLabel(detail.severity)}</span></div>
-                <div className="kpi-card py-2.5 px-3"><p className="kpi-label">Confianza IA</p><p className="text-sm font-semibold text-slate-700">{detail.confidence_percent ? `${detail.confidence_percent}%` : '—'}</p></div>
-              </div>
-              {detail.analysis_text && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1.5">Análisis</p>
-                  <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{detail.analysis_text}</p>
-                </div>
-              )}
-              {detail.recommendations_text && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1.5">Recomendaciones</p>
-                  <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{detail.recommendations_text}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div id="drawerOverlay" className={sidebarOpen ? 'open' : ''} onClick={closeSidebar}></div>
 
@@ -853,7 +218,7 @@ export default function HomePage() {
 
           <p className="text-[0.67rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1" style={{ position: 'relative', zIndex: 1 }}>Panel Admin</p>
 
-          <div className="flex flex-col gap-1 overflow-y-auto flex-1" style={{ position: 'relative', zIndex: 1 }}>
+          <nav className="flex flex-col gap-1 overflow-y-auto flex-1" style={{ position: 'relative', zIndex: 1 }}>
             {navItems.map(item => (
               <button key={item.key} onClick={() => switchView(item.key)}
                 className={`nav-btn ${view === item.key ? 'active' : ''}`}>
@@ -861,7 +226,7 @@ export default function HomePage() {
                 {item.label}
               </button>
             ))}
-          </div>
+          </nav>
 
           {/* ── Weather widget ── */}
           <section className="flex-shrink-0 w-full mt-2 mb-1" aria-label="Clima actual"

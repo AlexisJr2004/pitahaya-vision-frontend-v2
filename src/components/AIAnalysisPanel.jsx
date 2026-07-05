@@ -1,20 +1,6 @@
 import { useState } from 'react'
 import formatAIText from '../utils/formatAIText'
 
-/**
- * Panel de análisis con IA (Gemma 3) reutilizable.
- *
- * Props:
- *   analyses      — array de análisis (para computar stats: total, sick, GPS)
- *   buildSummary  — () => string   — construye el prompt para Gemma (definido por cada página)
- *   title         — título del panel  (default: "Diagnóstico fitosanitario")
- *   buttonLabel   — texto del botón de acción (default: "Analizar")
- *   emptyText     — descripción en estado vacío
- *   showGeoStats  — muestra el contador de puntos GPS (default: false)
- *   variant       — "full" (dashboard, ocupa toda la altura del contenedor)
- *                   "compact" (historial, se renderiza como stat-card autónoma)
- *   className     — clase extra para el contenedor raíz
- */
 export default function AIAnalysisPanel({
   analyses = [],
   buildSummary,
@@ -76,10 +62,10 @@ export default function AIAnalysisPanel({
   const errorRadius   = isCompact ? 'rounded-xl' : 'rounded-2xl'
 
   return (
-    <div className={containerClass}>
+    <section className={containerClass}>
 
       {/* ── Cabecera ── */}
-      <div className={`${headerPad} border-b border-slate-100`}>
+      <header className={`${headerPad} border-b border-slate-100`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.22em] text-brand-600 mb-1">IA · Gemma 3</p>
@@ -98,7 +84,7 @@ export default function AIAnalysisPanel({
             <span className="flex items-center gap-1"><i className="fas fa-triangle-exclamation text-red-400"></i> {sick} en riesgo</span>
           </div>
         )}
-      </div>
+      </header>
 
       {/* ── Stats (solo en variant=full) ── */}
       {!isCompact && (
@@ -170,7 +156,7 @@ export default function AIAnalysisPanel({
       </div>
 
       {/* ── Botón ── */}
-      <div className={`flex-shrink-0 ${footerPad} border-t border-slate-100`}>
+      <footer className={`flex-shrink-0 ${footerPad} border-t border-slate-100`}>
         <button onClick={requestAnalysis} disabled={loading} className={btnClass}>
           {loading
             ? <><i className="fas fa-spinner fa-spin text-xs"></i> Analizando...</>
@@ -179,8 +165,8 @@ export default function AIAnalysisPanel({
               : <><i className="fas fa-magnifying-glass-chart text-xs"></i> {buttonLabel}</>
           }
         </button>
-      </div>
+      </footer>
 
-    </div>
+    </section>
   )
 }

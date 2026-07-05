@@ -137,11 +137,11 @@ export default function WeatherWidget({
         {days.length > 0 && (
           <div className="mt-4 pt-3" style={{ borderTop: '1px solid #eef2f7' }}>
             <p className="text-[0.6rem] font-bold uppercase tracking-[0.22em] text-slate-400 mb-2">Últimos 3 días</p>
-            <div className="space-y-0.5">
+            <ul className="space-y-0.5">
               {days.map((day, i) => {
                 const di = dayIcon(day.precip, day.humidity)
                 return (
-                  <div key={i} className="rounded-xl px-2 py-1.5"
+                  <li key={i} className="rounded-xl px-2 py-1.5"
                     style={{ background: i === 0 ? '#f8fafc' : 'transparent' }}>
                     <div className="flex items-center gap-2">
                       <i className={`fas ${di.i} ${di.c} text-sm w-4 text-center flex-shrink-0`}></i>
@@ -157,10 +157,10 @@ export default function WeatherWidget({
                         <i className="fas fa-cloud-rain text-blue-300 text-[0.55rem]"></i>{day.precip} mm
                       </span>
                     </div>
-                  </div>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           </div>
         )}
       </>
@@ -206,11 +206,11 @@ export default function WeatherWidget({
       </div>
 
       {/* Desglose por día */}
-      <div className="divide-y divide-slate-50">
+      <ul className="divide-y divide-slate-50">
         {days.map((day, i) => {
           const di = dayIcon(day.precip, day.humidity)
           return (
-            <div key={i} className="flex items-center gap-2.5 px-4 py-2.5 text-[0.78rem]">
+            <li key={i} className="flex items-center gap-2.5 px-4 py-2.5 text-[0.78rem]">
               <i className={`fas ${di.i} ${di.c} w-4 text-center text-sm flex-shrink-0`}></i>
               <span className="text-slate-500 font-medium w-9 flex-shrink-0 capitalize">{shortDay(day.date)}</span>
               <span className="font-semibold text-slate-800 flex-1">{day.temp}°C</span>
@@ -221,10 +221,10 @@ export default function WeatherWidget({
               <span className="flex items-center gap-1 text-slate-400 text-[0.68rem]">
                 <i className="fas fa-cloud-rain text-blue-300 text-[0.55rem]"></i>{day.precip}mm
               </span>
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
 
       {/* Confirmar condición (solo si se pasa onConditionChange) */}
       {onConditionChange && (

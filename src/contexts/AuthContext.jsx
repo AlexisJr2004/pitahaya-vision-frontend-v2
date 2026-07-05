@@ -2,11 +2,18 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { login as apiLogin, logout as apiLogout, getProfile } from '../services/authService'
 
 const AuthContext = createContext(null)
+const AUTH_TRANSITION_MS = 500
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [showAuthLoader, setShowAuthLoader] = useState(false)
+
+  const flashAuthLoader = () => {
+    setShowAuthLoader(true)
+    setTimeout(() => setShowAuthLoader(false), AUTH_TRANSITION_MS)
+  }
 
   // ─── Restore session from localStorage on mount ─────────────────
   useEffect(() => {
@@ -35,6 +42,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('auth_token', data.key)
       const profile = await getProfile()
       setUser(profile)
+      flashAuthLoader()
       return profile
     } finally {
       setLoading(false)
@@ -49,10 +57,11 @@ export function AuthProvider({ children }) {
     }
     localStorage.removeItem('auth_token')
     setUser(null)
+    flashAuthLoader()
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, initialLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, initialLoading, showAuthLoader, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

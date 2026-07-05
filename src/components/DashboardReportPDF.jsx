@@ -731,25 +731,16 @@ function LoadingOverlay({ status, onClose }) {
       <div style={{ background:'#fff', borderRadius:28, padding:'36px 44px', textAlign:'center', minWidth:300, boxShadow:'0 32px 64px rgba(0,0,0,0.2)', border:`1px solid rgba(226,232,240,0.9)` }}>
         {status === 'error' ? (
           <>
-            <div style={{ width:52, height:52, borderRadius:'50%', background:R.redL, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
-              <Icon name="circle-xmark" color={R.red} size={24} />
-            </div>
             <div style={{ fontFamily:SERIF, fontSize:20, fontWeight:600, color:SL[800], marginBottom:6 }}>Error al generar</div>
             <div style={{ fontFamily:SANS, fontSize:12, color:SL[500], marginBottom:20 }}>No se pudo crear el PDF. Intenta de nuevo.</div>
             <button onClick={onClose} style={{ padding:'10px 28px', borderRadius:12, background:B[600], color:'#fff', border:'none', cursor:'pointer', fontFamily:SANS, fontWeight:600, fontSize:13 }}>Cerrar</button>
           </>
         ) : status === 'done' ? (
           <>
-            <div style={{ width:52, height:52, borderRadius:'50%', background:B[50], border:`2px solid ${B[200]}`, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
-              <Icon name="circle-check" color={B[600]} size={24} />
-            </div>
             <div style={{ fontFamily:SERIF, fontSize:20, fontWeight:600, color:SL[800] }}>¡PDF descargado!</div>
           </>
         ) : (
           <>
-            <div style={{ width:54, height:54, borderRadius:16, background:B[50], border:`1.5px solid ${B[200]}`, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }}>
-              <Icon name="file-pdf" color={B[600]} size={24} />
-            </div>
             <div style={{ fontFamily:SERIF, fontSize:21, fontWeight:600, color:SL[800], marginBottom:6 }}>Generando reporte...</div>
             <div style={{ fontFamily:SANS, fontSize:12, color:SL[500], marginBottom:22 }}>Compilando datos, gráficos y diseño del informe</div>
             <div style={{ height:4, background:SL[100], borderRadius:99, overflow:'hidden' }}>

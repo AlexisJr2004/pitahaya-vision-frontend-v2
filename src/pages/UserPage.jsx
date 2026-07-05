@@ -177,7 +177,7 @@ export default function UserPage() {
 
           <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1" style={{ position: 'relative', zIndex: 1 }}>Navegación</p>
 
-          <div className="flex flex-col gap-1 flex-1 overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
+          <nav className="flex flex-col gap-1 flex-1 overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
             <button className={`h-nav-btn ${view === 'dashboard' ? 'active' : ''}`} onClick={() => switchView('dashboard')}>
               <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
               Dashboard
@@ -190,7 +190,7 @@ export default function UserPage() {
               <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
               Chatbot
             </button>
-          </div>
+          </nav>
 
           <section className="flex-shrink-0 w-full mt-2 mb-1" aria-label="Clima actual"
             style={{ position: 'relative', zIndex: 1, borderRadius: 28, border: '1px solid rgba(226,232,240,0.9)', padding: '1.1rem 1rem' }}>

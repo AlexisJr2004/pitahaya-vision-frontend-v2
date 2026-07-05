@@ -11,11 +11,12 @@ function animateCloseModal(modalRef, callback) {
 
 export default function SettingsModal({ isOpen, onClose }) {
   const modalRef = useRef(null)
-  const [sTheme,         setSTheme]         = useState('light')
-  const [sLanguage,      setSLanguage]      = useState('es')
-  const [sNotifications, setSNotifications] = useState(true)
-  const [saving,         setSaving]         = useState(false)
-  const [saveError,      setSaveError]      = useState('')
+  const [sTheme,           setSTheme]           = useState('light')
+  const [sLanguage,        setSLanguage]        = useState('es')
+  const [sNotifications,   setSNotifications]   = useState(true)
+  const [sSeverityLevel,   setSSeverityLevel]   = useState('todas')
+  const [saving,           setSaving]           = useState(false)
+  const [saveError,        setSaveError]        = useState('')
 
   useEffect(() => {
     if (isOpen) { loadSettings(); setSaveError('') }
@@ -62,10 +63,11 @@ export default function SettingsModal({ isOpen, onClose }) {
   const loadSettings = async () => {
     try {
       const prefs = await getProfilePreferences()
-      // theme, language, notifications_enabled are top-level Profile fields
+      // theme, language, notifications_enabled, notify_severity_threshold are top-level Profile fields
       setSTheme(prefs.theme || 'light')
       setSLanguage(prefs.language || 'es')
       setSNotifications(prefs.notifications_enabled !== undefined ? prefs.notifications_enabled : true)
+      setSSeverityLevel(prefs.notify_severity_threshold || 'todas')
     } catch {}
   }
 
@@ -76,9 +78,10 @@ export default function SettingsModal({ isOpen, onClose }) {
     setSaveError('')
     try {
       await updateProfilePreferences({
-        theme:                 sTheme,
-        language:              sLanguage,
-        notifications_enabled: sNotifications,
+        theme:                     sTheme,
+        language:                  sLanguage,
+        notifications_enabled:     sNotifications,
+        notify_severity_threshold: sSeverityLevel,
       })
       handleClose()
     } catch (err) {
@@ -93,7 +96,7 @@ export default function SettingsModal({ isOpen, onClose }) {
     }
   }
 
-  const resetSettings = () => { setSTheme('light'); setSLanguage('es'); setSNotifications(true) }
+  const resetSettings = () => { setSTheme('light'); setSLanguage('es'); setSNotifications(true); setSSeverityLevel('todas') }
 
   const exportBackup = () => {
     const data = {}
@@ -155,7 +158,7 @@ export default function SettingsModal({ isOpen, onClose }) {
           <div className="smod-drag-handle" />
 
           {/* Header */}
-          <div className="smod-modal-header px-5 py-5 sm:px-7 sm:py-6">
+          <header className="smod-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
@@ -179,13 +182,13 @@ export default function SettingsModal({ isOpen, onClose }) {
                 </svg>
               </button>
             </div>
-          </div>
+          </header>
 
           {/* Body */}
           <div className="smod-modal-body px-4 sm:px-6 py-5 space-y-4">
 
             {/* Apariencia — tema */}
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
                   <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -210,10 +213,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                   ))}
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Idioma */}
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
@@ -238,10 +241,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                   ))}
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Notificaciones */}
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -252,11 +255,11 @@ export default function SettingsModal({ isOpen, onClose }) {
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="font-cormorant text-xl font-semibold text-slate-900">Notificaciones de la plataforma</p>
+                    <p className="font-cormorant text-xl font-semibold text-slate-900">Notificaciones por correo</p>
                     <p className="text-sm text-slate-500 mt-0.5">
                       {sNotifications
-                        ? 'Recibirás alertas sobre análisis, diagnósticos y actualizaciones del sistema.'
-                        : 'Las notificaciones están desactivadas. No recibirás alertas del sistema.'}
+                        ? 'Recibirás un correo electrónico sobre análisis, diagnósticos y cambios en tu cuenta.'
+                        : 'Las notificaciones por correo están desactivadas. Solo recibirás lo estrictamente necesario (ej. verificación de cuenta).'}
                     </p>
                   </div>
                   <label className="smod-toggle flex-shrink-0" style={{ position: 'relative', display: 'inline-block', width: 44, height: 24 }}>
@@ -269,11 +272,36 @@ export default function SettingsModal({ isOpen, onClose }) {
                   <span className={`w-1.5 h-1.5 rounded-full ${sNotifications ? 'bg-green-500' : 'bg-slate-400'}`}></span>
                   {sNotifications ? 'Notificaciones activadas' : 'Notificaciones desactivadas'}
                 </div>
+
+                {sNotifications && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <p className="font-cormorant text-lg font-semibold text-slate-900">Severidad de análisis a notificar</p>
+                    <p className="mb-3 text-sm text-slate-500 mt-0.5">
+                      Elige a partir de qué nivel de severidad quieres que te avisemos por correo cuando termine un análisis. "Todas" te notifica siempre, incluso en resultados sin severidad.
+                    </p>
+                    <div className="grid gap-2 grid-cols-3">
+                      {[
+                        { id: 'ninguna',  label: 'Ninguna' },
+                        { id: 'baja',     label: 'Baja' },
+                        { id: 'moderada', label: 'Moderada' },
+                        { id: 'alta',     label: 'Alta' },
+                        { id: 'critica',  label: 'Crítica' },
+                        { id: 'todas',    label: 'Todas' },
+                      ].map(({ id, label }) => (
+                        <button key={id} onClick={() => setSSeverityLevel(id)}
+                          className={`smod-set-opt ${sSeverityLevel === id ? 'active' : ''}`}
+                          style={{ padding: '.6rem .5rem', textAlign: 'center' }}>
+                          <b className="block text-sm text-slate-900">{label}</b>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            </section>
 
             {/* Datos / Respaldo */}
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
                   <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
@@ -305,19 +333,19 @@ export default function SettingsModal({ isOpen, onClose }) {
                   </label>
                 </div>
               </div>
-            </div>
+            </section>
 
             {saveError && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveError}</p>
             )}
 
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+            <footer className="flex flex-wrap items-center justify-end gap-3 pt-1">
               <button onClick={resetSettings}  className="smod-secondary-btn">Restaurar valores</button>
               <button onClick={handleClose}    className="smod-secondary-btn">Cancelar</button>
               <button onClick={handleSaveSettings} disabled={saving} className="smod-save-btn">
                 {saving ? 'Guardando…' : 'Guardar configuraciones'}
               </button>
-            </div>
+            </footer>
 
           </div>
         </div>

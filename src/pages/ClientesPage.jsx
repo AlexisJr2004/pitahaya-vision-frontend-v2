@@ -325,8 +325,13 @@ export default function ClientesPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-bold text-slate-800 truncate">{c.full_name || c.username}</p>
-                            <p className="text-xs text-slate-500 truncate">{c.email}</p>
-                            {c.phone && <p className="text-xs text-green-600">{c.phone}</p>}
+                            {c.email && (
+                              <a href={`mailto:${c.email}`} className="text-xs text-slate-500 truncate block hover:text-sky-400">{c.email}</a>
+                            )}
+                            {c.phone && (
+                              <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-green-600 hover:text-green-700">{c.phone}</a>
+                            )}
                             {c.date_joined && (
                               <p className="text-xs text-slate-400">
                                 Registro: {new Date(c.date_joined).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -411,8 +416,14 @@ export default function ClientesPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{c.full_name || c.username}</td>
-                          <td className="px-4 py-3 text-sm text-green-600">{c.phone || '—'}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{c.email}</td>
+                          <td className="px-4 py-3 text-sm text-green-600">
+                            {c.phone
+                              ? <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-700">{c.phone}</a>
+                              : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {c.email && <a href={`mailto:${c.email}`} className="hover:text-sky-400">{c.email}</a>}
+                          </td>
                           <td className="px-4 py-3 text-xs font-bold">
                             <span className={`px-2 py-0.5 rounded ${c.role === 'admin' ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-700'}`}>
                               {c.role === 'admin' ? 'Administrador' : 'Usuario'}
@@ -432,7 +443,7 @@ export default function ClientesPage() {
                             {isMe ? (
                               <span className="text-xs bg-slate-100 text-slate-400 p-1.5 rounded">Tu cuenta</span>
                             ) : (
-                              <nav className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1">
                                 <button
                                   onClick={() => handleToggle(c.id)}
                                   disabled={actionId === `${c.id}_act`}
@@ -449,7 +460,7 @@ export default function ClientesPage() {
                                 >
                                   {actionId === `${c.id}_role` ? <i className="fas fa-spinner fa-spin"></i> : 'Cambiar Rol'}
                                 </button>
-                              </nav>
+                              </div>
                             )}
                           </td>
                         </tr>

@@ -32,6 +32,11 @@ export async function register(data) {
   return res.data
 }
 
+export async function checkAvailability(field, value) {
+  const res = await API.get('/availability/', { params: { field, value } })
+  return res.data
+}
+
 export async function requestPasswordReset(email) {
   const res = await API.post('/password/reset/', { email })
   return res.data

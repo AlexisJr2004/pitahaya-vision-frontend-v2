@@ -11,9 +11,6 @@ export function validateEcuadorianDni(dni) {
   const province = parseInt(dni.substring(0, 2), 10)
   if (province < 1 || province > 24) return 'Los primeros 2 dígitos deben corresponder a una provincia válida (01-24)'
 
-  const thirdDigit = parseInt(dni[2], 10)
-  if (thirdDigit >= 6) return 'El tercer dígito debe ser menor a 6'
-
   const weights = [2, 1, 2, 1, 2, 1, 2, 1, 2]
   let sum = 0
   for (let i = 0; i < 9; i++) {

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getAnalyses, updateAnalysis, deleteAnalysis } from '../services/analysisService'
-import { getFarms, getPlantHistories, getConversations, getContexts } from '../services/chatbotService'
+import { getAnalyses, deleteAnalysis } from '../services/analysisService'
+import { getFarms, getPlantHistories, getConversations, getContexts, updatePlantHistory } from '../services/chatbotService'
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
 import FichaTecnicaPDF from '../components/FichaTecnicaPDF'
 
@@ -224,10 +224,13 @@ export default function HistorialView({ onOpenSidebar }) {
   }
 
   const handleSaveEdit = async () => {
+    const target = analyses.find(a => a.id === editingId)
+    const phId = target?._ph?.id
+    if (!phId) { setEditingId(null); return }
     setEditSaving(true)
     try {
-      await updateAnalysis(editingId, { analysis_text: editText })
-      setAnalyses(prev => prev.map(a => a.id === editingId ? { ...a, analysis_text: editText } : a))
+      await updatePlantHistory(phId, { notes: editText })
+      setAnalyses(prev => prev.map(a => a.id === editingId ? { ...a, _ph: { ...a._ph, notes: editText } } : a))
       setEditingId(null)
     } catch {} finally { setEditSaving(false) }
   }
@@ -304,7 +307,8 @@ export default function HistorialView({ onOpenSidebar }) {
     const hasTrazabilidad = Boolean(groupKey && (groupCount[groupKey] || 0) >= 2)
     const sev             = a.severity || 'Sin severidad'
     const disease         = a.disease_name_predicted || 'Diagnóstico pendiente'
-    const preview         = a.analysis_text ? a.analysis_text.substring(0, 120) + '…' : 'Sin descripción'
+    const notes           = ph?.notes || ''
+    const preview         = notes ? notes.substring(0, 120) + '…' : 'Sin observaciones'
     const location        = ph
       ? [ph._farmName, ph._plotName, ph._zone, ph._rows ? `Hilera ${ph._rows}` : ''].filter(Boolean).join(' · ') || 'Sin ubicación'
       : 'Sin ubicación'
@@ -353,11 +357,13 @@ export default function HistorialView({ onOpenSidebar }) {
                style={{ border: 'none' }}>
               Abrir en chat<i className="fas fa-arrow-up-right-from-square text-[0.78rem]"></i>
             </button>
-            <button onClick={() => { setEditingId(a.id); setEditText(a.analysis_text || ''); setDeleteConfirmId(null) }}
-              className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer"
-              style={{ background: 'none', border: 'none' }} title="Editar observaciones">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
+            {ph?.id && (
+              <button onClick={() => { setEditingId(a.id); setEditText(notes); setDeleteConfirmId(null) }}
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer"
+                style={{ background: 'none', border: 'none' }} title="Editar observación">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            )}
             <button onClick={() => { setDeleteConfirmId(a.id); setEditingId(null) }}
               className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
               style={{ background: 'none', border: 'none' }} title="Eliminar análisis">
@@ -373,6 +379,32 @@ export default function HistorialView({ onOpenSidebar }) {
             </div>
           ))}
         </div>
+        <div className="mt-4 pt-3 border-t border-slate-100">
+          <p className="text-[0.62rem] uppercase tracking-[0.18em] text-slate-400 font-semibold mb-1">Observación</p>
+          {editingId === a.id ? (
+            <>
+              <textarea rows={4} value={editText} onChange={e => setEditText(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-brand-500 resize-none"
+                style={{ background: '#f8fafc' }} />
+              <div className="flex gap-2 mt-2">
+                <button onClick={handleSaveEdit} disabled={editSaving}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer disabled:opacity-60"
+                  style={{ border: 'none' }}>
+                  {editSaving ? 'Guardando…' : 'Guardar'}
+                </button>
+                <button onClick={() => setEditingId(null)}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  style={{ background: 'none' }}>
+                  Cancelar
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-700 leading-relaxed">
+              {notes || <span className="text-slate-400 italic">Sin observaciones</span>}
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-100">
           <div className="flex flex-wrap gap-2 text-xs text-slate-500">
             {conf != null && <span className="px-2.5 py-1 rounded-full bg-slate-100 font-semibold">Confianza: {conf}%</span>}
@@ -382,46 +414,6 @@ export default function HistorialView({ onOpenSidebar }) {
             <p className="text-xs text-slate-400">Actualizado {a.created_at ? fmtDate(a.created_at) : '—'}</p>
           </div>
         </div>
-        {/* ── Editar observaciones inline ── */}
-        {editingId === a.id && (
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">Editar observaciones</p>
-            <textarea rows={4} value={editText} onChange={e => setEditText(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-brand-500 resize-none"
-              style={{ background: '#f8fafc' }} />
-            <div className="flex gap-2 mt-2">
-              <button onClick={handleSaveEdit} disabled={editSaving}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer disabled:opacity-60"
-                style={{ border: 'none' }}>
-                {editSaving ? 'Guardando…' : 'Guardar'}
-              </button>
-              <button onClick={() => setEditingId(null)}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                style={{ background: 'none' }}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-        {/* ── Confirmar eliminación inline ── */}
-        {deleteConfirmId === a.id && (
-          <div className="mt-3 pt-3 border-t border-red-100 bg-red-50 rounded-xl px-4 py-3">
-            <p className="text-sm font-semibold text-red-700 mb-2">¿Eliminar este análisis? Esta acción no se puede deshacer.</p>
-            <div className="flex gap-2">
-              <button onClick={() => handleDelete(a.id)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition cursor-pointer"
-                style={{ border: 'none' }}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                Eliminar
-              </button>
-              <button onClick={() => setDeleteConfirmId(null)}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                style={{ background: 'none' }}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
       </article>
     )
   }
@@ -490,6 +482,17 @@ export default function HistorialView({ onOpenSidebar }) {
         @media(max-width:639px){
           .drag-handle-hist{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0;touch-action:none;cursor:grab}
         }
+        .delete-overlay{position:fixed;inset:0;z-index:400;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(15,23,42,.36);backdrop-filter:blur(1px)}
+        .delete-overlay.open{display:flex}
+        .delete-modal{width:min(100%,420px);border-radius:24px;background:#fff;border:1px solid #eef2f7;box-shadow:0 24px 48px rgba(15,23,42,.18);overflow:hidden}
+        .delete-modal-title{font-size:1rem;font-weight:700;color:#0f172a}
+        .delete-modal-text{font-size:.9rem;color:#64748b}
+        .delete-modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
+        .delete-btn{min-width:108px;padding:.78rem 1rem;border-radius:14px;font-size:.9rem;font-weight:600;transition:all .14s;border:none;cursor:pointer}
+        .delete-btn-secondary{background:#fff;color:#334155;border:1px solid #e2e8f0}
+        .delete-btn-secondary:hover{background:#f8fafc}
+        .delete-btn-danger{background:#ef4444;color:#fff;border:1px solid #ef4444}
+        .delete-btn-danger:hover{background:#dc2626}
       `}</style>
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
@@ -688,7 +691,7 @@ export default function HistorialView({ onOpenSidebar }) {
         <div className="hist-overlay open" onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}>
           <div ref={trazModalRef} className="hist-modal" style={{ maxWidth: 'min(100%,1024px)' }} onClick={e => e.stopPropagation()}>
             <div className="drag-handle-hist" />
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
+            <header className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
               <div>
                 <h2 className="font-cormorant text-xl font-semibold text-slate-900">
                   Trazabilidad{tzPh?._plantId ? ` — Planta ${tzPh._plantId}` : ''}
@@ -704,7 +707,7 @@ export default function HistorialView({ onOpenSidebar }) {
                 style={{ border: 'none', cursor: 'pointer' }}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
-            </div>
+            </header>
             <div className="hist-modal-body p-6 space-y-2">
               {tzAnalyses.length === 0 ? (
                 <div className="text-center text-slate-500 py-8">No hay registros de trazabilidad para esta planta.</div>
@@ -757,13 +760,13 @@ export default function HistorialView({ onOpenSidebar }) {
                 )
               })}
             </div>
-            <div className="p-5 border-t border-slate-200 text-center flex-shrink-0">
+            <footer className="p-5 border-t border-slate-200 text-center flex-shrink-0">
               <button onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}
                 className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
                 style={{ border: 'none' }}>
                 Cerrar
               </button>
-            </div>
+            </footer>
           </div>
         </div>
       )}
@@ -773,7 +776,7 @@ export default function HistorialView({ onOpenSidebar }) {
         <div className="hist-overlay open" onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}>
           <div ref={fichaModalRef} className="hist-modal" style={{ maxWidth: 'min(100%,896px)' }} onClick={e => e.stopPropagation()}>
             <div className="drag-handle-hist" />
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
+            <header className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
               <div>
                 <h2 className="font-cormorant text-xl font-semibold text-slate-900">
                   Ficha técnica{fichaPh?._plantId ? ` — Planta ${fichaPh._plantId}` : ''}
@@ -787,7 +790,7 @@ export default function HistorialView({ onOpenSidebar }) {
                 style={{ border: 'none', cursor: 'pointer' }}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
-            </div>
+            </header>
             <div className="hist-modal-body">
               <div className="p-5 space-y-4">
                 <div className="detail-section">
@@ -917,7 +920,7 @@ export default function HistorialView({ onOpenSidebar }) {
                 )}
               </div>
             </div>
-            <div className="p-5 border-t border-slate-200 flex items-center gap-3 justify-center flex-shrink-0">
+            <footer className="p-5 border-t border-slate-200 flex items-center gap-3 justify-center flex-shrink-0">
               <button onClick={() => setShowFichaPDF(true)}
                 disabled={fichaTotal === 0}
                 className="px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -929,7 +932,7 @@ export default function HistorialView({ onOpenSidebar }) {
                 style={{ border: 'none' }}>
                 Cerrar
               </button>
-            </div>
+            </footer>
           </div>
         </div>
       )}
@@ -939,6 +942,22 @@ export default function HistorialView({ onOpenSidebar }) {
         onClose={() => setShowFichaPDF(false)}
         data={{ fichaPh, fichaAnalyses, fichaTotal, fichaDiseases, fichaTopDisease, fichaLastDate, avgSeverityLabel, severityTrend, sevDistEntries, maxSevCount, user }}
       />
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <div className={`delete-overlay ${deleteConfirmId ? 'open' : ''}`} onClick={() => setDeleteConfirmId(null)}>
+        <div className="delete-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+          <div className="px-6 pt-6 pb-4">
+            <h3 className="delete-modal-title">¿Eliminar este análisis?</h3>
+            <p className="delete-modal-text mt-3">Esta acción no se puede deshacer. Se eliminará el análisis y su información asociada.</p>
+          </div>
+          <div className="px-6 pb-6">
+            <div className="delete-modal-actions">
+              <button className="delete-btn delete-btn-secondary" onClick={() => setDeleteConfirmId(null)}>Cancelar</button>
+              <button className="delete-btn delete-btn-danger" onClick={() => handleDelete(deleteConfirmId)}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </>
   )
 }

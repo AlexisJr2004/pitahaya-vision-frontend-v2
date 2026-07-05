@@ -11,3 +11,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
+
+// Oculta el splash estático de index.html apenas React termina de montar.
+window.hideAppSplash?.()

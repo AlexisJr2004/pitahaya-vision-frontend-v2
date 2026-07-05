@@ -1,7 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { validateRegistration } from '../utils/validators'
-import { register as apiRegister } from '../services/authService'
+import { register as apiRegister, checkAvailability } from '../services/authService'
+
+const UNIQUE_FIELDS = ['username', 'email', 'dni', 'phone']
+const DUPLICATE_MESSAGES = {
+  username: 'Este usuario ya está registrado',
+  email: 'Este correo ya está registrado',
+  dni: 'Esta cédula ya está registrada',
+  phone: 'Este teléfono ya está registrado',
+}
 
 // ─── Design tokens ───────────────────────────────────────────────
 const G = { 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }
@@ -51,17 +59,71 @@ export default function RegisterPage() {
   const navigate = useNavigate()
   const [form, setForm]             = useState(EMPTY_FORM)
   const [fieldErrors, setFieldErrors] = useState({})
+  const [touched, setTouched]       = useState({})
   const [serverError, setServerError] = useState('')
   const [loading, setLoading]       = useState(false)
   const [showPwd, setShowPwd]       = useState({ password1: false, password2: false })
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [checkingFields, setCheckingFields] = useState({})
 
-  const clearFieldError = (name) =>
-    setFieldErrors(prev => prev[name] ? { ...prev, [name]: '' } : prev)
+  const formRef = useRef(form)
+  useEffect(() => { formRef.current = form }, [form])
+
+  // Verifica en el backend si username/email/dni/phone ya existen, con debounce
+  // por campo. Solo se dispara si el campo fue tocado y ya pasó la validación
+  // de formato (no tiene sentido consultar la BD con un dato inválido).
+  const useAvailabilityCheck = (name) => {
+    const value = (form[name] || '').trim()
+    useEffect(() => {
+      if (!touched[name] || !value) return undefined
+      const syncErrors = validateRegistration(formRef.current)
+      if (syncErrors[name]) return undefined
+
+      setCheckingFields(prev => ({ ...prev, [name]: true }))
+      const timer = setTimeout(async () => {
+        try {
+          const { available } = await checkAvailability(name, value)
+          if (!available && formRef.current[name]?.trim() === value) {
+            setFieldErrors(prev => ({ ...prev, [name]: DUPLICATE_MESSAGES[name] }))
+          }
+        } catch {
+          // si la verificación remota falla (red/servidor), no bloquea el flujo normal
+        } finally {
+          setCheckingFields(prev => ({ ...prev, [name]: false }))
+        }
+      }, 500)
+
+      return () => { clearTimeout(timer); setCheckingFields(prev => ({ ...prev, [name]: false })) }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [value, touched[name]])
+  }
+
+  UNIQUE_FIELDS.forEach(useAvailabilityCheck)
+
+  // Aplica la validación de formato solo a los campos indicados en `keys`,
+  // sin tocar el resto (así no se pisa, por ejemplo, un error de "ya
+  // registrado" devuelto por la verificación en tiempo real contra la BD
+  // mientras el usuario edita otro campo).
+  const applyValidation = (nextForm, keys) => {
+    if (!keys.length) return
+    const errors = validateRegistration(nextForm)
+    setFieldErrors(prev => {
+      const next = { ...prev }
+      keys.forEach(key => { next[key] = errors[key] || '' })
+      return next
+    })
+  }
 
   const handleChange = ({ target: { name, value } }) => {
-    setForm(prev => ({ ...prev, [name]: value }))
-    clearFieldError(name)
+    const cleanValue = (name === 'dni' || name === 'phone') ? value.replace(/\D/g, '') : value
+    const nextForm = { ...form, [name]: cleanValue }
+    setForm(nextForm)
+    const keys = []
+    if (touched[name]) keys.push(name)
+    // password1 y password2 se validan cruzados: si ya se tocó la confirmación,
+    // re-chequearla también al editar la contraseña principal.
+    if (name === 'password1' && touched.password2) keys.push('password2')
+    applyValidation(nextForm, keys)
   }
 
   const handlePhotoChange = ({ target: { files } }) => {
@@ -76,6 +138,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setServerError('')
+    setTouched(FIELD_NAMES.reduce((acc, k) => ({ ...acc, [k]: true }), {}))
     const errors = validateRegistration(form)
     if (Object.keys(errors).length) { setFieldErrors(errors); return }
     setFieldErrors({})
@@ -111,6 +174,10 @@ export default function RegisterPage() {
     e.target.style.borderColor = fieldErrors[name] ? '#dc2626' : GRAY[200]
     e.target.style.boxShadow   = 'none'
     e.target.style.background  = GRAY[100]
+    if (!touched[name]) {
+      setTouched(prev => ({ ...prev, [name]: true }))
+      applyValidation(form, [name])
+    }
   }
   const onMouseEnter = (e) => { if (!fieldErrors[e.target.name]) e.target.style.borderColor = '#d1d5db' }
   const onMouseLeave = (e, name) => { if (!fieldErrors[name]) e.target.style.borderColor = GRAY[200] }
@@ -126,9 +193,12 @@ export default function RegisterPage() {
         <Icon d={icon} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: GRAY[400], pointerEvents: 'none' }} />
         <input id={name} name={name} type={type} value={form[name] ?? ''} placeholder={placeholder}
           autoComplete={autoComplete} maxLength={maxLength}
+          inputMode={(name === 'dni' || name === 'phone') ? 'numeric' : undefined}
           style={inputStyle(name)} onChange={handleChange} {...inputEvents(name)} />
       </div>
-      {fieldErrors[name] && <span style={s.errorMsg}>{fieldErrors[name]}</span>}
+      {fieldErrors[name]
+        ? <span style={s.errorMsg}>{fieldErrors[name]}</span>
+        : checkingFields[name] && <span style={{ fontSize: '0.7rem', color: GRAY[500], marginTop: '0.2rem', display: 'block' }}>Verificando disponibilidad…</span>}
     </div>
   )
 
@@ -151,10 +221,10 @@ export default function RegisterPage() {
   )
 
   const SectionLabel = ({ children, mt = '0.25rem' }) => (
-    <div style={{ ...s.fieldLabel, marginTop: mt }}>
+    <legend style={{ ...s.fieldLabel, marginTop: mt, width: '100%', padding: 0 }}>
       <span>{children}</span>
       <div style={s.divider} />
-    </div>
+    </legend>
   )
 
   const TwoCol = ({ children }) => (
@@ -264,9 +334,9 @@ export default function RegisterPage() {
             </p>
 
             {serverError && (
-              <div style={{ background:'#fef2f2', color:'#dc2626', padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center' }}>
+              <p style={{ background:'#fef2f2', color:'#dc2626', padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center' }}>
                 {serverError}
-              </div>
+              </p>
             )}
 
             {/* ═══ FORM ═══ */}

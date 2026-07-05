@@ -8,6 +8,7 @@ import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { getAnalyses } from '../services/analysisService'
+import { getCustomers } from '../services/adminService'
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
 import DashboardReportPDF from '../components/DashboardReportPDF'
 
@@ -328,14 +329,20 @@ function HBarChart({ data }) {
 
 export default function DashboardAdminPage() {
   const [analyses, setAnalyses]           = useState([])
+  const [customers, setCustomers]         = useState([])
   const [loading, setLoading]             = useState(true)
   const [showPDF, setShowPDF]             = useState(false)
   const [selectedAnalysis, setSelectedAnalysis] = useState(null)
 
   useEffect(() => {
-    getAnalyses({ page_size: 200 })
-      .then(d => setAnalyses(toArr(d)))
-      .catch(() => {})
+    Promise.allSettled([
+      getAnalyses({ page_size: 500 }),
+      getCustomers({ page_size: 500 }),
+    ])
+      .then(([ra, rc]) => {
+        setAnalyses(toArr(ra.value))
+        setCustomers(toArr(rc.value))
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -428,6 +435,111 @@ export default function DashboardAdminPage() {
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 4)
   }, [analyses])
+
+  /* ── helper: últimas 10 semanas ── */
+  const lastWeeks = useMemo(() => {
+    const now = new Date()
+    const weeks = []
+    for (let i = 9; i >= 0; i--) {
+      const end = new Date(now); end.setDate(now.getDate() - i * 7)
+      const start = new Date(end); start.setDate(end.getDate() - 6)
+      const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59)
+      weeks.push({ start, end: endOfDay, label: `${start.getDate()}/${start.getMonth() + 1}` })
+    }
+    return weeks
+  }, [])
+
+  /* ── 1. Crecimiento de usuarios registrados (curva acumulada) ── */
+  const userGrowth = useMemo(() => {
+    if (!customers.length) return []
+    let cumulative = customers.filter(c => new Date(c.date_joined) < lastWeeks[0].start).length
+    return lastWeeks.map(w => {
+      const newCount = customers.filter(c => {
+        const d = new Date(c.date_joined)
+        return d >= w.start && d <= w.end
+      }).length
+      cumulative += newCount
+      return { label: w.label, value: cumulative, newCount }
+    })
+  }, [customers, lastWeeks])
+
+  /* ── 2. Usuarios inactivos / en riesgo de abandono (30+ días sin análisis) ── */
+  const inactiveUsers = useMemo(() => {
+    if (!customers.length) return []
+    const lastByEmail = new Map()
+    analyses.forEach(a => {
+      const email = (a.owner_email || '').toLowerCase()
+      if (!email) return
+      const cur = lastByEmail.get(email)
+      if (!cur || new Date(a.created_at) > new Date(cur)) lastByEmail.set(email, a.created_at)
+    })
+    const now = new Date()
+    return customers
+      .filter(c => c.role !== 'admin' && c.is_active)
+      .map(c => {
+        const last = lastByEmail.get((c.email || '').toLowerCase()) || null
+        const daysSince = last ? Math.floor((now - new Date(last)) / 86400000) : null
+        return { ...c, lastAnalysis: last, daysSince }
+      })
+      .filter(c => c.daysSince == null || c.daysSince >= 30)
+      .sort((a, b) => {
+        if (a.daysSince == null && b.daysSince == null) return 0
+        if (a.daysSince == null) return -1
+        if (b.daysSince == null) return 1
+        return b.daysSince - a.daysSince
+      })
+      .slice(0, 8)
+  }, [customers, analyses])
+
+  /* ── 3. Confianza promedio del modelo en el tiempo ── */
+  const confidenceTrend = useMemo(() => {
+    const confOf = a => a.confidence_percent ?? (a.confidence > 1 ? a.confidence : (a.confidence || 0) * 100)
+    return lastWeeks
+      .map(w => {
+        const inWeek = analyses.filter(a => {
+          const d = new Date(a.created_at)
+          return d >= w.start && d <= w.end
+        })
+        const confs = inWeek.map(confOf).filter(v => v != null && !Number.isNaN(v))
+        return { label: w.label, value: confs.length ? Math.round(confs.reduce((s, v) => s + v, 0) / confs.length) : null }
+      })
+      .filter(w => w.value != null)
+  }, [analyses, lastWeeks])
+
+  /* ── 4. Brotes regionales (misma enfermedad, misma zona, varios agricultores, últimos 14 días) ── */
+  const regionalOutbreaks = useMemo(() => {
+    const now = new Date()
+    const cutoff = new Date(now); cutoff.setDate(now.getDate() - 14)
+    const recent = analyses.filter(a => a.latitude != null && a.longitude != null && new Date(a.created_at) >= cutoff && isRisk(a))
+    const groups = new Map()
+    recent.forEach(a => {
+      const zoneLat = Math.round(a.latitude * 20) / 20
+      const zoneLon = Math.round(a.longitude * 20) / 20
+      const disease = a.disease_name_predicted || 'Sin diagnóstico'
+      const key = `${zoneLat}|${zoneLon}|${disease}`
+      if (!groups.has(key)) groups.set(key, { lat: zoneLat, lon: zoneLon, disease, count: 0, owners: new Set(), lastDate: a.created_at })
+      const g = groups.get(key)
+      g.count++
+      if (a.owner_name) g.owners.add(a.owner_name)
+      if (new Date(a.created_at) > new Date(g.lastDate)) g.lastDate = a.created_at
+    })
+    return Array.from(groups.values())
+      .filter(g => g.count >= 2 && g.owners.size >= 2)
+      .map(g => ({ ...g, farms: g.owners.size }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+  }, [analyses])
+
+  /* ── 5. Volumen total de análisis en el tiempo (throughput de la plataforma) ── */
+  const volumeTrend = useMemo(() => {
+    return lastWeeks.map(w => {
+      const count = analyses.filter(a => {
+        const d = new Date(a.created_at)
+        return d >= w.start && d <= w.end
+      }).length
+      return { label: w.label, value: count }
+    })
+  }, [analyses, lastWeeks])
 
   function riskColor(rate) {
     if (rate >= 0.7) return '#dc2626'
@@ -558,6 +670,43 @@ export default function DashboardAdminPage() {
           </article>
         </section>
 
+        {/* ── Row growth: Crecimiento de usuarios + Volumen de análisis ── */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <article className="da-card p-6">
+            <header className="flex items-center justify-between mb-4 gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-brand-600 font-semibold">Crecimiento</p>
+                <h3 className="mt-1 da-panel-title text-2xl font-semibold text-slate-900">Usuarios registrados</h3>
+              </div>
+              <span className="text-xs px-2 py-1 bg-brand-50 text-brand-600 rounded-full border border-brand-100">
+                {customers.length} usuarios totales
+              </span>
+            </header>
+            <figure className="h-40 w-full mb-4">
+              <TrendLine data={userGrowth} />
+            </figure>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Curva acumulada de cuentas creadas en las últimas 10 semanas. Útil para medir la adopción de la plataforma y planificar capacidad.
+            </p>
+          </article>
+
+          <article className="da-card p-6">
+            <header className="flex items-center justify-between mb-4 gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500 font-semibold">Throughput</p>
+                <h3 className="mt-1 da-panel-title text-2xl font-semibold text-slate-900">Volumen de análisis</h3>
+              </div>
+              <span className="text-xs px-2 py-1 bg-slate-50 text-slate-600 rounded-full border border-slate-200">10 semanas</span>
+            </header>
+            <figure className="h-40 w-full mb-4">
+              <TrendLine data={volumeTrend} />
+            </figure>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Total de análisis procesados por semana en toda la plataforma. Permite anticipar demanda de infraestructura y estacionalidad de uso.
+            </p>
+          </article>
+        </section>
+
         {/* ── Row 1: Donut + Top enfermedades ── */}
         <section className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
 
@@ -619,6 +768,57 @@ export default function DashboardAdminPage() {
             <figure className="relative h-72 w-full">
               <HBarChart data={topDiseases} />
             </figure>
+          </article>
+        </section>
+
+        {/* ── Row: Confianza del modelo + Brotes regionales ── */}
+        <section className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-6">
+          <article className="da-card p-6">
+            <header className="flex items-center justify-between mb-4 gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-brand-600 font-semibold">Calidad del modelo</p>
+                <h3 className="mt-1 da-panel-title text-2xl font-semibold text-slate-900">Confianza promedio</h3>
+              </div>
+            </header>
+            <figure className="h-40 w-full mb-4">
+              <TrendLine data={confidenceTrend} />
+            </figure>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Promedio semanal de confianza del clasificador. Una tendencia a la baja puede indicar imágenes de menor calidad, nuevas variedades no vistas por el modelo, o la necesidad de reentrenamiento.
+            </p>
+          </article>
+
+          <article className="da-card p-6">
+            <header className="flex items-center justify-between mb-4 gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-red-600 font-semibold">Vigilancia epidemiológica</p>
+                <h3 className="mt-1 da-panel-title text-2xl font-semibold text-slate-900">Brotes regionales</h3>
+              </div>
+              <span className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-full border border-red-100">Últimos 14 días</span>
+            </header>
+            {regionalOutbreaks.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+                No se detectan brotes concentrados: ninguna zona registra la misma enfermedad en 2 o más fincas distintas en los últimos 14 días.
+              </div>
+            ) : (
+              <ul className="space-y-3 list-none p-0 m-0">
+                {regionalOutbreaks.map((g, i) => (
+                  <li key={i}>
+                    <article className="flex items-start gap-3 rounded-3xl border border-red-100 bg-red-50/40 p-4">
+                      <figure className="mt-0.5 w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 bg-red-100 text-red-600">
+                        <i className="fas fa-map-location-dot"></i>
+                      </figure>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-semibold text-slate-900 truncate">{g.disease}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{g.farms} fincas afectadas · {g.count} casos</p>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">{g.lat.toFixed(3)}, {g.lon.toFixed(3)} · última detección {fmtShort(g.lastDate)}</p>
+                      </div>
+                      <span className="da-severity-pill da-sev-critical flex-shrink-0">Brote</span>
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         </section>
 
@@ -831,6 +1031,42 @@ export default function DashboardAdminPage() {
             </div>
           </article>
         </section>
+
+        {/* ── Usuarios inactivos / en riesgo de abandono ── */}
+        <article className="da-card p-6">
+          <header className="flex items-center justify-between mb-4 gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-amber-600 font-semibold">Retención</p>
+              <h3 className="mt-1 da-panel-title text-2xl font-semibold text-slate-900">Usuarios en riesgo de abandono</h3>
+            </div>
+            <span className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-100">
+              30+ días sin análisis
+            </span>
+          </header>
+          {inactiveUsers.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+              Todos los usuarios activos tienen análisis recientes. Sin señales de abandono por ahora.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {inactiveUsers.map((u, i) => (
+                <article key={u.id ?? i} className="rounded-3xl border border-amber-100 bg-amber-50/40 p-3">
+                  <p className="text-[0.68rem] uppercase tracking-[0.18em] text-slate-400">{u.role_label || 'Agricultor'}</p>
+                  <h4 className="mt-1 text-sm font-semibold text-slate-900 leading-tight truncate">{u.full_name || u.username}</h4>
+                  <p className="text-xs text-slate-500 mt-1 truncate">{u.email}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      {u.lastAnalysis ? `Último análisis: ${fmtShort(u.lastAnalysis)}` : 'Nunca ha analizado'}
+                    </span>
+                    {u.daysSince != null && (
+                      <span className="text-xs font-bold text-amber-700">{u.daysSince}d</span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
 
         {/* ── Row 3: Distribución de severidad + Alertas recientes ── */}
         <section className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6 mb-8">

@@ -6,11 +6,11 @@ import SettingsModal from '../components/SettingsModal'
 import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../services/analysisService'
 import WeatherWidget from '../components/WeatherWidget'
+import ConversationPDF from '../components/ConversationPDF'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 export default function ChatbotPage() {
-  const PLANT_HISTORY_STORAGE_KEY = 'pitahayaVision.plantHistory.v1'
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -37,6 +37,9 @@ export default function ChatbotPage() {
   const [editingFarm, setEditingFarm] = useState(null)
   const [editingPlot, setEditingPlot] = useState(null)
   const [showContextModal, setShowContextModal] = useState(false)
+  const [pdfConversationData, setPdfConversationData] = useState(null)
+  const [renamingConvId, setRenamingConvId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [confirmDeleteConv, setConfirmDeleteConv] = useState(null)
   const [contextSelectedFarmId, setContextSelectedFarmId] = useState('')
@@ -51,8 +54,6 @@ export default function ChatbotPage() {
   const [plotRows, setPlotRows] = useState('')
   const [sessionMenuState, setSessionMenuState] = useState({ sessionId: null, left: 0, top: 0, open: false })
   const [contextOptions, setContextOptions] = useState({ lotId: [], zone: [], rows: [] })
-  const [plantHistories, setPlantHistories] = useState([])
-  const [savedPlantKey, setSavedPlantKey] = useState('')
   const [showNoFarmHint, setShowNoFarmHint] = useState(false)
   const [showNoContextHint, setShowNoContextHint] = useState(false)
   const [geoLoading, setGeoLoading] = useState(false)
@@ -103,9 +104,8 @@ export default function ChatbotPage() {
 
   const loadFarms = async () => { try { const d = await getFarms(); setFarms(Array.isArray(d) ? d : d.results || []) } catch { setFarms([]) } }
   const loadConversations = async () => { try { const d = await getConversations(); setConversations(Array.isArray(d) ? d : d.results || []) } catch { setConversations([]) } }
-  const loadPlantHistories = async () => { try { const d = await getPlantHistories(); setPlantHistories(Array.isArray(d) ? d : d.results || []) } catch { setPlantHistories([]) } }
 
-  useEffect(() => { loadFarms(); loadConversations(); loadPlantHistories() }, [])
+  useEffect(() => { loadFarms(); loadConversations() }, [])
 
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -315,31 +315,6 @@ export default function ChatbotPage() {
     )
   }
 
-  const readLocalPlantHistories = () => {
-    try {
-      const raw = localStorage.getItem(PLANT_HISTORY_STORAGE_KEY)
-      if (!raw) return []
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-
-  const writeLocalPlantHistories = (entries) => {
-    const safeEntries = Array.isArray(entries) ? entries : []
-    localStorage.setItem(PLANT_HISTORY_STORAGE_KEY, JSON.stringify(safeEntries))
-    setPlantHistories(safeEntries)
-  }
-
-  const upsertLocalPlantHistory = (entry) => {
-    const entryKey = String(entry.analysis_result || entry.id || entry.conversation_id || entry.plant_key || '')
-    const current = readLocalPlantHistories()
-    const next = current.filter(item => String(item.analysis_result || item.id || item.conversation_id || item.plant_key || '') !== entryKey)
-    next.unshift(entry)
-    writeLocalPlantHistories(next)
-  }
-
   const getSelectedPlotContext = () => {
     const plotVal = contextSelectedPlotId || contextRowsRef.current?.value || ''
     const selectedFarm = farms.find(farm => String(farm.id) === String(contextLotRef.current?.value || contextSelectedFarmId)) || null
@@ -405,7 +380,7 @@ export default function ChatbotPage() {
     }
   }
 
-  const sevOrder = { baja:0, leve:0, moderada:1, alta:2, critica:3, crítica:3 }
+  const sevOrder = { ninguna:0, baja:1, leve:1, moderada:2, alta:3, critica:4, crítica:4 }
 
   function generateComparison(prevHistories, current) {
     if (!prevHistories.length) return ''
@@ -436,7 +411,7 @@ export default function ChatbotPage() {
     } else if (trend === 'Empeorando') {
       advice = 'Se necesita reforzar las medidas de control. Revisa el plan fitosanitario.'
       if (isRecurring) advice += ' Esta enfermedad se ha presentado en múltiples ocasiones. Considera rotar el principio activo del fungicida y evaluar condiciones ambientales que favorecen su aparición.'
-      if (curLevel >= 2) advice += ' La severidad es alta. Se recomienda una intervención inmediata y consultar con un ingeniero agrónomo.'
+      if (curLevel >= 3) advice += ' La severidad es alta. Se recomienda una intervención inmediata y consultar con un ingeniero agrónomo.'
     } else {
       advice = 'No se detectan cambios significativos. Mantén el monitoreo constante.'
       if (isRecurring) advice += ' Aunque la severidad no ha cambiado, la enfermedad persiste. Evalúa si el manejo actual está siendo efectivo a largo plazo.'
@@ -502,7 +477,6 @@ export default function ChatbotPage() {
       const pkPlant = contextData.plant_key_or_id || `plot_${selectedPlot.id}`
       const pk = `${pkPlant}|${selectedPlot.id}`
       savedPlantKeyRef.current = pk
-      setSavedPlantKey(pk)
     } catch (e) {
       console.error('Error al guardar contexto:', e)
       alert('Error al guardar el contexto. Verifica tu conexion e intenta de nuevo.')
@@ -768,7 +742,6 @@ export default function ChatbotPage() {
         setMessages(msgs)
       } catch {}
       loadConversations()
-      loadPlantHistories()
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Ocurri\u00f3 un error al procesar tu mensaje. Intenta de nuevo.' }])
     }
@@ -868,7 +841,7 @@ export default function ChatbotPage() {
     setShowWelcome(true); setActiveConvId(null)
     savedContextIdRef.current = null; savedPlantKeyRef.current = ''
     setContextSelectedFarmId(''); setContextSelectedZone(''); setContextSelectedPlotId('')
-    setSavedPlantKey(''); closeSidebar(); setSending(false)
+    closeSidebar(); setSending(false)
     if (farms.length === 0) {
       setShowParcelasModal(true)
     } else {
@@ -1029,6 +1002,60 @@ export default function ChatbotPage() {
 
   const openDeleteConvModal = (convId) => {
     setConfirmDeleteConv(convId); closeSessionMenu()
+  }
+
+  const shareConversation = async (convId) => {
+    closeSessionMenu()
+    try {
+      const full = await getConversation(convId)
+      const msgs = (full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+      const strip = (c, header) => c?.startsWith(`**${header}**`) ? c.replace(`**${header}**`, '').replace(/^\n+/, '') : c
+      const consumed = new Set()
+      const items = []
+      msgs.forEach((m, idx) => {
+        if (consumed.has(idx)) return
+        if (m.content?.startsWith('{"__type":"analysis_card"')) {
+          let card = null
+          try { card = JSON.parse(m.content) } catch {}
+          if (!card) return
+          let imageUrl = ''
+          for (let j = idx - 1; j >= 0; j--) {
+            if (msgs[j].role === 'user') { imageUrl = msgs[j].image_path || ''; consumed.add(j); break }
+          }
+          let treatmentText = ''
+          for (let j = idx + 1; j < msgs.length; j++) {
+            if (msgs[j].content?.startsWith('**Resultados del análisis**')) { consumed.add(j); continue }
+            if (msgs[j].content?.startsWith('**Plan de tratamiento**')) {
+              treatmentText = strip(msgs[j].content, 'Plan de tratamiento')
+              consumed.add(j)
+              break
+            }
+            break
+          }
+          items.push({ type: 'analysis', disease: card.disease, severity: card.severity, confidence: card.confidence, recs: card.recs, imageUrl, treatmentText })
+        }
+      })
+      setPdfConversationData({ title: full.title || 'Nueva conversacion', items })
+    } catch {
+      alert('No se pudo exportar la conversacion')
+    }
+  }
+
+  const openRenameConvModal = (convId) => {
+    const conv = conversations.find(c => c.id === convId)
+    setRenameValue(conv?.title || '')
+    setRenamingConvId(convId)
+    closeSessionMenu()
+  }
+
+  const handleRenameConversation = async () => {
+    if (!renamingConvId) return
+    const title = renameValue.trim() || 'Nueva conversacion'
+    try {
+      await updateConversation(renamingConvId, { title })
+      setConversations(prev => prev.map(c => c.id === renamingConvId ? { ...c, title } : c))
+    } catch { alert('Error al renombrar la conversacion') }
+    setRenamingConvId(null)
   }
 
   const openAddPlotModal = (farm) => {
@@ -1349,7 +1376,7 @@ export default function ChatbotPage() {
         .session-dot-btn span { display: block; width: 4px; height: 4px; border-radius: 9999px; background: #64748b; margin: 1px 0; }
         .session-menu-overlay { position: fixed; inset: 0; z-index: 180; display: none; background: transparent; }
         .session-menu-overlay.open { display: block; }
-        .session-menu { position: fixed; z-index: 190; min-width: 196px; border-radius: 18px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 24px 48px rgba(15,23,42,.18); padding: 0.35rem; }
+        .session-menu { position: fixed; z-index: 190; min-width: 196px; border-radius: 18px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 2px 8px rgba(15,23,42,.05); padding: 0.35rem; }
         .session-menu-item { width: 100%; display: flex; align-items: center; gap: 0.7rem; padding: 0.72rem 0.8rem; border-radius: 14px; text-align: left; transition: background 0.14s ease, color 0.14s ease; background: transparent; border: none; cursor: pointer; }
         .session-menu-item:hover { background: #f8fafc; }
         .session-pin { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #15803d; background: #dcfce7; border-radius: 9999px; padding: 0.18rem 0.45rem; }
@@ -1462,9 +1489,17 @@ export default function ChatbotPage() {
       <div className={`session-menu-overlay ${sessionMenuState.open ? 'open' : ''}`} onClick={closeSessionMenu}></div>
       {sessionMenuState.open && (
         <div className="session-menu" style={{ left: sessionMenuState.left + 'px', top: sessionMenuState.top + 'px' }}>
+          <button className="session-menu-item" onClick={() => shareConversation(sessionMenuState.sessionId)}>
+            <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-arrow-up-from-bracket text-[0.72rem]"></i></span>
+            <span className="text-sm text-gray-700 font-medium">Compartir conversacion</span>
+          </button>
           <button className="session-menu-item" onClick={() => togglePinConversation(sessionMenuState.sessionId)}>
             <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-thumbtack text-[0.72rem]"></i></span>
             <span className="text-sm text-gray-700 font-medium">{getConvPinState(sessionMenuState.sessionId) ? 'Desfijar' : 'Fijar'} conversacion</span>
+          </button>
+          <button className="session-menu-item" onClick={() => openRenameConvModal(sessionMenuState.sessionId)}>
+            <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-pen text-[0.72rem]"></i></span>
+            <span className="text-sm text-gray-700 font-medium">Cambiar nombre</span>
           </button>
           <button className="session-menu-item" onClick={() => openDeleteConvModal(sessionMenuState.sessionId)}>
             <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-trash text-[0.72rem]"></i></span>
@@ -1472,6 +1507,34 @@ export default function ChatbotPage() {
           </button>
         </div>
       )}
+
+      {/* RENAME CONVERSATION MODAL */}
+      <div className={`delete-overlay ${renamingConvId ? 'open' : ''}`} onClick={() => setRenamingConvId(null)}>
+        <div className="delete-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+          <div className="px-6 pt-6 pb-4">
+            <h3 className="delete-modal-title">Cambiar nombre</h3>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRenameConversation() }}
+              autoFocus
+              maxLength={100}
+              className="mt-3 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:border-brand-400"
+              placeholder="Nombre de la conversacion"
+            />
+          </div>
+          <div className="px-6 pb-6">
+            <div className="delete-modal-actions">
+              <button className="delete-btn delete-btn-secondary" onClick={() => setRenamingConvId(null)}>Cancelar</button>
+              <button className="delete-btn delete-btn-danger" style={{ background: '#16a34a', borderColor: '#16a34a' }} onClick={handleRenameConversation}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CONVERSATION PDF EXPORT */}
+      <ConversationPDF isOpen={!!pdfConversationData} onClose={() => setPdfConversationData(null)} data={pdfConversationData} />
 
       {/* DELETE CONVERSATION MODAL */}
       <div className={`delete-overlay ${confirmDeleteConv ? 'open' : ''}`} onClick={() => setConfirmDeleteConv(null)}>
@@ -1509,31 +1572,33 @@ export default function ChatbotPage() {
             </div>
             <span className="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
           </div>
-          <button onClick={() => navigate('/dashboard')} className="sidebar-btn" style={{ position: 'relative', zIndex: 1 }}>
-            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
-            Dashboard
-          </button>
-          <button onClick={openParcelasModal} className="sidebar-btn" style={{ position: 'relative', zIndex: 1 }}>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
-            </svg>
-            Mis parcelas
-          </button>
-          <button onClick={() => navigate('/historial')} className="sidebar-btn" style={{ position: 'relative', zIndex: 1 }}>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M7 6h10" /><path d="M7 18h10" /></svg>
-            Historial de analisis
-          </button>
-          <button onClick={newChat} className="sidebar-btn" style={{ position: 'relative', zIndex: 1 }}>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            Nueva conversacion
-          </button>
+          <nav style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <button onClick={() => navigate('/dashboard')} className="sidebar-btn">
+              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
+              Dashboard
+            </button>
+            <button onClick={openParcelasModal} className="sidebar-btn">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
+              </svg>
+              Mis parcelas
+            </button>
+            <button onClick={() => navigate('/historial')} className="sidebar-btn">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M7 6h10" /><path d="M7 18h10" /></svg>
+              Historial de analisis
+            </button>
+            <button onClick={newChat} className="sidebar-btn">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              Nueva conversacion
+            </button>
+          </nav>
           <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1" style={{ position: 'relative', zIndex: 1 }}>Recientes</p>
-          <div id="historyList" className="flex flex-col gap-1 overflow-y-auto flex-1" style={{ position: 'relative', zIndex: 1 }}>
+          <ul id="historyList" className="flex flex-col gap-1 overflow-y-auto flex-1" style={{ position: 'relative', zIndex: 1 }}>
             {sortedConversations.length === 0 ? (
               <p className="text-xs text-gray-300 px-2">Sin conversaciones aun</p>
             ) : (
               sortedConversations.map(conv => (
-                <div key={conv.id} className={`session-card rounded-xl border transition w-full cursor-pointer ${activeConvId === conv.id ? 'bg-brand-50 border-brand-200 text-brand-800 shadow-sm' : 'bg-white border-transparent text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`} onClick={() => selectConversation(conv)}>
+                <li key={conv.id} className={`session-card rounded-xl border transition w-full cursor-pointer ${activeConvId === conv.id ? 'bg-brand-50 border-brand-200 text-brand-800' : 'bg-white border-transparent text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`} onClick={() => selectConversation(conv)}>
                   <div className="flex items-start justify-between gap-2 px-3 py-2.5 pr-12">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
@@ -1550,10 +1615,10 @@ export default function ChatbotPage() {
                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-gray-500"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                     </button>
                   </div>
-                </div>
+                </li>
               ))
             )}
-          </div>
+          </ul>
           <div className="border-t border-gray-100 pt-3 mt-1" style={{ position: 'relative', zIndex: 1 }}>
             <button id="userTrigger" ref={triggerRef} onClick={toggleUserMenu} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left group" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
               <div className="trigger-ring w-9 h-9 rounded-full flex-shrink-0 p-0.5" style={{ background: 'linear-gradient(135deg,#16a34a,#4ade80)', boxShadow: '0 0 0 2px white' }}>
@@ -1584,7 +1649,10 @@ export default function ChatbotPage() {
               </div>
             </div>
             <button onClick={newChat} title="Nueva conversacion" className="p-2 rounded-xl hover:bg-brand-50 transition text-gray-400 hover:text-brand-600 active:bg-brand-100" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+              </svg>
             </button>
           </header>
 
@@ -1663,7 +1731,7 @@ export default function ChatbotPage() {
                     if (s.includes('alta') || s.includes('high') || s.includes('grave')) return { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c', dot: '#f97316' }
                     if (s.includes('media') || s.includes('moder')) return { bg: '#fffbeb', border: '#fde68a', text: '#92400e', dot: '#f59e0b' }
                     if (s.includes('baja') || s.includes('low') || s.includes('leve')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
-                    if (s.includes('sana') || s.includes('health') || s.includes('normal')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
+                    if (s.includes('sana') || s.includes('health') || s.includes('normal') || s.includes('ninguna')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
                     return { bg: '#f8fafc', border: '#e2e8f0', text: '#475569', dot: '#94a3b8' }
                   }
                   return (
@@ -1902,7 +1970,7 @@ export default function ChatbotPage() {
       <div className={`context-overlay ${showContextModal ? 'open' : ''}`} onClick={() => animateClose(contextSelModalRef, () => setShowContextModal(false))}>
         <div className="context-modal" ref={contextSelModalRef} onClick={e => e.stopPropagation()}>
           <div className="drag-handle" />
-          <div className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+          <header className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <span className="context-badge">Contexto de conversacion</span>
@@ -1915,7 +1983,7 @@ export default function ChatbotPage() {
               <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Uso</p><p className="text-sm text-gray-700 mt-1">Conectar diagnostico, contexto del lote y resultado final.</p></div>
               <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Salida</p><p className="text-sm text-gray-700 mt-1">Datos listos para analisis historico de la planta.</p></div>
             </div>
-          </div>
+          </header>
           <div className="context-modal-body px-4 sm:px-6 py-5">
             <form className="space-y-4" onSubmit={e => e.preventDefault()}>
               <div className="context-section">
@@ -1990,7 +2058,7 @@ export default function ChatbotPage() {
                     <select ref={contextStageRef} className="context-select"><option value="">Seleccionar</option><option>Vegetativo / Crecimiento</option><option>Brotacion floral</option><option>Antesis (Floracion)</option><option>Amarre o Cuajado</option><option>Madurez y Cosecha</option><option>Post-cosecha</option></select>
                   </label>
                   <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Severidad observada</span>
-                    <select ref={contextSeverityRef} className="context-select"><option value="">Seleccionar</option><option>Baja</option><option>Moderada</option><option>Alta</option><option>Critica</option></select>
+                    <select ref={contextSeverityRef} className="context-select"><option value="">Seleccionar</option><option>Ninguna</option><option>Baja</option><option>Moderada</option><option>Alta</option><option>Critica</option></select>
                   </label>
                 </div>
                 <div className="mt-4">
@@ -2039,7 +2107,7 @@ export default function ChatbotPage() {
         <div className="context-modal" ref={parcelasModalRef} onClick={e => e.stopPropagation()}>
           <div className="drag-handle" />
           {/* ── Header ── */}
-          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
+          <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
@@ -2057,7 +2125,7 @@ export default function ChatbotPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
-          </div>
+          </header>
 
           {/* ── Body ── */}
           <div className="context-modal-body px-5 sm:px-7 py-5">
@@ -2164,7 +2232,7 @@ export default function ChatbotPage() {
       <div className={`context-overlay ${showAddFarmModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))}>
         <div className="context-modal" ref={addFarmModalRef} style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
           <div className="drag-handle" />
-          <div className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
+          <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
@@ -2182,7 +2250,7 @@ export default function ChatbotPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
-          </div>
+          </header>
           <div className="context-modal-body px-5 sm:px-7 py-6">
             <div className="context-section space-y-4">
               <p className="context-section-title">Datos de la corporación agrícola</p>
@@ -2233,7 +2301,7 @@ export default function ChatbotPage() {
       <div className={`context-overlay ${showAddPlotModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))}>
         <div className="context-modal" ref={addPlotModalRef} style={{ maxWidth: '960px' }} onClick={e => e.stopPropagation()}>
           <div className="drag-handle" />
-          <div className="context-modal-header px-5 py-4 sm:px-7 sm:py-5">
+          <header className="context-modal-header px-5 py-4 sm:px-7 sm:py-5">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
@@ -2253,7 +2321,7 @@ export default function ChatbotPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
-          </div>
+          </header>
 
           {/* DOS COLUMNAS: izquierda datos | derecha GPS + mapa */}
           <div className="plot-modal-body">

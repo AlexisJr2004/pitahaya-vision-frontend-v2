@@ -117,14 +117,14 @@ export default function ForgotPasswordPage() {
 
             {/* Messages */}
             {status === 'success' && (
-              <div style={{ background:'#f0fdf4', color:G[600], padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center', border:'1px solid #bbf7d0' }}>
+              <p style={{ background:'#f0fdf4', color:G[600], padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center', border:'1px solid #bbf7d0' }}>
                 {message}
-              </div>
+              </p>
             )}
             {status === 'error' && (
-              <div style={{ background:'#fef2f2', color:'#dc2626', padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center' }}>
+              <p style={{ background:'#fef2f2', color:'#dc2626', padding:'.75rem', borderRadius:8, marginBottom:'1rem', fontSize:'.875rem', textAlign:'center' }}>
                 {message}
-              </div>
+              </p>
             )}
 
             {/* ═══ FORM ═══ */}
@@ -133,10 +133,10 @@ export default function ForgotPasswordPage() {
 
                 <fieldset style={s.fieldset}>
 
-                  <div style={{ display:'flex', alignItems:'center', gap:'.5rem', marginBottom:'0.75rem', fontSize:'0.68rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.12em', color:GRAY[400] }}>
+                  <legend style={{ display:'flex', alignItems:'center', gap:'.5rem', marginBottom:'0.75rem', fontSize:'0.68rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.12em', color:GRAY[400], width: '100%', padding: 0 }}>
                     <span>Datos de cuenta</span>
                     <div style={{ height:1, flex:1, background:GRAY[200] }} />
-                  </div>
+                  </legend>
 
                   <div>
                     <label htmlFor="email" style={s.label}>Correo electrónico</label>

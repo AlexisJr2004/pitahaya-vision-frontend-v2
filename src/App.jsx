@@ -7,11 +7,13 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 import HomePage from './pages/HomePage'
 import ChatbotPage from './pages/ChatbotPage'
 import UserPage from './pages/UserPage'
+import LoadingScreen from './components/LoadingScreen'
+import AuthTransitionLoader from './components/AuthTransitionLoader'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function ProtectedRoute({ children }) {
   const { user, initialLoading } = useAuth()
-  if (initialLoading) return null
+  if (initialLoading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace />
   return children
 }
@@ -32,6 +34,7 @@ function RoleHome() {
 export default function App() {
   return (
     <AuthProvider>
+      <AuthTransitionLoader />
       <Routes>
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/registro" element={<PublicRoute><RegisterPage /></PublicRoute>} />
