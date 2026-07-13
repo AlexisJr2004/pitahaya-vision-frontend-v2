@@ -5,6 +5,7 @@ import { getAnalyses, deleteAnalysis } from '../services/analysisService'
 import { getFarms, getPlantHistories, getConversations, getContexts, updatePlantHistory } from '../services/chatbotService'
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
 import FichaTecnicaPDF from '../components/FichaTecnicaPDF'
+import TrazabilidadPDF from '../components/TrazabilidadPDF'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function normSev(val) {
@@ -54,6 +55,45 @@ function normArr(v) {
   return Array.isArray(v) ? v : (v?.results ?? [])
 }
 
+function filterByTzPeriod(list, period, dateFrom, dateTo) {
+  if (dateFrom || dateTo) {
+    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
+    const to   = dateTo   ? new Date(`${dateTo}T23:59:59`)   : null
+    return list.filter(e => {
+      const d = new Date(e.created_at)
+      if (isNaN(d)) return false
+      if (from && d < from) return false
+      if (to   && d > to)   return false
+      return true
+    })
+  }
+  if (period === 'all') return list
+  const days = period === '3d' ? 3 : period === '5d' ? 5 : period === '7d' ? 7 : null
+  if (!days) return list
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  return list.filter(e => {
+    const d = new Date(e.created_at)
+    return !isNaN(d) && d >= cutoff
+  })
+}
+
+function buildTzEvolutionSummary(entries, ph, periodLabel) {
+  const plantId  = ph?._plantId  || '—'
+  const farmName = ph?._farmName || '—'
+  const plotName = ph?._plotName || '—'
+  const zone     = ph?._zone ? `, Zona ${ph._zone}` : ''
+  const rows = entries.map((e, i) => {
+    const date  = fmtDateShort(e.created_at)
+    const dis   = e.disease_name_predicted || '—'
+    const sev   = e.severity || '—'
+    const conf  = e.confidence_percent ?? (e.confidence ? Math.round(e.confidence * 100) : null)
+    const treat = e._ph?.history_treatment_applied || ''
+    const notes = e._ph?.history_notes || e._ph?.notes || ''
+    return `${i + 1}. ${date} — Diagnóstico: ${dis} | Severidad: ${sev}${conf != null ? ` (${conf}% confianza)` : ''}${treat ? ` | Tratamiento aplicado: ${treat}` : ''}${notes ? ` | Notas: ${notes}` : ''}`
+  }).join('\n')
+  return `Trazabilidad de la planta ${plantId} (Finca ${farmName}, Parcela ${plotName}${zone}).\nPeríodo analizado: ${periodLabel}.\nRegistros ordenados cronológicamente (${entries.length} en total):\n${rows || '- Sin registros en este período'}\n\nComo agrónomo experto, explica en detalle la evolución de esta planta a lo largo del período: ¿mejoró, empeoró o se mantuvo estable? ¿Qué patrones o correlaciones existen entre síntomas, severidad y tratamientos aplicados? ¿Qué recomendaciones concretas darías para las próximas semanas?`
+}
+
 const sevLabels = ['Baja', 'Moderada', 'Alta', 'Crítica']
 const sevColors = ['#22c55e', '#f59e0b', '#fb923c', '#ef4444']
 
@@ -83,6 +123,14 @@ export default function HistorialView({ onOpenSidebar }) {
   const [showFicha,       setShowFicha]       = useState(false)
   const [activeGroupKey,  setActiveGroupKey]  = useState('')
   const [showFichaPDF,    setShowFichaPDF]    = useState(false)
+
+  // ── trazabilidad modal: filtro temporal + IA + export ──────────────────────────
+  const [tzPeriod,        setTzPeriod]        = useState('all')
+  const [tzDateFrom,      setTzDateFrom]      = useState('')
+  const [tzDateTo,        setTzDateTo]        = useState('')
+  const [tzApplied,       setTzApplied]       = useState({ period: 'all', dateFrom: '', dateTo: '' })
+  const [tzAiText,        setTzAiText]        = useState('')
+  const [showTrazPDF,     setShowTrazPDF]     = useState(false)
 
   // ── temporal filters ─────────────────────────────────────────────────────────
   const [period,          setPeriod]          = useState('all')
@@ -214,13 +262,25 @@ export default function HistorialView({ onOpenSidebar }) {
     return (!q || txt.includes(q)) && (activeFilter === 'all' || severityBucket(a.severity) === activeFilter)
   })
 
-  function openTrazabilidad(a) { setActiveGroupKey(a._ph?._groupKey || ''); setShowTrazabilidad(true) }
+  function openTrazabilidad(a) {
+    setActiveGroupKey(a._ph?._groupKey || '')
+    setTzPeriod('all'); setTzDateFrom(''); setTzDateTo('')
+    setTzApplied({ period: 'all', dateFrom: '', dateTo: '' })
+    setTzAiText('')
+    setShowTrazabilidad(true)
+  }
   function openFicha(a)        { setActiveGroupKey(a._ph?._groupKey || ''); setShowFicha(true) }
 
   const handleApplyFilters = () => setApplied({ period, dateFrom, dateTo })
   const handleClearFilters = () => {
     setPeriod('all'); setDateFrom(''); setDateTo('')
     setApplied({ period: 'all', dateFrom: '', dateTo: '' })
+  }
+
+  const handleTzApplyFilters = () => setTzApplied({ period: tzPeriod, dateFrom: tzDateFrom, dateTo: tzDateTo })
+  const handleTzClearFilters = () => {
+    setTzPeriod('all'); setTzDateFrom(''); setTzDateTo('')
+    setTzApplied({ period: 'all', dateFrom: '', dateTo: '' })
   }
 
   const handleSaveEdit = async () => {
@@ -419,8 +479,25 @@ export default function HistorialView({ onOpenSidebar }) {
   }
 
   // ── trazabilidad ──────────────────────────────────────────────────────────────
-  const tzAnalyses = showTrazabilidad ? [...getGroupAnalyses(activeGroupKey)].reverse() : []
-  const tzPh       = tzAnalyses[0]?._ph
+  const tzAllAnalyses = showTrazabilidad ? getGroupAnalyses(activeGroupKey) : [] // ascendente (antiguo → reciente)
+  const tzPh           = tzAllAnalyses[tzAllAnalyses.length - 1]?._ph
+  const tzFilteredAsc   = filterByTzPeriod(tzAllAnalyses, tzApplied.period, tzApplied.dateFrom, tzApplied.dateTo)
+  const tzAnalyses      = [...tzFilteredAsc].reverse() // descendente para la línea de tiempo (más reciente primero)
+
+  const tzPeriodLabel = (tzApplied.dateFrom || tzApplied.dateTo)
+    ? `${tzApplied.dateFrom ? new Date(`${tzApplied.dateFrom}T00:00:00`).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} – ${tzApplied.dateTo ? new Date(`${tzApplied.dateTo}T00:00:00`).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`
+    : tzApplied.period === '3d' ? 'Últimos 3 días'
+    : tzApplied.period === '5d' ? 'Últimos 5 días'
+    : tzApplied.period === '7d' ? 'Última semana'
+    : 'Todo el historial'
+
+  const tzSevLevels        = tzFilteredAsc.map(e => severityLevel(e.severity)).filter(l => l >= 0)
+  const tzAvgSeverityIdx   = tzSevLevels.length ? Math.round(tzSevLevels.reduce((a, b) => a + b, 0) / tzSevLevels.length) : -1
+  const tzAvgSeverityLabel = tzAvgSeverityIdx >= 0 ? sevLabels[tzAvgSeverityIdx] : (tzFilteredAsc.length ? tzFilteredAsc[0].severity || '—' : '—')
+  const tzSeverityTrend    = tzSevLevels.length >= 2
+    ? (tzSevLevels[tzSevLevels.length - 1] > tzSevLevels[0] ? 'Empeorando'
+      : tzSevLevels[tzSevLevels.length - 1] < tzSevLevels[0] ? 'Mejorando' : 'Estable')
+    : (tzFilteredAsc.length === 1 ? 'Sin comparación (1 análisis)' : '—')
 
   // ── ficha ────────────────────────────────────────────────────────────────────
   const fichaAnalyses  = showFicha ? getGroupAnalyses(activeGroupKey) : []
@@ -689,7 +766,7 @@ export default function HistorialView({ onOpenSidebar }) {
       {/* ── TRAZABILIDAD MODAL ── */}
       {showTrazabilidad && (
         <div className="hist-overlay open" onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}>
-          <div ref={trazModalRef} className="hist-modal" style={{ maxWidth: 'min(100%,1024px)' }} onClick={e => e.stopPropagation()}>
+          <div ref={trazModalRef} className="hist-modal" style={{ maxWidth: 'min(100%,1180px)' }} onClick={e => e.stopPropagation()}>
             <div className="drag-handle-hist" />
             <header className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0 bg-white">
               <div>
@@ -697,7 +774,7 @@ export default function HistorialView({ onOpenSidebar }) {
                   Trazabilidad{tzPh?._plantId ? ` — Planta ${tzPh._plantId}` : ''}
                 </h2>
                 <p className="text-sm text-slate-500 mt-0.5">
-                  {tzAnalyses.length} análisis
+                  {tzAllAnalyses.length} análisis registrados
                   {tzPh?._plotName ? ` · Parcela ${tzPh._plotName}` : ''}
                   {tzPh?._farmName ? ` · Finca ${tzPh._farmName}` : ''}
                 </p>
@@ -708,9 +785,54 @@ export default function HistorialView({ onOpenSidebar }) {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </header>
-            <div className="hist-modal-body p-6 space-y-2">
+
+            {/* ── Filtro temporal scoped a esta planta (idéntico al filtro de Historial) ── */}
+            <div className="stat-card p-4 m-5 sm:m-6 mb-0">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filtrar por período</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {[
+                  { key: 'all', label: 'Todos' },
+                  { key: '3d',  label: 'Últimos 3 días' },
+                  { key: '5d',  label: 'Últimos 5 días' },
+                  { key: '7d',  label: 'Última semana' },
+                ].map(p => (
+                  <button key={p.key} className={`chip ${tzPeriod === p.key ? 'active' : ''}`}
+                    onClick={() => setTzPeriod(p.key)} style={{ border: 'none', cursor: 'pointer' }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-slate-500 font-medium">Desde</label>
+                <input type="date" value={tzDateFrom} onChange={e => setTzDateFrom(e.target.value)}
+                  className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
+                <label className="text-xs text-slate-500 font-medium">Hasta</label>
+                <input type="date" value={tzDateTo} onChange={e => setTzDateTo(e.target.value)}
+                  className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
+                <button onClick={handleTzApplyFilters}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer"
+                  style={{ border: 'none' }}>
+                  <i className="fas fa-filter text-[0.72rem]"></i>Filtrar
+                </button>
+                {(tzApplied.period !== 'all' || tzApplied.dateFrom || tzApplied.dateTo) && (
+                  <button onClick={handleTzClearFilters}
+                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer"
+                    style={{ background: 'none', border: 'none' }}>
+                    Limpiar
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-3">
+                <i className="fas fa-filter text-[0.65rem] mr-1"></i>
+                {tzFilteredAsc.length} registro{tzFilteredAsc.length !== 1 ? 's' : ''} en &ldquo;{tzPeriodLabel}&rdquo;
+              </p>
+            </div>
+
+            <div className="hist-modal-body">
+            <div className="p-5 sm:p-6 grid gap-5 lg:grid-cols-[3fr_2fr] items-start">
+              <div className="space-y-2 min-w-0">
               {tzAnalyses.length === 0 ? (
-                <div className="text-center text-slate-500 py-8">No hay registros de trazabilidad para esta planta.</div>
+                <div className="text-center text-slate-500 py-8">No hay registros de trazabilidad para esta planta en el período seleccionado.</div>
               ) : tzAnalyses.map((entry, idx) => {
                 const isLatest     = idx === 0
                 const disease      = entry.disease_name_predicted || entry._ph?.history_final_diagnosis || '—'
@@ -759,8 +881,39 @@ export default function HistorialView({ onOpenSidebar }) {
                   </div>
                 )
               })}
+              </div>
+
+              {/* ── Análisis de evolución con IA ── */}
+              <aside className="lg:sticky lg:top-0 min-w-0">
+                {tzFilteredAsc.length > 0 ? (
+                  <div className="stat-card overflow-hidden" style={{ minHeight: 420 }}>
+                    <AIAnalysisPanel
+                      analyses={tzFilteredAsc}
+                      buildSummary={() => buildTzEvolutionSummary(tzFilteredAsc, tzPh, tzPeriodLabel)}
+                      title="Evolución de la planta"
+                      buttonLabel="Analizar evolución con IA"
+                      emptyText="Gemma 3 explicará a detalle cómo evolucionó esta planta durante el período seleccionado."
+                      onAnalysis={setTzAiText}
+                      resetKey={`${activeGroupKey}|${tzApplied.period}|${tzApplied.dateFrom}|${tzApplied.dateTo}`}
+                      resultMaxHeight={320}
+                    />
+                  </div>
+                ) : (
+                  <div className="stat-card p-6 text-center text-sm text-slate-500">
+                    No hay registros en este período para analizar la evolución.
+                  </div>
+                )}
+              </aside>
             </div>
-            <footer className="p-5 border-t border-slate-200 text-center flex-shrink-0">
+            </div>
+
+            <footer className="p-5 border-t border-slate-200 flex flex-col items-center gap-2.5 flex-shrink-0">
+              <button onClick={() => setShowTrazPDF(true)}
+                disabled={tzFilteredAsc.length === 0}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ border: 'none' }}>
+                <i className="fas fa-file-export"></i> Exportar trazabilidad + análisis IA (PDF)
+              </button>
               <button onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}
                 className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
                 style={{ border: 'none' }}>
@@ -770,6 +923,20 @@ export default function HistorialView({ onOpenSidebar }) {
           </div>
         </div>
       )}
+
+      <TrazabilidadPDF
+        isOpen={showTrazPDF}
+        onClose={() => setShowTrazPDF(false)}
+        data={{
+          tzPh,
+          tzAnalyses: tzFilteredAsc,
+          periodLabel: tzPeriodLabel,
+          aiAnalysis: tzAiText,
+          avgSeverityLabel: tzAvgSeverityLabel,
+          severityTrend: tzSeverityTrend,
+          user,
+        }}
+      />
 
       {/* ── FICHA TÉCNICA MODAL ── */}
       {showFicha && (

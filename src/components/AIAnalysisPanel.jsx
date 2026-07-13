@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import formatAIText from '../utils/formatAIText'
 
 export default function AIAnalysisPanel({
@@ -10,10 +10,15 @@ export default function AIAnalysisPanel({
   showGeoStats = false,
   variant = 'full',
   className = '',
+  onAnalysis,
+  resetKey,
+  resultMaxHeight,
 }) {
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => { setAnalysis(''); setError('') }, [resetKey])
 
   const sick      = analyses.filter(a => (a.severity || '').toLowerCase() !== 'sana').length
   const pctSick   = analyses.length ? Math.round(sick / analyses.length * 100) : 0
@@ -32,7 +37,9 @@ export default function AIAnalysisPanel({
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      setAnalysis(data.analysis || 'Sin respuesta del modelo.')
+      const text = data.analysis || 'Sin respuesta del modelo.'
+      setAnalysis(text)
+      onAnalysis?.(text)
     } catch {
       setError('No se pudo conectar con el servicio de IA. Verifica que el modelo Gemma esté activo en Colab.')
     } finally {
@@ -56,7 +63,7 @@ export default function AIAnalysisPanel({
     : 'w-full py-2.5 rounded-xl text-sm font-semibold bg-brand-600 text-white hover:bg-brand-700 active:scale-95 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2'
   const emptyIconSize = isCompact ? 'w-11 h-11' : 'w-14 h-14'
   const emptyIconText = isCompact ? 'text-base' : 'text-xl'
-  const resultMaxH    = isCompact ? 200 : 180
+  const resultMaxH    = resultMaxHeight ?? (isCompact ? 200 : 180)
   const resultRadius  = isCompact ? 'rounded-xl' : 'rounded-2xl'
   const resultPad     = isCompact ? 'px-3 py-2.5 text-[0.72rem]' : 'px-4 py-3 text-[0.76rem]'
   const errorRadius   = isCompact ? 'rounded-xl' : 'rounded-2xl'
