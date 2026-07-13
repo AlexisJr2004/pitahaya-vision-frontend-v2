@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import axios from 'axios'
 import { getProfilePreferences, updateProfilePreferences } from '../services/authService'
+import SuccessModal from './SuccessModal'
 
 function animateCloseModal(modalRef, callback) {
   if (window.innerWidth >= 640 || !modalRef.current) { callback(); return }
@@ -11,12 +13,12 @@ function animateCloseModal(modalRef, callback) {
 
 export default function SettingsModal({ isOpen, onClose }) {
   const modalRef = useRef(null)
-  const [sTheme,           setSTheme]           = useState('light')
-  const [sLanguage,        setSLanguage]        = useState('es')
-  const [sNotifications,   setSNotifications]   = useState(true)
-  const [sSeverityLevel,   setSSeverityLevel]   = useState('todas')
-  const [saving,           setSaving]           = useState(false)
-  const [saveError,        setSaveError]        = useState('')
+  const [sNotifications, setSNotifications] = useState(true)
+  const [sSeverityLevel, setSSeverityLevel] = useState('todas')
+  const [saving,     setSaving]     = useState(false)
+  const [saveError,  setSaveError]  = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     if (isOpen) { loadSettings(); setSaveError('') }
@@ -63,9 +65,6 @@ export default function SettingsModal({ isOpen, onClose }) {
   const loadSettings = async () => {
     try {
       const prefs = await getProfilePreferences()
-      // theme, language, notifications_enabled, notify_severity_threshold are top-level Profile fields
-      setSTheme(prefs.theme || 'light')
-      setSLanguage(prefs.language || 'es')
       setSNotifications(prefs.notifications_enabled !== undefined ? prefs.notifications_enabled : true)
       setSSeverityLevel(prefs.notify_severity_threshold || 'todas')
     } catch {}
@@ -78,8 +77,6 @@ export default function SettingsModal({ isOpen, onClose }) {
     setSaveError('')
     try {
       await updateProfilePreferences({
-        theme:                     sTheme,
-        language:                  sLanguage,
         notifications_enabled:     sNotifications,
         notify_severity_threshold: sSeverityLevel,
       })
@@ -96,12 +93,16 @@ export default function SettingsModal({ isOpen, onClose }) {
     }
   }
 
-  const resetSettings = () => { setSTheme('light'); setSLanguage('es'); setSNotifications(true); setSSeverityLevel('todas') }
-
   const exportBackup = () => {
     const data = {}
-    const keys = ['auth_token', 'pitahayaVision.sessions.v2', 'pitahayaVision.plantHistory.v1', 'pitahayaVision.contextOptions.v1', 'pitahayaVision.settings.v1']
-    keys.forEach(key => { try { const raw = localStorage.getItem(key); if (raw) data[key] = JSON.parse(raw) } catch {} })
+    const jsonKeys = ['pitahayaVision.sessions.v2', 'pitahayaVision.plantHistory.v1', 'pitahayaVision.contextOptions.v1', 'pitahayaVision.settings.v1']
+    jsonKeys.forEach(key => { try { const raw = localStorage.getItem(key); if (raw) data[key] = JSON.parse(raw) } catch {} })
+    const token = localStorage.getItem('auth_token')
+    if (token) data.auth_token = token
+    const cooldownEnd = localStorage.getItem('login_cooldown_end')
+    if (cooldownEnd) data.login_cooldown_end = parseInt(cooldownEnd, 10)
+    const cooldownType = localStorage.getItem('login_cooldown_type')
+    if (cooldownType) data.login_cooldown_type = cooldownType
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), data }, null, 2)], { type: 'application/json' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
@@ -109,19 +110,36 @@ export default function SettingsModal({ isOpen, onClose }) {
     URL.revokeObjectURL(url)
   }
 
-  const importBackup = (e) => {
+  const importBackup = async (e) => {
     const file = e.target.files[0]; if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const parsed = JSON.parse(ev.target.result)
-        if (!parsed.data || typeof parsed.data !== 'object') throw new Error()
-        Object.entries(parsed.data).forEach(([key, value]) => { if (key !== 'auth_token') localStorage.setItem(key, JSON.stringify(value)) })
-        alert('Respaldo importado correctamente. Recarga la página.')
-      } catch { alert('Archivo inválido') }
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      if (!parsed.data || typeof parsed.data !== 'object') throw new Error()
+      const token = localStorage.getItem('auth_token')
+      const res = await axios.post('/api/v2/chatbot/import-backup/', parsed, {
+        headers: token ? { Authorization: `Token ${token}` } : {},
+        timeout: 120000,
+      })
+      if (res.data.errores?.length) {
+        alert('Errores durante la importación:\n' + res.data.errores.join('\n'))
+      }
+      setShowSuccess(true)
+    } catch (err) {
+      const msg = err?.response?.data?.error
+        || err?.response?.data?.detail
+        || (err.code === 'ECONNABORTED' ? 'La importación tardó demasiado. Reintenta con menos datos.' : null)
+        || err.message
+        || 'Archivo inválido'
+      alert('Error: ' + msg)
+    } finally {
+      setImporting(false)
     }
-    reader.readAsText(file); e.target.value = ''
+    e.target.value = ''
   }
+
+  const resetSettings = () => { setSNotifications(true); setSSeverityLevel('todas') }
 
   return (
     <>
@@ -171,7 +189,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                 <div>
                   <span className="smod-badge">Preferencias</span>
                   <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Configuraciones</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Personaliza la apariencia, idioma, notificaciones y respaldos.</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Personaliza las notificaciones y administra tus respaldos de datos.</p>
                 </div>
               </div>
               <button onClick={handleClose}
@@ -186,62 +204,6 @@ export default function SettingsModal({ isOpen, onClose }) {
 
           {/* Body */}
           <div className="smod-modal-body px-4 sm:px-6 py-5 space-y-4">
-
-            {/* Apariencia — tema */}
-            <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
-              <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-                <span>Apariencia</span>
-                <div className="h-px flex-1 bg-slate-200"/>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="font-cormorant text-xl font-semibold text-slate-900">Tema de la interfaz</p>
-                <p className="mb-4 text-sm text-slate-500 mt-0.5">Selecciona la apariencia visual de la plataforma.</p>
-                <div className="grid gap-3 grid-cols-3">
-                  {[
-                    { id: 'light',  label: 'Claro',     desc: 'Fondo blanco, modo día.',   icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> },
-                    { id: 'dark',   label: 'Oscuro',    desc: 'Modo noche elegante.',       icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> },
-                    { id: 'system', label: 'Automático', desc: 'Sigue al sistema.',         icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
-                  ].map(({ id, label, desc, icon }) => (
-                    <button key={id} onClick={() => setSTheme(id)} className={`smod-set-opt ${sTheme === id ? 'active' : ''}`}>
-                      <span className={`block mb-2 ${sTheme === id ? 'text-brand-600' : 'text-slate-400'}`}>{icon}</span>
-                      <b className="block text-sm text-slate-900">{label}</b>
-                      <p className="mt-0.5 text-xs text-slate-500">{desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            {/* Idioma */}
-            <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
-              <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-                <span>Idioma</span>
-                <div className="h-px flex-1 bg-slate-200"/>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="font-cormorant text-xl font-semibold text-slate-900">Idioma de la plataforma</p>
-                <p className="mb-4 text-sm text-slate-500 mt-0.5">Selecciona el idioma en el que quieres usar el sistema.</p>
-                <div className="grid gap-3 grid-cols-2">
-                  {[
-                    { id: 'es', label: 'Español', desc: 'Interfaz en español.', flag: '🇪🇨' },
-                    { id: 'en', label: 'English',  desc: 'Interface in English.', flag: '🇺🇸' },
-                  ].map(({ id, label, desc, flag }) => (
-                    <button key={id} onClick={() => setSLanguage(id)} className={`smod-set-opt ${sLanguage === id ? 'active' : ''}`}>
-                      <span className="block mb-2 text-2xl leading-none">{flag}</span>
-                      <b className="block text-sm text-slate-900">{label}</b>
-                      <p className="mt-0.5 text-xs text-slate-500">{desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
 
             {/* Notificaciones */}
             <section className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
@@ -323,13 +285,14 @@ export default function SettingsModal({ isOpen, onClose }) {
                     </svg>
                     Exportar respaldo
                   </button>
-                  <label className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer inline-flex items-center gap-2">
+                  <label className={`rounded-lg border ${importing ? 'border-green-300 bg-green-50 text-green-600 cursor-wait' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer'} px-4 py-2.5 text-sm font-semibold transition inline-flex items-center gap-2`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                       <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
-                    Importar respaldo
-                    <input type="file" accept=".json" className="hidden" onChange={importBackup} />
+                    {importing ? 'Importando…' : 'Importar respaldo'}
+                    {importing && <span className="inline-block w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />}
+                    <input type="file" accept=".json" className="hidden" onChange={importBackup} disabled={importing} />
                   </label>
                 </div>
               </div>
@@ -350,6 +313,13 @@ export default function SettingsModal({ isOpen, onClose }) {
           </div>
         </div>
       </div>
+
+      {showSuccess && (
+        <SuccessModal
+          message="Respaldo importado correctamente. Presiona el botón para recargar la página."
+          onReload={() => window.location.reload()}
+        />
+      )}
     </>
   )
 }
