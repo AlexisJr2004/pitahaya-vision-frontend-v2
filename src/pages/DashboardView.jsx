@@ -260,7 +260,11 @@ export default function DashboardView({ onOpenSidebar }) {
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
-    Promise.allSettled([getAnalyses(), getFarms(), getPlantHistories()])
+    Promise.allSettled([
+      getAnalyses({ page_size: 1000 }),
+      getFarms({ page_size: 1000 }),
+      getPlantHistories({ page_size: 1000 }),
+    ])
       .then(([ra, rf, rh]) => {
         setAnalyses(toArr(ra.value))
         setFarms(toArr(rf.value))

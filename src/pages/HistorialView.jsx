@@ -146,16 +146,16 @@ export default function HistorialView({ onOpenSidebar }) {
 
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const params = {}
+    const params = { page_size: 1000 }
     if (applied.period !== 'all') params.range = applied.period
     if (applied.dateFrom) params.date_from = applied.dateFrom
     if (applied.dateTo)   params.date_to   = applied.dateTo
     setLoading(true)
     Promise.all([
       getAnalyses(params),
-      getFarms(),
-      getPlantHistories(),
-      getContexts().catch(() => []),
+      getFarms({ page_size: 1000 }),
+      getPlantHistories({ page_size: 1000 }),
+      getContexts({ page_size: 1000 }).catch(() => []),
     ]).then(([rawA, rawF, rawPh, rawCtx]) => {
       const farmsArr = normArr(rawF)
       const plotsById = {}, farmByPlotId = {}

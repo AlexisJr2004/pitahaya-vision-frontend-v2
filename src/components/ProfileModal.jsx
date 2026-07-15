@@ -23,6 +23,7 @@ export default function ProfileModal({ isOpen, onClose }) {
   const [saveError, setSaveError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteInput, setDeleteInput] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
   const [deleting, setDeleting] = useState(false)
 
   const displayName = user?.full_name || user?.username || 'Usuario'
@@ -41,6 +42,7 @@ export default function ProfileModal({ isOpen, onClose }) {
       setSaveError('')
       setShowDeleteConfirm(false)
       setDeleteInput('')
+      setDeletePassword('')
     }
   }, [isOpen, user])
 
@@ -123,15 +125,16 @@ export default function ProfileModal({ isOpen, onClose }) {
 
   const handleDeleteAccount = async () => {
     if (deleteInput.trim().toLowerCase() !== 'eliminar') return
+    if (!deletePassword) return
     setDeleting(true)
     try {
-      await deleteAccount()
+      await deleteAccount(deletePassword)
       await logout()
       navigate('/login')
-    } catch {
+    } catch (err) {
       setDeleting(false)
-      setShowDeleteConfirm(false)
-      setSaveError('Error al eliminar la cuenta. Intenta de nuevo.')
+      const detail = err?.response?.data?.detail || 'Error al eliminar la cuenta. Intenta de nuevo.'
+      setSaveError(detail)
     }
   }
 
@@ -385,13 +388,23 @@ export default function ProfileModal({ isOpen, onClose }) {
                           autoFocus
                         />
                       </div>
+                      <div className="pm-input-wrap">
+                        <input
+                          type="password"
+                          className="pm-input"
+                          style={{ paddingLeft: '.75rem' }}
+                          placeholder="Tu contraseña actual"
+                          value={deletePassword}
+                          onChange={e => setDeletePassword(e.target.value)}
+                        />
+                      </div>
                       <div className="flex gap-3">
                         <button type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }} className="pm-cancel-btn text-sm py-2 px-4" style={{ minWidth: 0, padding: '.55rem .9rem' }}>
                           Cancelar
                         </button>
                         <button
                           type="button"
-                          disabled={deleteInput.trim().toLowerCase() !== 'eliminar' || deleting}
+                          disabled={deleteInput.trim().toLowerCase() !== 'eliminar' || !deletePassword || deleting}
                           onClick={handleDeleteAccount}
                           className="pm-confirm-delete-btn flex items-center gap-2">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">

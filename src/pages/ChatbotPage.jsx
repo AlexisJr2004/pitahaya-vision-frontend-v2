@@ -102,8 +102,8 @@ export default function ChatbotPage() {
   })()
   const profilePhotoUrl = user?.profile_photo_url
 
-  const loadFarms = async () => { try { const d = await getFarms(); setFarms(Array.isArray(d) ? d : d.results || []) } catch { setFarms([]) } }
-  const loadConversations = async () => { try { const d = await getConversations(); setConversations(Array.isArray(d) ? d : d.results || []) } catch { setConversations([]) } }
+  const loadFarms = async () => { try { const d = await getFarms({ page_size: 1000 }); setFarms(Array.isArray(d) ? d : d.results || []) } catch { setFarms([]) } }
+  const loadConversations = async () => { try { const d = await getConversations({ page_size: 1000 }); setConversations(Array.isArray(d) ? d : d.results || []) } catch { setConversations([]) } }
 
   useEffect(() => { loadFarms(); loadConversations() }, [])
 
@@ -632,7 +632,7 @@ export default function ChatbotPage() {
         // Fetch plant histories once — used for both deduplication check and comparison
         let allPhs = []
         try {
-          const phs = await getPlantHistories()
+          const phs = await getPlantHistories({ page_size: 1000 })
           allPhs = Array.isArray(phs) ? phs : phs.results || []
         } catch {}
 

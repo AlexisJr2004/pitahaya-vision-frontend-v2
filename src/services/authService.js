@@ -75,7 +75,7 @@ export async function changePassword(data) {
   return res.data
 }
 
-export async function deleteAccount() {
-  const res = await API.post('/account/delete/')
+export async function deleteAccount(password) {
+  const res = await API.post('/account/delete/', { password })
   return res.data
 }

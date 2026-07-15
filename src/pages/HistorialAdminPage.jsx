@@ -113,8 +113,8 @@ export default function HistorialAdminPage() {
   const load = useCallback((params) => {
     setLoading(true)
     Promise.all([
-      getAnalyses(params),
-      getPlantHistories().catch(() => []),
+      getAnalyses({ ...params, page_size: 1000 }),
+      getPlantHistories({ page_size: 1000 }).catch(() => []),
     ])
       .then(([d, ph]) => {
         setAnalyses(toArr(d))

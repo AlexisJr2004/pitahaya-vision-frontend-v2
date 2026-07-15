@@ -13,8 +13,8 @@ API.interceptors.request.use((config) => {
 })
 
 // ─── Farms ───
-export async function getFarms() {
-  const res = await API.get('/farms/')
+export async function getFarms(params = {}) {
+  const res = await API.get('/farms/', { params })
   return res.data
 }
 
@@ -50,8 +50,8 @@ export async function deletePlot(id) {
 }
 
 // ─── Conversations ───
-export async function getConversations() {
-  const res = await API.get('/conversations/')
+export async function getConversations(params = {}) {
+  const res = await API.get('/conversations/', { params })
   return res.data
 }
 
