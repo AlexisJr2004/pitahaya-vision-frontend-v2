@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { getAnalyses } from '../services/analysisService'
 import { getPlantHistories } from '../services/chatbotService'
-
-const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
+import { toArray } from '../utils/arrayUtils'
+import { computeSev } from '../utils/severity'
+import { formatDateWithTime as fmtDate, formatDateLong as fmtDateShort } from '../utils/formatters'
 
 const RANGE_OPTIONS = [
   { key: 'all',    label: 'Todos los registros', param: null    },
@@ -10,33 +11,6 @@ const RANGE_OPTIONS = [
   { key: '7days',  label: 'Últimos 7 días',        param: 'last7' },
   { key: '30days', label: 'Últimos 30 días',        param: 'month' },
 ]
-
-// El API solo devuelve 'sana' / 'enferma' en severity.
-// Derivamos 4 niveles desde disease_name_predicted + confidence como fallback.
-function computeSev(analysis) {
-  const status  = (analysis.severity || '').toLowerCase()
-  const disease = (analysis.disease_name_predicted || '').toLowerCase()
-
-  if (status === 'sana' || disease.includes('sana')) {
-    return { bucket: 'low', label: 'Baja' }
-  }
-  // Pudriciones = crítica (mayor riesgo, sistémica)
-  if (disease.includes('pudric')) {
-    return { bucket: 'critical', label: 'Crítica' }
-  }
-  // Cancro, tizón, antracnosis = alta (se propagan rápido)
-  if (disease.includes('cancro') || disease.includes('tiz') || disease.includes('antrac')) {
-    return { bucket: 'high', label: 'Alta' }
-  }
-  // Manchas = media (localizada, tratable)
-  if (disease.includes('mancha')) {
-    return { bucket: 'medium', label: 'Media' }
-  }
-  // Enferma genérica — usar confianza como indicador
-  const conf = analysis.confidence_percent ?? 0
-  if (conf >= 75) return { bucket: 'high',   label: 'Alta'   }
-  return             { bucket: 'medium', label: 'Media'  }
-}
 
 function sevClass(bucket) {
   if (bucket === 'critical') return 'ha-sev-critical'
@@ -49,16 +23,6 @@ function dotClass(bucket) {
   if (bucket === 'critical' || bucket === 'high') return 'high'
   if (bucket === 'medium') return 'medium'
   return ''
-}
-
-function fmtDate(s) {
-  if (!s) return '—'
-  return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-function fmtDateShort(s) {
-  if (!s) return '—'
-  return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // SVG Donut robusto — usa conteos exactos para evitar errores de redondeo
@@ -117,9 +81,9 @@ export default function HistorialAdminPage() {
       getPlantHistories({ page_size: 1000 }).catch(() => []),
     ])
       .then(([d, ph]) => {
-        setAnalyses(toArr(d))
+        setAnalyses(toArray(d))
         const map = {}
-        toArr(ph).forEach(p => {
+        toArray(ph).forEach(p => {
           const arId = (p.analysis_result && typeof p.analysis_result === 'object') ? p.analysis_result.id : p.analysis_result
           if (arId != null) map[String(arId)] = p.notes || ''
         })

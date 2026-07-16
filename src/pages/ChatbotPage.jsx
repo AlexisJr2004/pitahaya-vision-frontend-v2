@@ -7,6 +7,10 @@ import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, d
 import { uploadImage, updateAnalysis, getWeather } from '../services/analysisService'
 import WeatherWidget from '../components/WeatherWidget'
 import ConversationPDF from '../components/ConversationPDF'
+import WelcomeScreen from '../components/chat/WelcomeScreen'
+import SuggestedQuestions from '../components/chat/SuggestedQuestions'
+import AnalysisCard from '../components/chat/AnalysisCard'
+import { UserBubble, AssistantBubble, LoadingDots } from '../components/chat/MessageBubble'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -1659,63 +1663,12 @@ export default function ChatbotPage() {
           {/* CHAT AREA */}
           <div id="chatArea" ref={chatAreaRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-5 relative">
             {showWelcome && messages.length === 0 ? (
-              <div id="welcome" className="flex flex-col items-center justify-center min-h-full text-center px-3">
-                <svg className="absolute bottom-0 left-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
-                <svg className="absolute bottom-0 right-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none scale-x-[-1]" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
-
-                {farms.length === 0 ? (
-                  /* ── ONBOARDING: usuario nuevo sin corporaciones agrícolas ── */
-                  <div className="w-full max-w-sm animate-fade-up">
-                    <div className="brand-avatar w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4 mx-auto">
-                      <svg className="w-7 h-7 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                    </div>
-                    <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Bienvenido al sistema</p>
-                    <h2 className="font-cormorant text-3xl font-medium text-gray-900 mb-2 leading-tight">¡Hola, {displayName.split(' ')[0]}!<br /><em className="text-brand-600">Comencemos</em></h2>
-                    <p className="text-gray-400 text-sm mb-7 font-light leading-relaxed">Para analizar tu cultivo primero necesitas<br />registrar tu corporación agrícola y una parcela.</p>
-                    <div className="space-y-2.5 mb-7 text-left">
-                      <div className="onboard-step active">
-                        <div className="onboard-num active">1</div>
-                        <div><p className="text-sm font-semibold text-gray-800 leading-tight">Registra tu corporación agrícola</p><p className="text-xs text-gray-500 mt-0.5">Nombre y ubicación de tu propiedad</p></div>
-                      </div>
-                      <div className="onboard-step inactive">
-                        <div className="onboard-num inactive">2</div>
-                        <div><p className="text-sm font-semibold text-gray-700 leading-tight">Agrega una parcela</p><p className="text-xs text-gray-400 mt-0.5">Zona, hileras y coordenadas GPS</p></div>
-                      </div>
-                      <div className="onboard-step inactive">
-                        <div className="onboard-num inactive">3</div>
-                        <div><p className="text-sm font-semibold text-gray-700 leading-tight">Sube una foto y analiza</p><p className="text-xs text-gray-400 mt-0.5">Diagnóstico inteligente en segundos</p></div>
-                      </div>
-                    </div>
-                    <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="context-save-btn w-full">
-                      Registrar mi primera corporación agrícola
-                    </button>
-                  </div>
-                ) : (
-                  /* ── BIENVENIDA normal con sugerencias ── */
-                  <>
-                    <div className="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4">
-                      <svg className="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                    </div>
-                    <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Sistema de diagnostico inteligente</p>
-                    <h2 className="font-cormorant text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mb-1">Hola, ¿como puedo<br /><em className="italic text-brand-600">ayudarte hoy?</em></h2>
-                    <p className="text-gray-400 text-sm mt-2 mb-6 font-light">Escribe, habla o envia una imagen de tu cultivo.</p>
-                    <div className="chips-grid w-full max-w-md">
-                      <button onClick={() => suggest('¿Cuales son las enfermedades mas comunes de la pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                        <div className="text-lg sm:text-xl mb-1">🌵</div><div className="font-medium text-gray-800 text-xs">Enfermedades comunes</div><div className="text-gray-400 text-xs mt-0.5">Diagnostico de cultivos</div>
-                      </button>
-                      <button onClick={() => suggest('¿Como puedo mejorar el rendimiento de mi cultivo de pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                        <div className="text-lg sm:text-xl mb-1">📈</div><div className="font-medium text-gray-800 text-xs">Mejorar rendimiento</div><div className="text-gray-400 text-xs mt-0.5">Optimizacion agricola</div>
-                      </button>
-                      <button onClick={() => suggest('¿Que plagas afectan a la pitahaya y como controlarlas?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                        <div className="text-lg sm:text-xl mb-1">🐛</div><div className="font-medium text-gray-800 text-xs">Control de plagas</div><div className="text-gray-400 text-xs mt-0.5">Proteccion del cultivo</div>
-                      </button>
-                      <button onClick={() => suggest('¿Cual es el mejor sistema de riego para pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-                        <div className="text-lg sm:text-xl mb-1">💧</div><div className="font-medium text-gray-800 text-xs">Sistema de riego</div><div className="text-gray-400 text-xs mt-0.5">Gestion del agua</div>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <WelcomeScreen
+                displayName={displayName}
+                farms={farms}
+                openAddFarmModal={openAddFarmModal}
+                suggest={suggest}
+              />
             ) : (
               <div id="msgs" className="max-w-2xl mx-auto flex flex-col gap-4 sm:gap-5">
                 {messages.map((msg, i) => {
@@ -1725,141 +1678,28 @@ export default function ChatbotPage() {
                   } else if (msg.content?.startsWith('{"__type":"analysis_card"')) {
                     try { cardData = JSON.parse(msg.content) } catch {}
                   }
-                  const getSevColors = (sev) => {
-                    const s = (sev || '').toLowerCase()
-                    if (s.includes('crít') || s.includes('critic')) return { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', dot: '#ef4444' }
-                    if (s.includes('alta') || s.includes('high') || s.includes('grave')) return { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c', dot: '#f97316' }
-                    if (s.includes('media') || s.includes('moder')) return { bg: '#fffbeb', border: '#fde68a', text: '#92400e', dot: '#f59e0b' }
-                    if (s.includes('baja') || s.includes('low') || s.includes('leve')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
-                    if (s.includes('sana') || s.includes('health') || s.includes('normal') || s.includes('ninguna')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
-                    return { bg: '#f8fafc', border: '#e2e8f0', text: '#475569', dot: '#94a3b8' }
-                  }
                   return (
                   <div key={i}>
-                    {cardData ? (() => {
-                      const sev = getSevColors(cardData.severity)
-                      const confNum = Math.min(100, parseFloat(cardData.confidence) || 0)
-                      return (
-                      <div className="animate-fade-up" style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start' }}>
-                        <div className="brand-avatar" style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, boxShadow: '0 2px 8px rgba(22,163,74,.2)' }}>
-                          <svg style={{ width: 14, height: 14, fill: '#fff' }} viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0, maxWidth: 360 }}>
-                          <div style={{ border: '1px solid #eef2f7', borderRadius: 22, background: '#fff', overflow: 'hidden' }}>
-                            {/* Header */}
-                            <div style={{ borderBottom: '1px solid #eef2f7', padding: '0.62rem 1rem', display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                              <div className="brand-avatar" style={{ width: 22, height: 22, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <svg style={{ width: 11, height: 11, fill: '#fff' }} viewBox="0 0 24 24"><path d="M9.5 2A7.5 7.5 0 0 1 17 9.5c0 2.11-.87 4.02-2.28 5.39l.28.61H17l4 4-1.5 1.5-4-4v-1.5l-.61-.28A7.47 7.47 0 0 1 9.5 17 7.5 7.5 0 0 1 2 9.5 7.5 7.5 0 0 1 9.5 2m0 2A5.5 5.5 0 0 0 4 9.5 5.5 5.5 0 0 0 9.5 15 5.5 5.5 0 0 0 15 9.5 5.5 5.5 0 0 0 9.5 4z"/></svg>
-                              </div>
-                              <span className="context-section-title" style={{ lineHeight: 1 }}>Pitahaya Vision · Análisis</span>
-                              <span className="context-badge" style={{ marginLeft: 'auto' }}>Completado</span>
-                            </div>
-                            {/* Body */}
-                            <div style={{ padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                              {/* Enfermedad */}
-                              <div>
-                                <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.2rem' }}>Enfermedad detectada</p>
-                                <p style={{ fontSize: '0.92rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.4, margin: 0 }}>{cardData.disease}</p>
-                              </div>
-                              {/* Severidad + Confianza */}
-                              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                                <div>
-                                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.38rem' }}>Severidad</p>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', borderRadius: 9999, border: `1px solid ${sev.border}`, background: sev.bg, color: sev.text, padding: '0.26rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: sev.dot, flexShrink: 0 }}></span>
-                                    {cardData.severity}
-                                  </span>
-                                </div>
-                                <div style={{ flex: 1, minWidth: 120 }}>
-                                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.38rem' }}>Confianza del modelo</p>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                    <div style={{ flex: 1, height: 6, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-                                      <div style={{ height: 6, background: 'linear-gradient(90deg, #16a34a, #22c55e)', borderRadius: 999, width: `${confNum}%`, transition: 'width .7s ease' }}></div>
-                                    </div>
-                                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', minWidth: '2.6rem', textAlign: 'right' }}>{cardData.confidence}%</span>
-                                  </div>
-                                </div>
-                              </div>
-                              {/* Observación */}
-                              {cardData.recs && (
-                                <div style={{ borderTop: '1px dashed #dcfce7', paddingTop: '0.7rem' }}>
-                                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#64748b', margin: '0 0 0.25rem' }}>Observación del modelo</p>
-                                  <p style={{ fontSize: '0.81rem', color: '#475569', lineHeight: 1.55, margin: 0 }}>{cardData.recs}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      )
-                    })() : msg.role === 'user' ? (
-                      <div className="flex justify-end animate-fade-up">
-                        <div className="text-right">
-                          {msg.image_path && <img src={msg.image_path} alt="Preview" className="max-w-[75vw] sm:max-w-xs w-full rounded-2xl mb-2 block ml-auto shadow-sm" style={{ maxHeight: '200px', objectFit: 'cover' }} />}
-                          {msg.content && <div className="user-bubble text-white text-sm px-4 py-3 rounded-3xl rounded-tr-md leading-relaxed shadow-sm max-w-[80vw] sm:max-w-sm">{esc(msg.content)}</div>}
-                        </div>
-                      </div>
+                    {cardData ? (
+                      <AnalysisCard cardData={cardData} />
+                    ) : msg.role === 'user' ? (
+                      <UserBubble content={msg.content} imagePath={msg.image_path} />
                     ) : msg.content ? (
-                      <div className="flex gap-2 sm:gap-3 items-start animate-fade-up">
-                        <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="bot-text text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBotText(msg.content) }}></div>
-                          {(!String(msg.id ?? '').startsWith('stream-') || streamDoneIds.has(msg.id)) && <div className="flex gap-1 mt-2">
-                            <button onClick={() => handleCopy(msg.content, i)} className="action-btn p-1.5 rounded-lg transition text-gray-400" title="Copiar" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                              {copiedIndex === i ? (
-                                <svg className="w-3.5 h-3.5 text-brand-600" fill="none" stroke="#16a34a" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                              ) : (
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                              )}
-                            </button>
-                            <button className="action-btn p-1.5 rounded-lg transition text-gray-400" title="Util" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
-                            </button>
-                            <button className="action-btn p-1.5 rounded-lg transition text-gray-400" title="No util" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>
-                            </button>
-                          </div>}
-                        </div>
-                      </div>
+                      <AssistantBubble
+                        content={msg.content}
+                        msgId={msg.id}
+                        streamDoneIds={streamDoneIds}
+                        copiedIndex={copiedIndex}
+                        index={i}
+                        onCopy={handleCopy}
+                        onFormatBotText={formatBotText}
+                      />
                     ) : null}
                   </div>
                   )
                 })}
-                {sending && (
-                  <div className="flex gap-2 sm:gap-3 items-start animate-fade-up">
-                    <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-brand-50 border border-brand-100 px-4 py-3 rounded-3xl rounded-tl-md h-10">
-                      <div className="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot"></div>
-                      <div className="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot-2"></div>
-                      <div className="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot-3"></div>
-                    </div>
-                  </div>
-                )}
-                {!sending && suggestedQuestions.length > 0 && (
-                  <div className="flex gap-2 sm:gap-3 items-start animate-fade-up mt-1">
-                    <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="suggested-label" style={{ fontSize: '0.72rem', marginBottom: '6px', fontStyle: 'italic' }}>Preguntas sugeridas:</p>
-                      <div className="flex flex-col gap-1.5">
-                        {suggestedQuestions.map((q, qi) => (
-                          <button
-                            key={qi}
-                            onClick={() => handleSuggestionClick(q)}
-                            className="suggested-q"
-                          >
-                            {q}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {sending && <LoadingDots />}
+                <SuggestedQuestions questions={suggestedQuestions} onSelect={handleSuggestionClick} />
               </div>
             )}
           </div>

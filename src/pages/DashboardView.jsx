@@ -11,38 +11,10 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import 'leaflet.heat'
 import DashboardReportPDF from '../components/DashboardReportPDF'
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-function escapeHtml(v) {
-  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-function computeSevBucket(h) {
-  const sev     = (h.severity || '').toLowerCase()
-  const disease = (h.disease_name_predicted || '').toLowerCase()
-  if (sev === 'sana' || disease.includes('sana'))   return 0
-  if (disease.includes('pudric'))                    return 4
-  if (disease.includes('cancro') || disease.includes('tiz') || disease.includes('antrac')) return 3
-  if (disease.includes('mancha'))                    return 2
-  if (sev === 'enferma')                             return 2
-  return 0
-}
-function computeSevLabel(h) { return riskLabelFromBucket(computeSevBucket(h)) }
-function isHighRisk(h) { return computeSevBucket(h) >= 2 }
-function riskLabelFromBucket(b) { return ['Sin riesgo', 'Baja', 'Moderada', 'Alta', 'Crítica'][b] ?? '—' }
-function riskColorFromBucket(b) { return ['#16a34a', '#84cc16', '#d97706', '#ea580c', '#dc2626'][b] ?? '#94a3b8' }
-function riskBgFromBucket(b) { return ['#f0fdf4', '#f7fee7', '#fff7ed', '#fff7ed', '#fef2f2'][b] ?? '#f8fafc' }
-function formatDate(v) {
-  if (!v) return '—'
-  try { return new Intl.DateTimeFormat('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(v)) }
-  catch { return '—' }
-}
-
-// ── Map tile layers ────────────────────────────────────────────────────────────
-const TILE_LAYERS = {
-  street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors', subdomains: 'abc',  maxNativeZoom: 19, maxZoom: 21 },
-  satellite: { url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: '© Google',                 subdomains: '0123', maxNativeZoom: 20, maxZoom: 21 },
-  terrain:   { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: '© OpenTopoMap contributors',    subdomains: 'abc',  maxNativeZoom: 17, maxZoom: 21 },
-}
+import { toArray } from '../utils/arrayUtils'
+import { TILE_LAYERS } from '../constants/mapLayers'
+import { computeSeverityBucket, computeSeverityLabel, isRisk, sevLabel, sevColor, sevBg } from '../utils/severity'
+import { escapeHtml, formatDateLong as formatDate, extractConfidence } from '../utils/formatters'
 
 // ── SeverityBars ───────────────────────────────────────────────────────────────
 function SeverityBars({ data }) {
@@ -195,8 +167,8 @@ function ClimateCorrelationChart({ data }) {
 
 // ── ZoneCard ───────────────────────────────────────────────────────────────────
 function ZoneCard({ zone, idx }) {
-  const color = riskColorFromBucket(zone.maxBucket)
-  const bg = riskBgFromBucket(zone.maxBucket)
+  const color = sevColor(zone.maxBucket)
+  const bg = sevBg(zone.maxBucket)
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
@@ -205,7 +177,7 @@ function ZoneCard({ zone, idx }) {
           <h4 className="mt-1 text-sm font-semibold text-slate-900 leading-tight truncate">{zone.farmName}</h4>
         </div>
         <span className="px-2 py-1 rounded-full text-[0.62rem] font-bold uppercase tracking-[0.08em] flex-shrink-0" style={{ background: bg, color }}>
-          {riskLabelFromBucket(zone.maxBucket)}
+          {sevLabel(zone.maxBucket)}
         </span>
       </div>
       <div className="mt-3 rounded-2xl p-3 min-h-[80px] flex flex-col justify-between" style={{ background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
@@ -259,16 +231,15 @@ export default function DashboardView({ onOpenSidebar }) {
 
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
     Promise.allSettled([
       getAnalyses({ page_size: 1000 }),
       getFarms({ page_size: 1000 }),
       getPlantHistories({ page_size: 1000 }),
     ])
       .then(([ra, rf, rh]) => {
-        setAnalyses(toArr(ra.value))
-        setFarms(toArr(rf.value))
-        setHistories(toArr(rh.value))
+        setAnalyses(toArray(ra.value))
+        setFarms(toArray(rf.value))
+        setHistories(toArray(rh.value))
       })
       .finally(() => setLoading(false))
   }, [])
@@ -291,7 +262,7 @@ export default function DashboardView({ onOpenSidebar }) {
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const total = analyses.length
-    const highRisk = histories.filter(h => isHighRisk(h)).length
+    const highRisk = histories.filter(h => isRisk(h)).length
     const farmSet = new Set(histories.map(h => h.context_detail?.farm_id).filter(Boolean))
     const healthy = Math.max(total - highRisk, 0)
     return { total, highRisk, healthy, farms: farmSet.size || farms.length }
@@ -313,7 +284,7 @@ export default function DashboardView({ onOpenSidebar }) {
       if (!map.has(ctx.farm_id)) map.set(ctx.farm_id, { farmId: ctx.farm_id, farmName: ctx.farm_name || 'Sin nombre', total: 0, alerts: 0, maxBucket: 0, diseases: new Map(), lastDate: null })
       const z = map.get(ctx.farm_id)
       z.total++
-      const b = computeSevBucket(h)
+      const b = computeSeverityBucket(h)
       if (b >= 2) z.alerts++
       if (b > z.maxBucket) z.maxBucket = b
       const d = h.disease_name_predicted || ''
@@ -329,7 +300,7 @@ export default function DashboardView({ onOpenSidebar }) {
 
   // ── recent alerts ─────────────────────────────────────────────────────────────
   const recentAlerts = useMemo(() =>
-    histories.filter(h => isHighRisk(h))
+    histories.filter(h => isRisk(h))
       .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
       .slice(0, 6)
   , [histories])
@@ -337,7 +308,7 @@ export default function DashboardView({ onOpenSidebar }) {
   // ── severity distribution ─────────────────────────────────────────────────────
   const severityData = useMemo(() => {
     const buckets = [0, 0, 0, 0, 0]
-    histories.forEach(h => { buckets[computeSevBucket(h)]++ })
+    histories.forEach(h => { buckets[computeSeverityBucket(h)]++ })
     const total = histories.length || 1
     return [
       { label: 'Sin riesgo', count: buckets[0], pct: Math.round(buckets[0] / total * 100), color: '#16a34a' },
@@ -364,7 +335,7 @@ export default function DashboardView({ onOpenSidebar }) {
       currentLabel: monthLbl(thisM),
       previousLabel: monthLbl(prevM),
       total:      { cur: cur.length,                      prev: prev.length,                      delta: delta(cur.length, prev.length) },
-      risk:       { cur: cur.filter(isHighRisk).length,   prev: prev.filter(isHighRisk).length,   delta: delta(cur.filter(isHighRisk).length, prev.filter(isHighRisk).length) },
+      risk:       { cur: cur.filter(isRisk).length,   prev: prev.filter(isRisk).length,   delta: delta(cur.filter(isRisk).length, prev.filter(isRisk).length) },
       topDisease: { cur: topDis(cur),                     prev: topDis(prev) },
     }
   }, [histories])
@@ -383,7 +354,7 @@ export default function DashboardView({ onOpenSidebar }) {
         const d = new Date(h.created_at)
         return d >= w.start && d <= new Date(w.end.getFullYear(), w.end.getMonth(), w.end.getDate(), 23, 59, 59)
       })
-      const risk = inWeek.filter(isHighRisk).length
+      const risk = inWeek.filter(isRisk).length
       const total = inWeek.length
       return { label: w.label, total, risk, pctRisk: total > 0 ? Math.round((risk / total) * 100) : 0 }
     })
@@ -405,7 +376,7 @@ export default function DashboardView({ onOpenSidebar }) {
     if (!climateWeather?.days?.length) return []
     return climateWeather.days.map(d => {
       const dayHistories = histories.filter(h => (h.created_at || '').startsWith(d.date))
-      return { date: d.date, humidity: d.humidity, precip: d.precip, riskCount: dayHistories.filter(isHighRisk).length, total: dayHistories.length }
+      return { date: d.date, humidity: d.humidity, precip: d.precip, riskCount: dayHistories.filter(isRisk).length, total: dayHistories.length }
     })
   }, [climateWeather, histories])
 
@@ -495,7 +466,7 @@ export default function DashboardView({ onOpenSidebar }) {
 
     const geoAnalyses = analyses.filter(a => a.latitude != null && a.longitude != null)
     const filtered = geoAnalyses.filter(a => {
-      const b = computeSevBucket({ disease_name_predicted: a.disease_name_predicted, severity: a.severity })
+      const b = computeSeverityBucket({ disease_name_predicted: a.disease_name_predicted, severity: a.severity })
       return mapSevFilter.has(b)
     })
 
@@ -504,9 +475,9 @@ export default function DashboardView({ onOpenSidebar }) {
       : L.featureGroup()
 
     filtered.forEach(a => {
-      const bucket = computeSevBucket({ disease_name_predicted: a.disease_name_predicted, severity: a.severity })
-      const color = riskColorFromBucket(bucket)
-      const riskLbl = riskLabelFromBucket(bucket)
+      const bucket = computeSeverityBucket({ disease_name_predicted: a.disease_name_predicted, severity: a.severity })
+      const color = sevColor(bucket)
+      const riskLbl = sevLabel(bucket)
       const marker = L.circleMarker([a.latitude, a.longitude], { radius: 11, fillColor: color, color: '#fff', weight: 2.5, opacity: 1, fillOpacity: 0.9 })
       marker.bindTooltip(`<b>${escapeHtml(a.disease_name_predicted || 'Análisis')}</b> · <span style="color:${color}">${riskLbl}</span>`, { direction: 'top', offset: [0, -8] })
       marker.on('click', () => setSelectedAnalysis(a))
@@ -518,7 +489,7 @@ export default function DashboardView({ onOpenSidebar }) {
 
     if (showHeatmap && geoAnalyses.length > 0) {
       const pts = geoAnalyses.map(a => {
-        const b = computeSevBucket({ disease_name_predicted: a.disease_name_predicted, severity: a.severity })
+        const b = computeSeverityBucket({ disease_name_predicted: a.disease_name_predicted, severity: a.severity })
         return [a.latitude, a.longitude, (b + 1) / 5]
       })
       heatLayerRef.current = L.heatLayer(pts, { radius: 35, blur: 25, maxZoom: 17, gradient: { 0.3: '#22c55e', 0.6: '#f59e0b', 1.0: '#dc2626' } }).addTo(map)
@@ -707,11 +678,11 @@ export default function DashboardView({ onOpenSidebar }) {
                 {/* Side panel: shows analysis detail on click, else AI panel */}
                 <div className="min-w-0 rounded-[22px] border border-slate-200 bg-white overflow-hidden" style={{ height: 400 }}>
                   {selectedAnalysis ? (() => {
-                    const bucket = computeSevBucket({ disease_name_predicted: selectedAnalysis.disease_name_predicted, severity: selectedAnalysis.severity })
-                    const color = riskColorFromBucket(bucket)
-                    const bg = riskBgFromBucket(bucket)
-                    const riskLbl = riskLabelFromBucket(bucket)
-                    const confPct = Math.min(100, parseFloat(selectedAnalysis.confidence_percent ?? (selectedAnalysis.confidence > 1 ? selectedAnalysis.confidence : (selectedAnalysis.confidence || 0) * 100)) || 0)
+                    const bucket = computeSeverityBucket({ disease_name_predicted: selectedAnalysis.disease_name_predicted, severity: selectedAnalysis.severity })
+                    const color = sevColor(bucket)
+                    const bg = sevBg(bucket)
+                    const riskLbl = sevLabel(bucket)
+                    const confPct = extractConfidence(selectedAnalysis)
                     return (
                       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
                         {/* Panel header */}
@@ -1070,9 +1041,9 @@ export default function DashboardView({ onOpenSidebar }) {
                   : <ul className="space-y-3 list-none p-0">
                       {recentAlerts.map(h => {
                         const ctx = h.context_detail || {}
-                        const bucket = computeSevBucket(h)
-                        const color = riskColorFromBucket(bucket)
-                        const bg = riskBgFromBucket(bucket)
+                        const bucket = computeSeverityBucket(h)
+                        const color = sevColor(bucket)
+                        const bg = sevBg(bucket)
                         return (
                           <li key={h.id}>
                             <article className="flex items-start gap-3 rounded-3xl border border-slate-200 bg-white p-4 hover:border-red-200 hover:shadow-sm transition-shadow">
@@ -1084,7 +1055,7 @@ export default function DashboardView({ onOpenSidebar }) {
                                 <p className="text-xs text-slate-500 mt-0.5 truncate">{ctx.farm_name || '—'}{ctx.plot_name ? ` · ${ctx.plot_name}` : ''}</p>
                                 <p className="text-xs text-slate-400 mt-0.5">{formatDate(h.created_at)}</p>
                               </div>
-                              <span className="sev-pill flex-shrink-0" style={{ background: riskBgFromBucket(bucket), color }}>{computeSevLabel(h)}</span>
+                              <span className="sev-pill flex-shrink-0" style={{ background: sevBg(bucket), color }}>{computeSeverityLabel(h)}</span>
                             </article>
                           </li>
                         )

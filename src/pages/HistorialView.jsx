@@ -6,53 +6,17 @@ import { getFarms, getPlantHistories, getConversations, getContexts, updatePlant
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
 import FichaTecnicaPDF from '../components/FichaTecnicaPDF'
 import TrazabilidadPDF from '../components/TrazabilidadPDF'
+import { toArray } from '../utils/arrayUtils'
+import { severityBucket, severityLevel, normalizeSeverity, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../utils/severity'
+import { formatDateMediumWithTime as fmtDate, formatDateLongWithTime as fmtDateShort } from '../utils/formatters'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function normSev(val) {
-  return String(val || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-}
-
 function severityClass(val) {
-  const s = normSev(val)
+  const s = normalizeSeverity(val)
   if (s.includes('crit') || s.includes('extrem') || s.includes('muy alta') || s.includes('muy grav')) return 'severity-critical'
   if (s.includes('alta') || s.includes('high') || s.includes('grav') || s.includes('sever') || s.includes('seria')) return 'severity-high'
   if (s.includes('moder') || s.includes('media') || s.includes('inter') || s.includes('parcial')) return 'severity-medium'
   return 'severity-low'
-}
-
-function severityBucket(val) {
-  const s = normSev(val)
-  if (s.includes('crit') || s.includes('extrem') || s.includes('muy alta') || s.includes('muy grav')) return 'critical'
-  if (s.includes('alta') || s.includes('high') || s.includes('grav') || s.includes('sever') || s.includes('seria')) return 'high'
-  if (s.includes('moder') || s.includes('media') || s.includes('inter') || s.includes('parcial')) return 'medium'
-  return 'low'
-}
-
-function severityLevel(val) {
-  const s = normSev(val)
-  if (s.includes('crit') || s.includes('extrem') || s.includes('muy alta') || s.includes('muy grav')) return 3
-  if (s.includes('alta') || s.includes('high') || s.includes('grav') || s.includes('sever') || s.includes('seria')) return 2
-  if (s.includes('moder') || s.includes('media') || s.includes('med') || s.includes('inter') || s.includes('parcial')) return 1
-  if (s.includes('baja') || s.includes('leve') || s.includes('low') || s.includes('liger') || s.includes('inici') || s.includes('min')) return 0
-  return -1
-}
-
-function fmtDate(v) {
-  if (!v) return 'Sin fecha'
-  const d = new Date(v)
-  if (isNaN(d)) return 'Sin fecha'
-  return new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short' }).format(d)
-}
-
-function fmtDateShort(v) {
-  if (!v) return 'Sin fecha'
-  const d = new Date(v)
-  if (isNaN(d)) return 'Sin fecha'
-  return new Intl.DateTimeFormat('es-EC', { dateStyle: 'long', timeStyle: 'short' }).format(d)
-}
-
-function normArr(v) {
-  return Array.isArray(v) ? v : (v?.results ?? [])
 }
 
 function filterByTzPeriod(list, period, dateFrom, dateTo) {
@@ -93,9 +57,6 @@ function buildTzEvolutionSummary(entries, ph, periodLabel) {
   }).join('\n')
   return `Trazabilidad de la planta ${plantId} (Finca ${farmName}, Parcela ${plotName}${zone}).\nPeríodo analizado: ${periodLabel}.\nRegistros ordenados cronológicamente (${entries.length} en total):\n${rows || '- Sin registros en este período'}\n\nComo agrónomo experto, explica en detalle la evolución de esta planta a lo largo del período: ¿mejoró, empeoró o se mantuvo estable? ¿Qué patrones o correlaciones existen entre síntomas, severidad y tratamientos aplicados? ¿Qué recomendaciones concretas darías para las próximas semanas?`
 }
-
-const sevLabels = ['Baja', 'Moderada', 'Alta', 'Crítica']
-const sevColors = ['#22c55e', '#f59e0b', '#fb923c', '#ef4444']
 
 const filters = [
   { key: 'all',      label: 'Todos' },
@@ -157,7 +118,7 @@ export default function HistorialView({ onOpenSidebar }) {
       getPlantHistories({ page_size: 1000 }),
       getContexts({ page_size: 1000 }).catch(() => []),
     ]).then(([rawA, rawF, rawPh, rawCtx]) => {
-      const farmsArr = normArr(rawF)
+      const farmsArr = toArray(rawF)
       const plotsById = {}, farmByPlotId = {}
       farmsArr.forEach(farm => {
         ;(farm.plots || []).forEach(plot => {
@@ -167,11 +128,11 @@ export default function HistorialView({ onOpenSidebar }) {
         })
       })
       const ctxById = {}
-      normArr(rawCtx).forEach(ctx => {
+      toArray(rawCtx).forEach(ctx => {
         const cid = String(ctx.id || ctx.id_context || '')
         if (cid) ctxById[cid] = ctx
       })
-      const phArr = normArr(rawPh)
+      const phArr = toArray(rawPh)
       const enrichedPhArr = phArr.map(ph => {
         let ctx = null
         if (ph.context && typeof ph.context === 'object') {
@@ -222,7 +183,7 @@ export default function HistorialView({ onOpenSidebar }) {
         const arId = (ph.analysis_result && typeof ph.analysis_result === 'object') ? ph.analysis_result.id : ph.analysis_result
         if (arId != null) phByAnId[String(arId)] = ph
       })
-      const rawAnalyses = normArr(rawA)
+      const rawAnalyses = toArray(rawA)
       const seenKeys = new Set()
       const deduped = rawAnalyses.filter(x => {
         if (!x.image_path) return true
@@ -406,7 +367,7 @@ export default function HistorialView({ onOpenSidebar }) {
               if (!convId && ph?._ctx) {
                 try {
                   const convs = await getConversations()
-                  const list  = normArr(convs)
+                  const list  = toArray(convs)
                   const cid   = ph._ctx.id || ph._ctx.id_context
                   const match = list.find(c => c.context && String(c.context) === String(cid))
                   if (match) convId = match.id

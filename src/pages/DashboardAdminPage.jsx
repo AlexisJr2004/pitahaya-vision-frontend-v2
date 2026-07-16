@@ -11,58 +11,11 @@ import { getAnalyses } from '../services/analysisService'
 import { getCustomers } from '../services/adminService'
 import AIAnalysisPanel from '../components/AIAnalysisPanel'
 import DashboardReportPDF from '../components/DashboardReportPDF'
-
-const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
-
-function escapeHtml(v) {
-  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-const TILE_LAYERS = {
-  street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',  attribution: '© OpenStreetMap contributors', subdomains: 'abc',  maxNativeZoom: 19, maxZoom: 21 },
-  satellite: { url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: '© Google',                  subdomains: '0123', maxNativeZoom: 20, maxZoom: 21 },
-  terrain:   { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',    attribution: '© OpenTopoMap contributors',  subdomains: 'abc',  maxNativeZoom: 17, maxZoom: 21 },
-}
-
-const SEV_COLORS = { low: '#22c55e', medium: '#eab308', high: '#f97316', critical: '#ef4444' }
-const SEV_BG     = { low: '#ecfdf5', medium: '#fefce8', high: '#fff7ed', critical: '#fef2f2' }
-const SEV_LABELS = { low: 'Saludable', medium: 'Media', high: 'Alta', critical: 'Crítica' }
-
-/* ── Severity helpers (same logic as HistorialAdminPage) ── */
-function computeSev(a) {
-  const status  = (a.severity || '').toLowerCase()
-  const disease = (a.disease_name_predicted || '').toLowerCase()
-  if (status === 'sana' || disease.includes('sana'))  return { bucket: 'low',      label: 'Baja'    }
-  if (disease.includes('pudric'))                      return { bucket: 'critical',  label: 'Crítica' }
-  if (disease.includes('cancro') || disease.includes('tiz') || disease.includes('antrac'))
-                                                       return { bucket: 'high',     label: 'Alta'    }
-  if (disease.includes('mancha'))                      return { bucket: 'medium',   label: 'Media'   }
-  const conf = a.confidence_percent ?? 0
-  if (conf >= 75)  return { bucket: 'high',   label: 'Alta'   }
-                   return { bucket: 'medium', label: 'Media'  }
-}
-
-function isRisk(a) {
-  const b = computeSev(a).bucket
-  return b === 'critical' || b === 'high' || b === 'medium'
-}
-
-function sevPillClass(bucket) {
-  if (bucket === 'critical') return 'da-sev-critical'
-  if (bucket === 'high')     return 'da-sev-high'
-  if (bucket === 'medium')   return 'da-sev-medium'
-  return 'da-sev-low'
-}
-
-function fmtShort(s) {
-  if (!s) return '—'
-  return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short' })
-}
-
-function fmtFull(s) {
-  if (!s) return '—'
-  return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+import { toArray } from '../utils/arrayUtils'
+import { TILE_LAYERS } from '../constants/mapLayers'
+import { SEV_COLORS, SEV_BG, SEV_LABELS } from '../constants/severity'
+import { computeSev, isRisk, sevPillClassDALegacy as sevPillClass, riskColor, riskLabel, riskPillBg } from '../utils/severity'
+import { escapeHtml, formatDateShort as fmtShort, formatDateWithTime as fmtFull, extractConfidence } from '../utils/formatters'
 
 /* ── SVG Donut (sanas vs en riesgo) ── */
 function HealthDonut({ sanas, sick, size = 200, thickness = 36 }) {
@@ -340,8 +293,8 @@ export default function DashboardAdminPage() {
       getCustomers({ page_size: 500 }),
     ])
       .then(([ra, rc]) => {
-        setAnalyses(toArr(ra.value))
-        setCustomers(toArr(rc.value))
+        setAnalyses(toArray(ra.value))
+        setCustomers(toArray(rc.value))
       })
       .finally(() => setLoading(false))
   }, [])
@@ -493,14 +446,13 @@ export default function DashboardAdminPage() {
 
   /* ── 3. Confianza promedio del modelo en el tiempo ── */
   const confidenceTrend = useMemo(() => {
-    const confOf = a => a.confidence_percent ?? (a.confidence > 1 ? a.confidence : (a.confidence || 0) * 100)
     return lastWeeks
       .map(w => {
         const inWeek = analyses.filter(a => {
           const d = new Date(a.created_at)
           return d >= w.start && d <= w.end
         })
-        const confs = inWeek.map(confOf).filter(v => v != null && !Number.isNaN(v))
+        const confs = inWeek.map(extractConfidence).filter(v => v != null && !Number.isNaN(v))
         return { label: w.label, value: confs.length ? Math.round(confs.reduce((s, v) => s + v, 0) / confs.length) : null }
       })
       .filter(w => w.value != null)
@@ -540,25 +492,6 @@ export default function DashboardAdminPage() {
       return { label: w.label, value: count }
     })
   }, [analyses, lastWeeks])
-
-  function riskColor(rate) {
-    if (rate >= 0.7) return '#dc2626'
-    if (rate >= 0.4) return '#ea580c'
-    if (rate >= 0.15) return '#d97706'
-    return '#16a34a'
-  }
-  function riskLabel(rate) {
-    if (rate >= 0.7) return 'Crítica'
-    if (rate >= 0.4) return 'Alta'
-    if (rate >= 0.15) return 'Media'
-    return 'Baja'
-  }
-  function riskPillBg(rate) {
-    if (rate >= 0.7) return '#fef2f2'
-    if (rate >= 0.4) return '#fff7ed'
-    if (rate >= 0.15) return '#fefce8'
-    return '#ecfdf5'
-  }
 
   return (
     <>
@@ -854,7 +787,7 @@ export default function DashboardAdminPage() {
                 const sev     = computeSev(selectedAnalysis)
                 const color   = SEV_COLORS[sev.bucket] || '#94a3b8'
                 const bg      = SEV_BG[sev.bucket]    || '#f8fafc'
-                const confPct = Math.min(100, parseFloat(selectedAnalysis.confidence_percent ?? (selectedAnalysis.confidence > 1 ? selectedAnalysis.confidence : (selectedAnalysis.confidence || 0) * 100)) || 0)
+                const confPct = extractConfidence(selectedAnalysis)
                 return (
                   <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
