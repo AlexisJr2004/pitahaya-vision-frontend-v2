@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getWeather } from '../services/analysisService'
 import ProfileModal from '../components/ProfileModal'
+import AppLogo from '../components/AppLogo'
 import SettingsModal from '../components/SettingsModal'
 import WeatherWidget from '../components/WeatherWidget'
 import DashboardView from './dashboard/DashboardView'
@@ -170,7 +171,7 @@ export default function UserPage() {
 
           <div className="flex items-center gap-2 mb-1" style={{ position: 'relative', zIndex: 1 }}>
             <div className="brand-avatar-h w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+              <AppLogo className="w-4 h-4 fill-white" />
             </div>
             <span className="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
           </div>

@@ -1,4 +1,4 @@
-const LOGO_PATH = 'M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z'
+import AppLogo from './AppLogo'
 
 export default function LoadingScreen() {
   return (
@@ -21,9 +21,7 @@ export default function LoadingScreen() {
           border: '3px solid transparent', borderTopColor: '#16a34a', borderRightColor: '#16a34a',
           animation: 'ls-cw 0.9s linear infinite',
         }} />
-        <svg style={{ position: 'relative', zIndex: 2, width: 40, height: 40, fill: '#16a34a' }} viewBox="0 0 24 24">
-          <path d={LOGO_PATH} />
-        </svg>
+        <AppLogo size={40} style={{ position: 'relative', zIndex: 2, fill: '#16a34a' }} />
       </div>
     </div>
   )

@@ -1,3 +1,5 @@
+import AppLogo from '../../../components/AppLogo'
+
 function esc(text) {
   const div = document.createElement('div')
   div.textContent = text || ''
@@ -21,7 +23,7 @@ export function AssistantBubble({ content, msgId, streamDoneIds, copiedIndex, in
   return content ? (
     <div className="flex gap-2 sm:gap-3 items-start animate-fade-up">
       <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+        <AppLogo className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="bot-text text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: onFormatBotText(content) }}></div>
@@ -51,7 +53,7 @@ export function LoadingDots() {
   return (
     <div className="flex gap-2 sm:gap-3 items-start animate-fade-up">
       <div className="brand-avatar w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+        <AppLogo className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" />
       </div>
       <div className="flex items-center gap-1.5 bg-brand-50 border border-brand-100 px-4 py-3 rounded-3xl rounded-tl-md h-10">
         <div className="w-[7px] h-[7px] rounded-full bg-brand-500 animate-dot"></div>

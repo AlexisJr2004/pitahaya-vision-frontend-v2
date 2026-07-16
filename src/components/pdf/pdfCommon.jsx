@@ -2,6 +2,8 @@ export const B  = { 50:'#f0fdf4',100:'#dcfce7',200:'#bbf7d0',300:'#86efac',400:'
 export const SL = { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#cbd5e1',400:'#94a3b8',500:'#64748b',600:'#475569',700:'#334155',800:'#1e293b',900:'#0f172a' }
 export const R  = { red:'#dc2626',redL:'#fef2f2',redB:'#fecaca', ora:'#ea580c',oraL:'#fff7ed',oraB:'#fed7aa', amb:'#d97706',ambL:'#fffbeb',ambB:'#fde68a', blu:'#2563eb',bluL:'#eff6ff',bluB:'#bfdbfe', pur:'#7c3aed',purL:'#f5f3ff',purB:'#ddd6fe', tea:'#0d9488',teaL:'#f0fdfa',teaB:'#99f6e4' }
 
+import { PITAHAYA_PATH } from '../AppLogo'
+
 export const SERIF = "'Cormorant Garamond', Georgia, serif"
 export const SANS  = "Inter, -apple-system, 'Segoe UI', Arial, sans-serif"
 export const MONO  = "'IBM Plex Mono', 'Courier New', monospace"
@@ -22,7 +24,7 @@ export function sevText(v)   { const c=sevColor(v); return c===R.red?'#7f1d1d':c
 export function BrandLogo({ size=20, color='#fff' }) {
   return (
     <svg viewBox="0 0 24 24" style={{ width:size, height:size, fill:color, display:'block', flexShrink:0 }}>
-      <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z"/>
+      <path d={PITAHAYA_PATH}/>
     </svg>
   )
 }

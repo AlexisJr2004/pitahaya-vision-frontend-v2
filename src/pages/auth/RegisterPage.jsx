@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { validateRegistration } from '../../utils/validators'
 import { register as apiRegister, checkAvailability } from '../../services/authService'
+import AppLogo from '../../components/AppLogo'
 
 const UNIQUE_FIELDS = ['username', 'email', 'dni', 'phone']
 const DUPLICATE_MESSAGES = {
@@ -42,7 +43,7 @@ const icons = {
   plus:   'M12 4v16m8-8H4',
 }
 
-const LOGO_PATH = 'M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z'
+
 
 // ─── Icon helper ─────────────────────────────────────────────────
 const Icon = ({ d, size = 14, style = {} }) => (
@@ -301,7 +302,7 @@ export default function RegisterPage() {
             <header style={s.brandRow}>
               <div style={s.brandLeft}>
                 <figure style={s.brandLogo}>
-                  <svg style={{ width:20, height:20, fill:'#fff' }} viewBox="0 0 24 24"><path d={LOGO_PATH} /></svg>
+                  <AppLogo size={20} style={{ fill:'#fff' }} />
                 </figure>
                 <span style={s.brandName}>Pitahaya Vision</span>
               </div>
@@ -416,7 +417,7 @@ export default function RegisterPage() {
             </p>
             <footer style={{ display:'flex', alignItems:'center', gap:'.75rem', paddingLeft:'.5rem' }}>
               <figure style={{ width:36, height:36, borderRadius:'50%', background:G[600], display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, border:'1px solid rgba(255,255,255,0.3)' }}>
-                <svg style={{ width:16, height:16, fill:'#fff' }} viewBox="0 0 24 24"><path d={LOGO_PATH} /></svg>
+                <AppLogo size={16} style={{ fill:'#fff' }} />
               </figure>
               <figcaption>
                 <strong style={{ display:'block', fontSize:'.875rem', fontWeight:600, color:'#fff', lineHeight:1.2 }}>Plataforma Pitahaya Vision</strong>

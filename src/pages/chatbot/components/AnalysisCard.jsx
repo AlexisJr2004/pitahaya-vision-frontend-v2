@@ -1,3 +1,5 @@
+import AppLogo from '../../../components/AppLogo'
+
 const getSevColors = (sev) => {
   const s = (sev || '').toLowerCase()
   if (s.includes('crít') || s.includes('critic')) return { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', dot: '#ef4444' }
@@ -15,7 +17,7 @@ export default function AnalysisCard({ cardData }) {
   return (
     <div className="animate-fade-up" style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start' }}>
       <div className="brand-avatar" style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, boxShadow: '0 2px 8px rgba(22,163,74,.2)' }}>
-        <svg style={{ width: 14, height: 14, fill: '#fff' }} viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+        <AppLogo size={14} style={{ fill: '#fff' }} />
       </div>
       <div style={{ flex: 1, minWidth: 0, maxWidth: 360 }}>
         <div style={{ border: '1px solid #eef2f7', borderRadius: 22, background: '#fff', overflow: 'hidden' }}>

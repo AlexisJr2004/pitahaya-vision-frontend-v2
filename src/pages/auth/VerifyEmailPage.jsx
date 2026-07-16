@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { confirmEmail } from '../../services/authService'
+import AppLogo from '../../components/AppLogo'
 
 const G = { 800: '#15803d', 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }
 const GRAY = { 900: '#111827', 700: '#374151', 500: '#6b7280', 400: '#9ca3af', 200: '#e5e7eb', 100: '#F2F4FB' }
-const LOGO_PATH = 'M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z'
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
@@ -65,7 +65,7 @@ export default function VerifyEmailPage() {
             {/* Brand */}
             <header style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'.75rem', marginBottom:'1.5rem' }}>
               <figure style={{ width:40, height:40, borderRadius:8, background:G[600], display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 6px -1px rgba(22,163,74,0.2)', flexShrink:0 }}>
-                <svg style={{ width:20, height:20, fill:'#fff' }} viewBox="0 0 24 24"><path d={LOGO_PATH} /></svg>
+                <AppLogo size={20} style={{ fill:'#fff' }} />
               </figure>
               <span style={{ fontFamily:'"Cormorant Garamond",serif', fontSize:'1.5rem', fontWeight:600, color:GRAY[900] }}>
                 Pitahaya Vision
