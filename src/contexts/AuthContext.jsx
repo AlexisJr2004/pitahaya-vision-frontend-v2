@@ -26,8 +26,10 @@ export function AuthProvider({ children }) {
       try {
         const profile = await getProfile()
         setUser(profile)
-      } catch {
-        localStorage.removeItem('auth_token')
+      } catch (err) {
+        if (err?.response?.status === 401) {
+          localStorage.removeItem('auth_token')
+        }
       } finally {
         setInitialLoading(false)
       }

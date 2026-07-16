@@ -1,16 +1,6 @@
-import axios from 'axios'
+import createHttpClient from './httpClient'
 
-const API = axios.create({
-  baseURL: '/api/v2/analysis',
-})
-
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
-  if (token) {
-    config.headers.Authorization = `Token ${token}`
-  }
-  return config
-})
+const API = createHttpClient('/api/v2/analysis')
 
 export async function uploadImage(formData) {
   const res = await API.post('/', formData, {
