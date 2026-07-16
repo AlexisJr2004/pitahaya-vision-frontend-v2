@@ -7,9 +7,14 @@ import AIAnalysisPanel from '../../components/AIAnalysisPanel'
 import FichaTecnicaPDF from '../../components/pdf/FichaTecnicaPDF'
 import TrazabilidadPDF from '../../components/pdf/TrazabilidadPDF'
 import { toArray } from '../../utils/arrayUtils'
+import { API_PAGE_SIZE } from '../../services/apiConfig'
 import { severityBucket, severityLevel, normalizeSeverity, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../../utils/severity'
 import { formatDateMediumWithTime as fmtDate, formatDateLongWithTime as fmtDateShort } from '../../utils/formatters'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
+import AppLogo from '../../components/AppLogo'
+import AnalysisImage from '../../components/AnalysisImage'
+import FloatingChatButton from '../../components/FloatingChatButton'
+import Footer from '../../components/Footer'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function severityClass(val) {
@@ -108,16 +113,16 @@ export default function HistorialView({ onOpenSidebar }) {
 
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const params = { page_size: 1000 }
+    const params = { page_size: API_PAGE_SIZE }
     if (applied.period !== 'all') params.range = applied.period
     if (applied.dateFrom) params.date_from = applied.dateFrom
     if (applied.dateTo)   params.date_to   = applied.dateTo
     setLoading(true)
     Promise.all([
       getAnalyses(params),
-      getFarms({ page_size: 1000 }),
-      getPlantHistories({ page_size: 1000 }),
-      getContexts({ page_size: 1000 }).catch(() => []),
+      getFarms({ page_size: API_PAGE_SIZE }),
+      getPlantHistories({ page_size: API_PAGE_SIZE }),
+      getContexts({ page_size: API_PAGE_SIZE }).catch(() => []),
     ]).then(([rawA, rawF, rawPh, rawCtx]) => {
       const farmsArr = toArray(rawF)
       const plotsById = {}, farmByPlotId = {}
@@ -432,7 +437,7 @@ export default function HistorialView({ onOpenSidebar }) {
             {conf != null && <span className="px-2.5 py-1 rounded-full bg-slate-100 font-semibold">Confianza: {conf}%</span>}
           </div>
           <div className="flex items-center gap-2">
-            {a.image_url && <img src={a.image_url} alt="" className="w-10 h-10 rounded-lg border border-slate-200 object-cover" />}
+            {a.image_url && <AnalysisImage src={a.image_url} className="w-10 h-10 rounded-lg" />}
             <p className="text-xs text-slate-400">Actualizado {a.created_at ? fmtDate(a.created_at) : '—'}</p>
           </div>
         </div>
@@ -536,30 +541,7 @@ export default function HistorialView({ onOpenSidebar }) {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
 
-        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <button id="histMenuBtn" onClick={onOpenSidebar}
-              className="p-2 -ml-1 rounded-xl hover:bg-green-50 transition text-gray-500"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
-            <div className="brand-avatar-h w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-            </div>
-            <div>
-              <h1 className="font-cormorant text-base font-semibold text-gray-900 leading-none">Historial de análisis</h1>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-green-600 leading-none mt-0.5">Pitahaya Vision</p>
-            </div>
-          </div>
-          <button onClick={() => navigate('/chatbot')}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
-            style={{ background: 'none', border: '1px solid #e2e8f0', cursor: 'pointer' }}>
-            <i className="fas fa-comments text-[0.78rem]"></i>
-            <span className="hidden sm:inline">Ir al chat</span>
-          </button>
-        </header>
+        <FloatingChatButton />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-7">
           <div className="space-y-6 pb-8">
@@ -720,9 +702,7 @@ export default function HistorialView({ onOpenSidebar }) {
           </div>
         </div>
 
-        <footer className="hidden md:flex flex-shrink-0 items-center justify-center px-6 py-3 border-t border-gray-100 text-sm text-slate-400">
-          Pitahaya Vision © 2026. Todos los derechos reservados.
-        </footer>
+        <Footer />
       </main>
 
       {/* ── TRAZABILIDAD MODAL ── */}
@@ -822,10 +802,7 @@ export default function HistorialView({ onOpenSidebar }) {
                           <p className="text-base font-semibold text-slate-900">{disease}</p>
                           <p className="text-sm text-slate-500 mt-0.5">{fmtDateShort(entry.created_at)}</p>
                         </div>
-                        {entry.image_url
-                          ? <img src={entry.image_url} alt="" className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border border-slate-200 object-cover flex-shrink-0" />
-                          : <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0"><i className="fas fa-image text-xl"></i></div>
-                        }
+                        <AnalysisImage src={entry.image_url} className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0" />
                       </div>
                       <div className="grid gap-1.5 sm:grid-cols-2 text-sm mb-3">
                         <p><span className="font-semibold text-slate-800">Ubicación:</span> <span className="text-slate-700">{location}</span></p>
@@ -996,7 +973,7 @@ export default function HistorialView({ onOpenSidebar }) {
                     {fichaAnalyses.filter(e => e.image_url).length > 0
                       ? [...fichaAnalyses].reverse().filter(e => e.image_url).map((e, i) => (
                           <div key={i} className="flex-shrink-0 w-48">
-                            <img src={e.image_url} alt="" className="w-48 h-32 rounded-xl border border-slate-200 object-cover" />
+                            <AnalysisImage src={e.image_url} className="w-48 h-32" />
                             <div className="flex items-center gap-2 mt-1.5">
                               <span className={`severity-pill ${severityClass(e.severity)}`}>{e.severity || '—'}</span>
                               <span className="text-xs text-slate-500">{fmtDate(e.created_at)}</span>

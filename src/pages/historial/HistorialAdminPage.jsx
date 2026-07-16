@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { getAnalyses } from '../../services/analysisService'
 import { getPlantHistories } from '../../services/chatbotService'
 import { toArray } from '../../utils/arrayUtils'
+import { API_PAGE_SIZE } from '../../services/apiConfig'
+import AnalysisImage from '../../components/AnalysisImage'
 import { computeSev } from '../../utils/severity'
 import { formatDateWithTime as fmtDate, formatDateLong as fmtDateShort } from '../../utils/formatters'
 
@@ -77,8 +79,8 @@ export default function HistorialAdminPage() {
   const load = useCallback((params) => {
     setLoading(true)
     Promise.all([
-      getAnalyses({ ...params, page_size: 1000 }),
-      getPlantHistories({ page_size: 1000 }).catch(() => []),
+      getAnalyses({ ...params, page_size: API_PAGE_SIZE }),
+      getPlantHistories({ page_size: API_PAGE_SIZE }).catch(() => []),
     ])
       .then(([d, ph]) => {
         setAnalyses(toArray(d))
@@ -283,12 +285,7 @@ export default function HistorialAdminPage() {
               {/* Imagen */}
               <div className="ha-detail-section">
                 <p className="ha-detail-section-title mb-3">Imagen del análisis</p>
-                {detail.image_url
-                  ? <img src={detail.image_url} alt="análisis" className="ha-detail-img" />
-                  : <div className="w-full h-40 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-                      <i className="fas fa-leaf text-5xl"></i>
-                    </div>
-                }
+                <AnalysisImage src={detail.image_url} className="w-full h-40 rounded-2xl" />
               </div>
 
               {/* Usuario */}
@@ -529,12 +526,7 @@ export default function HistorialAdminPage() {
                     ) : analyses.map(a => (
                       <tr key={a.id} className="ha-tr transition" onClick={() => openDetail(a)}>
                         <td className="px-4 py-3">
-                          {a.image_url
-                            ? <img src={a.image_url} alt="" className="w-14 h-14 object-cover rounded-xl border border-slate-200" />
-                            : <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                                <i className="fas fa-leaf text-lg"></i>
-                              </div>
-                          }
+                          <AnalysisImage src={a.image_url} className="w-14 h-14" />
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-sm font-medium text-slate-800">{a.owner_name || '—'}</p>

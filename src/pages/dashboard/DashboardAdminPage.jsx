@@ -12,6 +12,8 @@ import { getCustomers } from '../../services/adminService'
 import AIAnalysisPanel from '../../components/AIAnalysisPanel'
 import DashboardReportPDF from '../../components/pdf/DashboardReportPDF'
 import { toArray } from '../../utils/arrayUtils'
+import AnalysisImage from '../../components/AnalysisImage'
+import { API_PAGE_SIZE } from '../../services/apiConfig'
 import { TILE_LAYERS } from '../../constants/mapLayers'
 import { SEV_COLORS, SEV_BG, SEV_LABELS } from '../../constants/severity'
 import { computeSev, isRisk, sevPillClassDALegacy as sevPillClass, riskColor, riskLabel, riskPillBg } from '../../utils/severity'
@@ -289,8 +291,8 @@ export default function DashboardAdminPage() {
 
   useEffect(() => {
     Promise.allSettled([
-      getAnalyses({ page_size: 500 }),
-      getCustomers({ page_size: 500 }),
+      getAnalyses({ page_size: API_PAGE_SIZE }),
+      getCustomers({ page_size: API_PAGE_SIZE }),
     ])
       .then(([ra, rc]) => {
         setAnalyses(toArray(ra.value))
@@ -796,10 +798,8 @@ export default function DashboardAdminPage() {
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', lineHeight: 1, padding: '0.1rem 0.3rem', borderRadius: 6 }}>✕</button>
                     </div>
                     <div style={{ padding: '0.85rem 1rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {selectedAnalysis.image_url && (
-                        <img src={selectedAnalysis.image_url} alt="leaf"
-                          style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 12, border: '1px solid #e2e8f0' }} />
-                      )}
+                      <AnalysisImage src={selectedAnalysis.image_url}
+                        style={{ width: '100%', height: 130, borderRadius: 12, border: '1px solid #e2e8f0' }} />
                       <div>
                         <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '0.2rem' }}>Diagnóstico</p>
                         <p style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{selectedAnalysis.disease_name_predicted || 'Sin diagnóstico'}</p>

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAnalyses, getWeather } from '../../services/analysisService'
 import { getFarms, getPlantHistories } from '../../services/chatbotService'
+import { API_PAGE_SIZE } from '../../services/apiConfig'
+import AnalysisImage from '../../components/AnalysisImage'
+import FloatingChatButton from '../../components/FloatingChatButton'
+import Footer from '../../components/Footer'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
@@ -11,6 +15,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import 'leaflet.heat'
 import DashboardReportPDF from '../../components/pdf/DashboardReportPDF'
 import AIAnalysisPanel from '../../components/AIAnalysisPanel'
+import AppLogo from '../../components/AppLogo'
 import { toArray } from '../../utils/arrayUtils'
 import { TILE_LAYERS } from '../../constants/mapLayers'
 import { computeSeverityBucket, computeSeverityLabel, isRisk, sevLabel, sevColor, sevBg } from '../../utils/severity'
@@ -232,9 +237,9 @@ export default function DashboardView({ onOpenSidebar }) {
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
     Promise.allSettled([
-      getAnalyses({ page_size: 1000 }),
-      getFarms({ page_size: 1000 }),
-      getPlantHistories({ page_size: 1000 }),
+      getAnalyses({ page_size: API_PAGE_SIZE }),
+      getFarms({ page_size: API_PAGE_SIZE }),
+      getPlantHistories({ page_size: API_PAGE_SIZE }),
     ])
       .then(([ra, rf, rh]) => {
         setAnalyses(toArray(ra.value))
@@ -529,22 +534,6 @@ export default function DashboardView({ onOpenSidebar }) {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
 
-        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <button id="histMenuBtn" onClick={onOpenSidebar} className="p-2 -ml-1 rounded-xl hover:bg-brand-50 transition text-gray-500" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-            </button>
-            <div className="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-            </div>
-            <div>
-              <h1 className="font-cormorant text-base font-semibold text-gray-900 leading-none">Pitahaya Vision</h1>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-brand-600 leading-none mt-0.5">Dashboard agrícola</p>
-            </div>
-          </div>
-          <div />
-        </header>
-
         <div id="dash-main" ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-7">
           <div className="fade-in space-y-6 pb-8">
 
@@ -693,10 +682,8 @@ export default function DashboardView({ onOpenSidebar }) {
                         </div>
                         <div style={{ padding: '0.85rem 1rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                           {/* Image */}
-                          {selectedAnalysis.image_url && (
-                            <img src={selectedAnalysis.image_url} alt="leaf"
-                              style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 12, border: '1px solid #e2e8f0' }} />
-                          )}
+                          <AnalysisImage src={selectedAnalysis.image_url}
+                            style={{ width: '100%', height: 120, borderRadius: 12, border: '1px solid #e2e8f0' }} />
                           {/* Disease name */}
                           <div>
                             <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '0.2rem' }}>Diagnóstico</p>
@@ -1102,10 +1089,10 @@ export default function DashboardView({ onOpenSidebar }) {
           </div>
         </div>
 
-        <footer className="hidden md:flex flex-shrink-0 items-center justify-center px-6 py-3 border-t border-gray-100 text-sm text-slate-400">
-          Pitahaya Vision © 2026. Todos los derechos reservados.
-        </footer>
+        <Footer />
       </main>
+
+      <FloatingChatButton />
 
       <DashboardReportPDF
         isOpen={showPDF}

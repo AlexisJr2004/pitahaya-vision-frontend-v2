@@ -8,6 +8,7 @@ import HomePage from './pages/HomePage'
 import ChatbotPage from './pages/chatbot/ChatbotPage'
 import UserPage from './pages/UserPage'
 import LoadingScreen from './components/LoadingScreen'
+import ThrottleBanner from './components/ThrottleBanner'
 import AuthTransitionLoader from './components/AuthTransitionLoader'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
@@ -35,6 +36,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AuthTransitionLoader />
+      <ThrottleBanner />
       <Routes>
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/registro" element={<PublicRoute><RegisterPage /></PublicRoute>} />

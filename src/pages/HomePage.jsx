@@ -8,6 +8,8 @@ import HistorialAdminPage from './historial/HistorialAdminPage'
 import DashboardAdminPage from './dashboard/DashboardAdminPage'
 import { getWeather } from '../services/analysisService'
 import WeatherWidget from '../components/WeatherWidget'
+import AppLogo from '../components/AppLogo'
+import Footer from '../components/Footer'
 
 export default function HomePage() {
   const { user, logout } = useAuth()
@@ -209,9 +211,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2 mb-1" style={{ position: 'relative', zIndex: 1 }}>
             <div className="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-                <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
-              </svg>
+              <AppLogo className="w-4 h-4 fill-white" />
             </div>
             <span style={{ fontFamily: "'Cormorant Garamond',serif" }} className="font-semibold text-base text-gray-900">Pitahaya Vision</span>
           </div>
@@ -273,34 +273,11 @@ export default function HomePage() {
 
         {/* MAIN */}
         <main className="flex-1 flex flex-col overflow-hidden min-w-0" style={{ background: '#ffffff' }}>
-          <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
-            <button id="menuBtn" onClick={openSidebar}
-              className="p-2 -ml-1 rounded-xl text-gray-500 hover:bg-green-50 transition"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
-            <div className="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-                <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" />
-              </svg>
-            </div>
-            <div>
-              <h1 style={{ fontFamily: "'Cormorant Garamond',serif" }} className="text-base font-semibold text-gray-900 leading-none">Pitahaya Vision</h1>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-green-600 leading-none mt-0.5">
-                {({ dashboard: 'Panel administrativo', history: 'Centro documental', customers: 'Gestión de usuarios' })[view] || 'Panel administrativo'}
-              </p>
-            </div>
-          </header>
-
           <div id="main-content" className="flex-1 overflow-y-auto p-4 md:p-6">
             {renderContent()}
           </div>
 
-          <footer className="hidden md:flex flex-shrink-0 items-center justify-center px-6 py-3 border-t border-gray-100 bg-white text-xs text-slate-400">
-            Pitahaya Vision © 2026. Todos los derechos reservados.
-          </footer>
+          <Footer className="bg-white text-xs" />
         </main>
       </div>
       <ProfileModal  isOpen={showProfileModal}  onClose={() => setShowProfileModal(false)} />
