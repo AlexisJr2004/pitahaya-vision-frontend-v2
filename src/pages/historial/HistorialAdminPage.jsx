@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { getAnalyses } from '../services/analysisService'
-import { getPlantHistories } from '../services/chatbotService'
-import { toArray } from '../utils/arrayUtils'
-import { computeSev } from '../utils/severity'
-import { formatDateWithTime as fmtDate, formatDateLong as fmtDateShort } from '../utils/formatters'
+import { getAnalyses } from '../../services/analysisService'
+import { getPlantHistories } from '../../services/chatbotService'
+import { toArray } from '../../utils/arrayUtils'
+import { computeSev } from '../../utils/severity'
+import { formatDateWithTime as fmtDate, formatDateLong as fmtDateShort } from '../../utils/formatters'
 
 const RANGE_OPTIONS = [
   { key: 'all',    label: 'Todos los registros', param: null    },

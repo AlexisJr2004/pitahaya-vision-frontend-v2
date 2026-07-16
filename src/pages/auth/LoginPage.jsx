@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { validateLogin } from '../utils/validators'
-import { getRemainingSeconds, setCooldownFromWait, getCooldownType } from '../utils/cooldown'
-import CooldownModal from '../components/CooldownModal'
+import { useAuth } from '../../contexts/AuthContext'
+import { validateLogin } from '../../utils/validators'
+import { getRemainingSeconds, setCooldownFromWait, getCooldownType } from '../../utils/cooldown'
+import CooldownModal from '../../components/CooldownModal'
 
 // ─── Design tokens ────────────────────────────────────────────────
 const G = { 800: '#15803d', 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }

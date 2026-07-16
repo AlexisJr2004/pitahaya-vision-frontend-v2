@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { confirmPasswordReset } from '../services/authService'
+import { confirmPasswordReset } from '../../services/authService'
 
 const G = { 800: '#15803d', 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }
 const GRAY = { 900: '#111827', 700: '#374151', 500: '#6b7280', 400: '#9ca3af', 200: '#e5e7eb', 100: '#F2F4FB' }

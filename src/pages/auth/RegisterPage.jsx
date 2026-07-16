@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { validateRegistration } from '../utils/validators'
-import { register as apiRegister, checkAvailability } from '../services/authService'
+import { validateRegistration } from '../../utils/validators'
+import { register as apiRegister, checkAvailability } from '../../services/authService'
 
 const UNIQUE_FIELDS = ['username', 'email', 'dni', 'phone']
 const DUPLICATE_MESSAGES = {

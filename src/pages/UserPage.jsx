@@ -5,8 +5,8 @@ import { getWeather } from '../services/analysisService'
 import ProfileModal from '../components/ProfileModal'
 import SettingsModal from '../components/SettingsModal'
 import WeatherWidget from '../components/WeatherWidget'
-import DashboardView from './DashboardView'
-import HistorialView from './HistorialView'
+import DashboardView from './dashboard/DashboardView'
+import HistorialView from './historial/HistorialView'
 
 export default function UserPage() {
   const { user, logout } = useAuth()
