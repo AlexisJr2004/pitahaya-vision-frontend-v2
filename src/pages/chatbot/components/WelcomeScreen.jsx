@@ -7,7 +7,7 @@ export default function WelcomeScreen({ displayName, farms, openAddFarmModal, su
       {farms.length === 0 ? (
         <div className="w-full max-w-sm animate-fade-up">
           <div className="brand-avatar w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4 mx-auto">
-            <svg className="w-7 h-7 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+            <svg className="w-7 h-7 fill-white" viewBox="0 0 24 24"><path d="M12 21C6 21 3 16.5 3 12S6 3 12 3s9 4.5 9 9-3 9-9 9zM11 3V1h2v2M7 6.5L5 4.5l3.5 2.5M17 6.5l2-2-3.5 2.5M4 11.5l-2-1L4.5 13M20 11.5l2-1-2.5 2.5M7 17.5l-2 2 3.5-2M17 17.5l2 2-3.5-2" /></svg>
           </div>
           <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Bienvenido al sistema</p>
           <h2 className="font-cormorant text-3xl font-medium text-gray-900 mb-2 leading-tight">¡Hola, {displayName.split(' ')[0]}!<br /><em className="text-brand-600">Comencemos</em></h2>
@@ -33,7 +33,7 @@ export default function WelcomeScreen({ displayName, farms, openAddFarmModal, su
       ) : (
         <>
           <div className="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4">
-            <svg className="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+            <svg className="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24"><path d="M12 21C6 21 3 16.5 3 12S6 3 12 3s9 4.5 9 9-3 9-9 9zM11 3V1h2v2M7 6.5L5 4.5l3.5 2.5M17 6.5l2-2-3.5 2.5M4 11.5l-2-1L4.5 13M20 11.5l2-1-2.5 2.5M7 17.5l-2 2 3.5-2M17 17.5l2 2-3.5-2" /></svg>
           </div>
           <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Sistema de diagnostico inteligente</p>
           <h2 className="font-cormorant text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mb-1">Hola, ¿como puedo<br /><em className="italic text-brand-600">ayudarte hoy?</em></h2>

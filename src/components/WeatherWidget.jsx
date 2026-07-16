@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export function weatherStyle(condition) {
   const c = (condition || '').toLowerCase()
@@ -44,6 +46,7 @@ export default function WeatherWidget({
   onConditionChange,
   fallback,
 }) {
+  const [collapsed, setCollapsed] = useState(true)
   const isSidebar = variant === 'sidebar'
   const label     = isSidebar ? 'Clima local' : 'Auto · últimos 3 días'
 
@@ -105,7 +108,9 @@ export default function WeatherWidget({
   if (isSidebar) {
     return (
       <>
-        <div className="flex items-center justify-between gap-3">
+        <button type="button" onClick={() => setCollapsed(c => !c)}
+          className="w-full flex items-center justify-between gap-3 text-left"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           <div className="min-w-0 flex-1">
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-brand-600 truncate">{label}</p>
             <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.8rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.15, marginTop: 2 }}>
@@ -113,56 +118,61 @@ export default function WeatherWidget({
             </p>
             <p className="text-sm text-slate-500 mt-1 capitalize">{data.condition}</p>
           </div>
-          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 border border-brand-100 flex-shrink-0">
-            <i className={`fas ${ws.icon} text-3xl text-brand-600`}></i>
-          </span>
-        </div>
-
-        <div className="mt-4 pt-4 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[0.72rem] text-slate-500"
-          style={{ borderTop: '1px solid #eef2f7' }}>
-          <span className="flex items-center gap-1.5 font-medium">
-            <i className="fas fa-droplet text-brand-500 w-3.5 text-center flex-shrink-0"></i>{data.avgHumidity}% humedad
-          </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <i className="fas fa-wind text-brand-500 w-3.5 text-center flex-shrink-0"></i>{data.avgWind} km/h
-          </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <i className="fas fa-cloud-rain text-brand-500 w-3.5 text-center flex-shrink-0"></i>{data.totalPrecip} mm lluvia
-          </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <i className="fas fa-temperature-half text-brand-500 w-3.5 text-center flex-shrink-0"></i>↓{data.tempMin}° ↑{data.tempMax}°
-          </span>
-        </div>
-
-        {days.length > 0 && (
-          <div className="mt-4 pt-3" style={{ borderTop: '1px solid #eef2f7' }}>
-            <p className="text-[0.6rem] font-bold uppercase tracking-[0.22em] text-slate-400 mb-2">Últimos 3 días</p>
-            <ul className="space-y-0.5">
-              {days.map((day, i) => {
-                const di = dayIcon(day.precip, day.humidity)
-                return (
-                  <li key={i} className="rounded-xl px-2 py-1.5"
-                    style={{ background: i === 0 ? '#f8fafc' : 'transparent' }}>
-                    <div className="flex items-center gap-2">
-                      <i className={`fas ${di.i} ${di.c} text-sm w-4 text-center flex-shrink-0`}></i>
-                      <span className="font-semibold text-slate-700 w-9 flex-shrink-0 capitalize text-[0.75rem]">{shortDay(day.date)}</span>
-                      <span className="font-bold text-slate-900 text-[0.82rem] flex-1">{day.temp}°C</span>
-                      <span className="text-slate-400 text-[0.65rem] flex-shrink-0">↓{day.tempMin}° ↑{day.tempMax}°</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 pl-6 text-[0.65rem] text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <i className="fas fa-droplet text-brand-300 text-[0.55rem]"></i>{day.humidity}%
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <i className="fas fa-cloud-rain text-blue-300 text-[0.55rem]"></i>{day.precip} mm
-                      </span>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+          <div className="flex flex-col items-center gap-1">
+            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 border border-brand-100 flex-shrink-0">
+              <i className={`fas ${ws.icon} text-3xl text-brand-600`}></i>
+            </span>
+            <i className={`fas fa-chevron-${collapsed ? 'down' : 'up'} text-[0.6rem] text-slate-400 transition-transform`}></i>
           </div>
-        )}
+        </button>
+
+        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${collapsed ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-[500px] opacity-100'}`}>
+          <div className="mt-4 pt-4 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[0.72rem] text-slate-500"
+            style={{ borderTop: '1px solid #eef2f7' }}>
+            <span className="flex items-center gap-1.5 font-medium">
+              <i className="fas fa-droplet text-brand-500 w-3.5 text-center flex-shrink-0"></i>{data.avgHumidity}% humedad
+            </span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <i className="fas fa-wind text-brand-500 w-3.5 text-center flex-shrink-0"></i>{data.avgWind} km/h
+            </span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <i className="fas fa-cloud-rain text-brand-500 w-3.5 text-center flex-shrink-0"></i>{data.totalPrecip} mm lluvia
+            </span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <i className="fas fa-temperature-half text-brand-500 w-3.5 text-center flex-shrink-0"></i>↓{data.tempMin}° ↑{data.tempMax}°
+            </span>
+          </div>
+
+          {days.length > 0 && (
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid #eef2f7' }}>
+              <p className="text-[0.6rem] font-bold uppercase tracking-[0.22em] text-slate-400 mb-2">Últimos 3 días</p>
+              <ul className="space-y-0.5">
+                {days.map((day, i) => {
+                  const di = dayIcon(day.precip, day.humidity)
+                  return (
+                    <li key={i} className="rounded-xl px-2 py-1.5"
+                      style={{ background: i === 0 ? '#f8fafc' : 'transparent' }}>
+                      <div className="flex items-center gap-2">
+                        <i className={`fas ${di.i} ${di.c} text-sm w-4 text-center flex-shrink-0`}></i>
+                        <span className="font-semibold text-slate-700 w-9 flex-shrink-0 capitalize text-[0.75rem]">{shortDay(day.date)}</span>
+                        <span className="font-bold text-slate-900 text-[0.82rem] flex-1">{day.temp}°C</span>
+                        <span className="text-slate-400 text-[0.65rem] flex-shrink-0">↓{day.tempMin}° ↑{day.tempMax}°</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 pl-6 text-[0.65rem] text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <i className="fas fa-droplet text-brand-300 text-[0.55rem]"></i>{day.humidity}%
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <i className="fas fa-cloud-rain text-blue-300 text-[0.55rem]"></i>{day.precip} mm
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
       </>
     )
   }
