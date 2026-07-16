@@ -10,10 +10,12 @@ import AddPlotModal from '../../components/modals/AddPlotModal'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
 import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../../services/analysisService'
+import { API_PAGE_SIZE } from '../../services/apiConfig'
 import ConversationPDF from '../../components/pdf/ConversationPDF'
 import WelcomeScreen from './components/WelcomeScreen'
 import SuggestedQuestions from './components/SuggestedQuestions'
 import AnalysisCard from './components/AnalysisCard'
+import AppLogo from '../../components/AppLogo'
 import { UserBubble, AssistantBubble, LoadingDots } from './components/MessageBubble'
 
 export default function ChatbotPage() {
@@ -104,10 +106,58 @@ export default function ChatbotPage() {
   })()
   const profilePhotoUrl = user?.profile_photo_url
 
-  const loadFarms = async () => { try { const d = await getFarms({ page_size: 1000 }); setFarms(Array.isArray(d) ? d : d.results || []) } catch { setFarms([]) } }
-  const loadConversations = async () => { try { const d = await getConversations({ page_size: 1000 }); setConversations(Array.isArray(d) ? d : d.results || []) } catch { setConversations([]) } }
+  const farmsCacheRef = useRef(null)
+  const conversationsCacheRef = useRef(null)
+  const plantHistoriesCacheRef = useRef(null)
+  const pendingFarmsRef = useRef(null)
+  const pendingConversationsRef = useRef(null)
+  const debounceRef = useRef(null)
 
-  useEffect(() => { loadFarms(); loadConversations() }, [])
+  const invalidateFarmsCache = () => { farmsCacheRef.current = null }
+  const invalidateConversationsCache = () => { conversationsCacheRef.current = null }
+
+  const loadFarms = async (force = false) => {
+    if (!force && farmsCacheRef.current) { setFarms(farmsCacheRef.current); return }
+    if (pendingFarmsRef.current) return pendingFarmsRef.current
+    const p = (async () => {
+      try { const d = await getFarms({ page_size: API_PAGE_SIZE }); farmsCacheRef.current = Array.isArray(d) ? d : d.results || []; setFarms(farmsCacheRef.current) } catch { setFarms([]) }
+    })()
+    pendingFarmsRef.current = p
+    await p
+    pendingFarmsRef.current = null
+  }
+
+  const loadConversations = async (force = false) => {
+    if (!force && conversationsCacheRef.current) { setConversations(conversationsCacheRef.current); return }
+    if (pendingConversationsRef.current) return pendingConversationsRef.current
+    const p = (async () => {
+      try { const d = await getConversations({ page_size: API_PAGE_SIZE }); conversationsCacheRef.current = Array.isArray(d) ? d : d.results || []; setConversations(conversationsCacheRef.current) } catch { setConversations([]) }
+    })()
+    pendingConversationsRef.current = p
+    await p
+    pendingConversationsRef.current = null
+  }
+
+  const debouncedLoadFarms = useCallback(() => {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => { invalidateFarmsCache(); loadFarms(true) }, 2000)
+  }, [])
+
+  const debouncedLoadConversations = useCallback(() => {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => { invalidateConversationsCache(); loadConversations(true) }, 2000)
+  }, [])
+
+  const loadPlantHistories = async (force = false) => {
+    if (!force && plantHistoriesCacheRef.current) return plantHistoriesCacheRef.current
+    try {
+      const phs = await getPlantHistories({ page_size: API_PAGE_SIZE })
+      plantHistoriesCacheRef.current = Array.isArray(phs) ? phs : phs.results || []
+      return plantHistoriesCacheRef.current
+    } catch { return [] }
+  }
+
+  useEffect(() => { loadFarms(); loadConversations(); loadPlantHistories() }, [])
 
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -332,7 +382,7 @@ export default function ChatbotPage() {
         const conv = await createConversation({ title: 'Nueva conversacion', context: contextId })
         convId = conv.id
         setActiveConvId(convId)
-        loadConversations()
+        debouncedLoadConversations()
       }
       savedContextIdRef.current = contextId
       setShowNoContextHint(false)
@@ -378,7 +428,7 @@ export default function ChatbotPage() {
           title: text.substring(0, 100) || 'Nueva conversacion',
           ...(ctxIdForConv ? { context: ctxIdForConv } : {}),
         })
-        convId = conv.id; setActiveConvId(convId); loadConversations()
+        convId = conv.id; setActiveConvId(convId); debouncedLoadConversations()
       }
       let imageUrl = ''
       let analysisResult = null
@@ -494,7 +544,7 @@ export default function ChatbotPage() {
         // Fetch plant histories once — used for both deduplication check and comparison
         let allPhs = []
         try {
-          const phs = await getPlantHistories({ page_size: 1000 })
+          const phs = await loadPlantHistories()
           allPhs = Array.isArray(phs) ? phs : phs.results || []
         } catch {}
 
@@ -603,7 +653,7 @@ export default function ChatbotPage() {
         const msgs = (full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
         setMessages(msgs)
       } catch {}
-      loadConversations()
+      debouncedLoadConversations()
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Ocurri\u00f3 un error al procesar tu mensaje. Intenta de nuevo.' }])
     }
@@ -726,7 +776,7 @@ export default function ChatbotPage() {
         let convId = activeConvId
         if (!convId) {
           const conv = await createConversation({ title: text.substring(0, 100) })
-          convId = conv.id; setActiveConvId(convId); loadConversations()
+          convId = conv.id; setActiveConvId(convId); debouncedLoadConversations()
         }
         await sendMessage({ conversation: convId, role: 'user', content: text })
         const _sid = `stream-${Date.now()}`
@@ -748,7 +798,7 @@ export default function ChatbotPage() {
           const full = await getConversation(convId)
           setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
         } catch {}
-        loadConversations()
+        debouncedLoadConversations()
         generateSuggestions(botReply)
       } catch {}
       setInputValue('')
@@ -814,7 +864,7 @@ export default function ChatbotPage() {
     try {
       await deleteConversation(confirmDeleteConv)
       if (activeConvId === confirmDeleteConv) newChat()
-      setConfirmDeleteConv(null); closeSessionMenu(); loadConversations()
+      setConfirmDeleteConv(null); closeSessionMenu(); debouncedLoadConversations()
     } catch { alert('Error al eliminar la conversacion') }
   }
 
@@ -838,19 +888,19 @@ export default function ChatbotPage() {
         await updateFarm(editingFarm.id, { name: farmName.trim(), location: farmLocation.trim() })
         setShowAddFarmModal(false)
         setEditingFarm(null)
-        await loadFarms()
+        debouncedLoadFarms()
       } else {
         const newFarm = await createFarm({ name: farmName.trim(), location: farmLocation.trim() })
         setFarmName(''); setFarmLocation('')
         setShowAddFarmModal(false)
-        await loadFarms()
+        debouncedLoadFarms()
         openAddPlotModal(newFarm)
       }
     } catch { setFarmError('No se pudo guardar la corporación agrícola. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
   const handleDeleteFarm = async (id) => {
-    if (confirmDelete === id) { try { await deleteFarm(id); setConfirmDelete(null); loadFarms() } catch { alert('Error al eliminar la corporación agrícola') } }
+    if (confirmDelete === id) { try {       await deleteFarm(id); setConfirmDelete(null); debouncedLoadFarms() } catch { alert('Error al eliminar la corporación agrícola') } }
     else { setConfirmDelete(id) }
   }
 
@@ -943,12 +993,12 @@ export default function ChatbotPage() {
         await updatePlot(editingPlot.id, { name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
         setShowAddPlotModal(false)
         setEditingPlot(null)
-        await loadFarms()
+        debouncedLoadFarms()
       } else {
         if (!selectedFarmForPlot) return
         await createPlot({ farm: selectedFarmForPlot.id, name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
         setShowAddPlotModal(false)
-        await loadFarms()
+        debouncedLoadFarms()
         if (farms.flatMap(f => f.plots || []).length === 0) {
           setShowParcelasModal(false)
           setShowContextModal(true)
@@ -957,7 +1007,7 @@ export default function ChatbotPage() {
     } catch { setPlotError('No se pudo guardar la parcela. Verifica tu conexión e inténtalo de nuevo.') }
   }
 
-  const handleDeletePlot = async (id) => { try { await deletePlot(id); loadFarms() } catch { alert('Error al eliminar la parcela') } }
+  const handleDeletePlot = async (id) => { try { await deletePlot(id); debouncedLoadFarms() } catch { alert('Error al eliminar la parcela') } }
 
   const openProfileModal  = () => { setShowProfileModal(true);  setMenuOpen(false) }
   const openSettingsModal = () => { setShowSettingsModal(true); setMenuOpen(false) }
@@ -1414,7 +1464,7 @@ export default function ChatbotPage() {
           </svg>
           <div className="flex items-center gap-2 mb-1" style={{ position: 'relative', zIndex: 1 }}>
             <div className="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
+              <AppLogo className="w-4 h-4 fill-white" />
             </div>
             <span className="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
           </div>
@@ -1481,27 +1531,6 @@ export default function ChatbotPage() {
 
         {/* MAIN */}
         <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
-          <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <button id="menuBtn" onClick={openSidebar} className="p-2 -ml-1 rounded-xl hover:bg-brand-50 transition text-gray-500 active:bg-brand-100" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-              </button>
-              <div className="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-                <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z" /></svg>
-              </div>
-              <div>
-                <h1 className="font-cormorant text-base font-semibold text-gray-900 leading-none">Pitahaya Vision</h1>
-                <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-brand-600 leading-none mt-0.5">Asistente inteligente</p>
-              </div>
-            </div>
-            <button onClick={newChat} title="Nueva conversacion" className="p-2 rounded-xl hover:bg-brand-50 transition text-gray-400 hover:text-brand-600 active:bg-brand-100" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
-              </svg>
-            </button>
-          </header>
-
           {/* CHAT AREA */}
           <div id="chatArea" ref={chatAreaRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-5 relative">
             {showWelcome && messages.length === 0 ? (

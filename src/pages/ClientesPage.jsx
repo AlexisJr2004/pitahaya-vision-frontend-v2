@@ -21,7 +21,7 @@ export default function ClientesPage() {
 
   useEffect(() => {
     setLoading(true)
-    getCustomers({ page_size: 200 })
+    getCustomers({ page_size: 100 })
       .then(d => setCustomers(toArr(d)))
       .catch(() => showToast('Error al cargar los clientes', true))
       .finally(() => setLoading(false))
