@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { validateRegistration } from '../../utils/validators'
 import { register as apiRegister, checkAvailability } from '../../services/authService'
+import '../../styles/auth.css'
 
 const UNIQUE_FIELDS = ['username', 'email', 'dni', 'phone']
 const DUPLICATE_MESSAGES = {
@@ -233,35 +234,7 @@ export default function RegisterPage() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
-        *{margin:0;padding:0;box-sizing:border-box}
 
-        @keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-        .fade-up    { animation: fadeUp .65s cubic-bezier(.22,1,.36,1) both }
-        .fade-up-d1 { animation: fadeUp .7s  cubic-bezier(.22,1,.36,1) both }
-        .fade-up-d2 { animation: fadeUp .7s  .12s cubic-bezier(.22,1,.36,1) both }
-        .fade-up-d3 { animation: fadeUp .85s .25s cubic-bezier(.22,1,.36,1) both }
-
-        .right-panel,.wave-line,.glow-desk { display:none }
-        .register-grid { grid-template-columns:1fr }
-        .overflow-y-mobile { overflow-y:auto }
-        .items-start { align-items:flex-start }
-
-        .avatar-group { position:relative; cursor:pointer; flex-shrink:0 }
-        .avatar-group .avatar-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; border-radius:50%; background:transparent; transition:background .2s }
-        .avatar-group:hover .avatar-overlay { background:rgba(0,0,0,.3) }
-        .avatar-group .avatar-icon { width:16px; height:16px; color:#fff; opacity:0; transition:opacity .2s }
-        .avatar-group:hover .avatar-icon { opacity:1 }
-        .avatar-group .avatar-img { transition:opacity .2s }
-        .avatar-group:hover .avatar-img { opacity:.75 }
-
-        @media(min-width:640px)  { .sm-py-3{padding-top:.75rem;padding-bottom:.75rem} .sm-px-8{padding-left:2rem;padding-right:2rem} .sm-text-4xl{font-size:2.25rem} .sm-mb-6{margin-bottom:1.5rem} .sm-h-24{height:6rem;width:6rem} .sm-h-6{height:1.5rem;width:1.5rem} }
-        @media(min-width:768px)  { .md-grid-cols-2{grid-template-columns:1fr 1fr} }
-        @media(min-width:1024px) { .register-grid{grid-template-columns:1fr 1fr} .right-panel{display:block} .wave-line{display:block} .glow-desk{display:block} .lg-items-center{align-items:center} .overflow-y-mobile{overflow-y:hidden} .lg-overflow-hidden{overflow:hidden} .lg-px-12{padding-left:3rem;padding-right:3rem} .lg-min-h-screen{min-height:100vh} .lg-py-0{padding-top:0;padding-bottom:0} .lg-h-32{height:8rem;width:8rem} }
-      `}</style>
 
       <main className="register-grid lg-overflow-hidden" style={{
         display:'grid', minHeight:'100vh', width:'100%', position:'relative',

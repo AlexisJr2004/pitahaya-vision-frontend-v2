@@ -16,6 +16,7 @@ import { TILE_LAYERS } from '../../constants/mapLayers'
 import { SEV_COLORS, SEV_BG, SEV_LABELS } from '../../constants/severity'
 import { computeSev, isRisk, sevPillClassDALegacy as sevPillClass, riskColor, riskLabel, riskPillBg } from '../../utils/severity'
 import { escapeHtml, formatDateShort as fmtShort, formatDateWithTime as fmtFull, extractConfidence } from '../../utils/formatters'
+import '../../styles/dashboard.css'
 
 /* ── SVG Donut (sanas vs en riesgo) ── */
 function HealthDonut({ sanas, sick, size = 200, thickness = 36 }) {
@@ -161,13 +162,13 @@ function FarmHeatmap({ analyses, onSelectAnalysis }) {
   return (
     <div>
       {/* Toolbar */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.65rem', alignItems: 'center' }}>
-        <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
+      <div className="map-toolbar">
+        <div className="map-layer-group">
           {[['street', 'Mapa'], ['satellite', 'Satélite'], ['terrain', 'Terreno']].map(([key, label], idx, arr) => (
             <button key={key} onClick={() => setMapLayer(key)}
-              style={{ padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600, border: 'none', cursor: 'pointer',
-                background: mapLayer === key ? '#16a34a' : '#fff', color: mapLayer === key ? '#fff' : '#64748b',
-                transition: 'all 0.15s', borderRight: idx < arr.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+              className="map-layer-btn"
+              style={{ background: mapLayer === key ? '#16a34a' : '#fff', color: mapLayer === key ? '#fff' : '#64748b',
+                borderRight: idx < arr.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
               {label}
             </button>
           ))}
@@ -495,23 +496,7 @@ export default function DashboardAdminPage() {
 
   return (
     <>
-      <style>{`
-        .da-kpi { position:relative; overflow:hidden; border-radius:28px; border:1px solid rgba(226,232,240,0.9); background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%); }
-        .da-card { border:1px solid rgba(226,232,240,0.9); border-radius:30px; background:#fff; }
-        .da-panel-title { font-family:'Cormorant Garamond',serif; letter-spacing:-0.02em; }
-        .da-sparkline { height:0.4rem; border-radius:9999px; background:linear-gradient(90deg,rgba(34,197,94,.1),rgba(34,197,94,.4)); }
-        .da-muted { color:#64748b; }
-        .da-fade { animation:daFade 0.3s ease-in-out; }
-        @keyframes daFade { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-        .da-badge { display:inline-flex;align-items:center;gap:.35rem;border-radius:9999px;border:1px solid #dcfce7;background:#f0fdf4;color:#15803d;padding:.3rem .7rem;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase; }
-        .da-severity-pill { display:inline-flex;align-items:center;padding:.22rem .5rem;border-radius:9999px;font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase; }
-        .da-sev-low      { background:#ecfdf5; color:#166534; }
-        .da-sev-medium   { background:#fefce8; color:#a16207; }
-        .da-sev-high     { background:#fff7ed; color:#c2410c; }
-        .da-sev-critical { background:#fef2f2; color:#b91c1c; }
-        .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;}
-        .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;font-weight:700;font-size:0.72rem;}
-      `}</style>
+
 
       <section className="mb-10 da-fade space-y-6">
 
@@ -789,58 +774,58 @@ export default function DashboardAdminPage() {
                 const bg      = SEV_BG[sev.bucket]    || '#f8fafc'
                 const confPct = extractConfidence(selectedAnalysis)
                 return (
-                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#16a34a' }}>Detalle del análisis</span>
+                  <div className="detail-panel">
+                    <div className="detail-panel-hdr">
+                      <span className="detail-panel-title">Detalle del análisis</span>
                       <button onClick={() => setSelectedAnalysis(null)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', lineHeight: 1, padding: '0.1rem 0.3rem', borderRadius: 6 }}>✕</button>
+                        className="detail-panel-close">✕</button>
                     </div>
-                    <div style={{ padding: '0.85rem 1rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div className="detail-panel-body">
                       {selectedAnalysis.image_url && (
                         <img src={selectedAnalysis.image_url} alt="leaf"
-                          style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 12, border: '1px solid #e2e8f0' }} />
+                          className="detail-img" style={{ height: 130 }} />
                       )}
                       <div>
-                        <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '0.2rem' }}>Diagnóstico</p>
-                        <p style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{selectedAnalysis.disease_name_predicted || 'Sin diagnóstico'}</p>
+                        <p className="detail-label">Diagnóstico</p>
+                        <p className="detail-value">{selectedAnalysis.disease_name_predicted || 'Sin diagnóstico'}</p>
                       </div>
                       <div>
-                        <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.2rem' }}>Usuario</p>
+                        <p className="detail-sub-label">Usuario</p>
                         <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>{selectedAnalysis.owner_name || '—'}</p>
                         {selectedAnalysis.owner_email && <p style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{selectedAnalysis.owner_email}</p>}
                       </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.3rem' }}>Severidad</p>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.6rem', borderRadius: 9999, background: bg, color, fontSize: '0.7rem', fontWeight: 700 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }}></span>
+                      <div className="detail-row">
+                        <div className="detail-col">
+                          <p className="detail-sub-label">Severidad</p>
+                          <span className="sev-pill-inline" style={{ background: bg, color }}>
+                            <span className="sev-dot" style={{ background: color }}></span>
                             {sev.label}
                           </span>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.3rem' }}>Confianza</p>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <div style={{ flex: 1, height: 5, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-                              <div style={{ height: 5, background: 'linear-gradient(90deg,#16a34a,#22c55e)', borderRadius: 999, width: `${confPct}%`, transition: 'width .6s ease' }}></div>
+                        <div className="detail-col">
+                          <p className="detail-sub-label">Confianza</p>
+                          <div className="conf-row">
+                            <div className="conf-bar">
+                              <div className="conf-fill" style={{ width: `${confPct}%` }}></div>
                             </div>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>{confPct.toFixed(1)}%</span>
+                            <span className="conf-pct">{confPct.toFixed(1)}%</span>
                           </div>
                         </div>
                       </div>
-                      <div style={{ borderTop: '1px solid #eef2f7', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                          <span style={{ color: '#94a3b8', fontWeight: 600 }}>Fecha</span>
-                          <span style={{ color: '#334155', fontWeight: 600 }}>{new Date(selectedAnalysis.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <div className="detail-meta">
+                        <div className="detail-meta-row">
+                          <span className="detail-meta-lbl">Fecha</span>
+                          <span className="detail-meta-val">{new Date(selectedAnalysis.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                          <span style={{ color: '#94a3b8', fontWeight: 600 }}>GPS</span>
-                          <span style={{ color: '#334155', fontFamily: 'monospace', fontSize: '0.66rem' }}>{selectedAnalysis.latitude?.toFixed(5)}, {selectedAnalysis.longitude?.toFixed(5)}</span>
+                        <div className="detail-meta-row">
+                          <span className="detail-meta-lbl">GPS</span>
+                          <span className="detail-meta-gps">{selectedAnalysis.latitude?.toFixed(5)}, {selectedAnalysis.longitude?.toFixed(5)}</span>
                         </div>
                       </div>
                       {selectedAnalysis.analysis_text && (
-                        <div style={{ borderTop: '1px solid #eef2f7', paddingTop: '0.6rem' }}>
-                          <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.35rem' }}>Observaciones</p>
-                          <p style={{ fontSize: '0.72rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{selectedAnalysis.analysis_text}</p>
+                        <div className="detail-excerpt">
+                          <p className="detail-excerpt-label">Observaciones</p>
+                          <p className="detail-excerpt-text" style={{ WebkitLineClamp: 5 }}>{selectedAnalysis.analysis_text}</p>
                         </div>
                       )}
                     </div>

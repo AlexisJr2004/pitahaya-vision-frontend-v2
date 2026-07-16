@@ -10,6 +10,7 @@ import { toArray } from '../../utils/arrayUtils'
 import { severityBucket, severityLevel, normalizeSeverity, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../../utils/severity'
 import { formatDateMediumWithTime as fmtDate, formatDateLongWithTime as fmtDateShort } from '../../utils/formatters'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
+import '../../styles/historial.css'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function severityClass(val) {
@@ -491,48 +492,6 @@ export default function HistorialView({ onOpenSidebar }) {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <>
-      <style>{`
-        .glass-card{background:#fff;border:1px solid #eef2f7;border-radius:1rem}
-        .analysis-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;transition:border-color .16s ease,background .16s ease}
-        .analysis-card:hover{border-color:#bbf7d0;background:#f8fafc}
-        .severity-pill{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .55rem;border-radius:9999px;font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-        .severity-low{background:#ecfdf5;color:#166534}
-        .severity-medium{background:#fefce8;color:#a16207}
-        .severity-high{background:#fff7ed;color:#c2410c}
-        .severity-critical{background:#fef2f2;color:#b91c1c}
-        .chip{border:1px solid #e5e7eb;background:#fff;border-radius:9999px;padding:.4rem .75rem;font-size:.8rem;color:#334155;transition:background .14s ease,border-color .14s ease,color .14s ease;cursor:pointer}
-        .chip.active{background:#dcfce7;border-color:#bbf7d0;color:#166534}
-        .search-input{width:100%;border:1px solid #dbe4ee;border-radius:14px;padding:.78rem .9rem .78rem 2.5rem;background:#fff;outline:none;transition:border-color .14s ease,box-shadow .14s ease}
-        .search-input:focus{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-        .detail-section{border:1px solid #e5e7eb;background:#fff;border-radius:22px;padding:1rem}
-        .detail-section-title{font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#166534}
-        .detail-field{display:flex;flex-direction:column;gap:.15rem}
-        .detail-field-label{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8}
-        .detail-field-value{font-size:.9rem;color:#0f172a;line-height:1.4}
-        .hist-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center;padding:0;background:rgba(15,23,42,.45);backdrop-filter:blur(4px)}
-        .hist-overlay.open{display:flex}
-        .hist-modal{width:100%;max-height:92dvh;border-radius:28px 28px 0 0;background:#fff;border:1px solid #eef2f7;box-shadow:0 -8px 48px rgba(15,23,42,.18);overflow:hidden;display:flex;flex-direction:column}
-        .hist-modal-body{overflow-y:auto;flex:1;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-        .drag-handle-hist{display:none}
-        @media(min-width:640px){
-          .hist-overlay{align-items:center;padding:1rem}
-          .hist-modal{border-radius:24px;box-shadow:0 24px 48px rgba(15,23,42,.18);max-height:min(92dvh,960px)}
-        }
-        @media(max-width:639px){
-          .drag-handle-hist{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0;touch-action:none;cursor:grab}
-        }
-        .delete-overlay{position:fixed;inset:0;z-index:400;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(15,23,42,.36);backdrop-filter:blur(1px)}
-        .delete-overlay.open{display:flex}
-        .delete-modal{width:min(100%,420px);border-radius:24px;background:#fff;border:1px solid #eef2f7;box-shadow:0 24px 48px rgba(15,23,42,.18);overflow:hidden}
-        .delete-modal-title{font-size:1rem;font-weight:700;color:#0f172a}
-        .delete-modal-text{font-size:.9rem;color:#64748b}
-        .delete-modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
-        .delete-btn{min-width:108px;padding:.78rem 1rem;border-radius:14px;font-size:.9rem;font-weight:600;transition:all .14s;border:none;cursor:pointer}
-        .delete-btn-secondary{background:#fff;color:#334155;border:1px solid #e2e8f0}
-        .delete-btn-secondary:hover{background:#f8fafc}
-        .delete-btn-danger{background:#ef4444;color:#fff;border:1px solid #ef4444}
-        .delete-btn-danger:hover{background:#dc2626}
-      `}</style>
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
 

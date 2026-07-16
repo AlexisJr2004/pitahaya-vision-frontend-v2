@@ -1,0 +1,94 @@
+/* ─── Historial shared styles ─────────────────────────────── */
+
+/* Severity pills (shared between HistorialView and HistorialAdminPage) */
+.severity-pill, .ha-severity-pill { display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .55rem;border-radius:9999px;font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase; }
+.severity-low, .ha-sev-low      { background:#ecfdf5; color:#166534; }
+.severity-medium, .ha-sev-medium{ background:#fefce8; color:#a16207; }
+.severity-high, .ha-sev-high    { background:#fff7ed; color:#c2410c; }
+.severity-critical, .ha-sev-critical { background:#fef2f2; color:#b91c1c; }
+
+/* Detail sections (structurally identical in both files) */
+.detail-section, .ha-detail-section { border:1px solid #e5e7eb; background:#fff; border-radius:22px; padding:1rem; }
+.detail-section-title, .ha-detail-section-title { font-size:.78rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#166534; }
+.detail-field, .ha-detail-field { display:flex; flex-direction:column; gap:.15rem; }
+.detail-field-label, .ha-detail-label { font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#94a3b8; }
+.detail-field-value, .ha-detail-value { font-size:.9rem; color:#0f172a; line-height:1.4; }
+
+/* Detail badge */
+.detail-badge, .ha-detail-badge { display:inline-flex; align-items:center; gap:.35rem; border-radius:9999px; border:1px solid #dcfce7; background:#f0fdf4; color:#15803d; padding:.3rem .7rem; font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+
+/* Detail image */
+.detail-img, .ha-detail-img { width:100%; max-height:260px; object-fit:cover; border-radius:16px; border:1px solid #e5e7eb; }
+
+/* Confidence bar */
+.conf-bar, .ha-conf-bar { height:.5rem; border-radius:9999px; background:#f1f5f9; overflow:hidden; }
+.conf-fill, .ha-conf-fill { height:100%; border-radius:9999px; background:linear-gradient(90deg,#22c55e,#16a34a); transition:width .6s ease; }
+
+/* Glass card */
+.glass-card{background:#fff;border:1px solid #eef2f7;border-radius:1rem}
+
+/* Analysis card */
+.analysis-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;transition:border-color .16s ease,background .16s ease}
+.analysis-card:hover{border-color:#bbf7d0;background:#f8fafc}
+
+/* Filter chips */
+.chip{border:1px solid #e5e7eb;background:#fff;border-radius:9999px;padding:.4rem .75rem;font-size:.8rem;color:#334155;transition:background .14s ease,border-color .14s ease,color .14s ease;cursor:pointer}
+.chip.active{background:#dcfce7;border-color:#bbf7d0;color:#166534}
+
+/* Search input */
+.search-input,.ha-input{width:100%;font-size:.875rem;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff;padding:.6rem .75rem;outline:none;color:#0f172a;transition:border-color .15s,box-shadow .15s}
+.search-input:focus,.ha-input:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
+
+/* Modal overlay + modal — HV uses .hist-*, HAP uses .ha-* */
+.hist-overlay,.ha-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;padding:0}
+.hist-overlay.open,.ha-overlay.open{display:flex}
+.hist-modal,.ha-modal{width:100%;max-height:92dvh;border-radius:28px 28px 0 0;background:#fff;border:1px solid #eef2f7;box-shadow:0 -8px 48px rgba(15,23,42,.18);overflow:hidden;display:flex;flex-direction:column}
+.hist-modal-body,.ha-modal-body{overflow-y:auto;flex:1;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.drag-handle,.ha-drag-handle{display:none}
+
+@media(min-width:640px){
+  .hist-overlay,.ha-overlay{align-items:center;padding:1rem}
+  .hist-modal,.ha-modal{border-radius:24px;box-shadow:0 24px 48px rgba(15,23,42,.18);max-height:min(92dvh,960px)}
+}
+@media(max-width:639px){
+  .drag-handle,.ha-drag-handle{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0;touch-action:none}
+}
+
+/* Delete modal */
+.delete-overlay{position:fixed;inset:0;z-index:400;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(15,23,42,.36);backdrop-filter:blur(1px)}
+.delete-overlay.open{display:flex}
+.delete-modal{width:min(100%,420px);border-radius:24px;background:#fff;border:1px solid #eef2f7;box-shadow:0 24px 48px rgba(15,23,42,.18);overflow:hidden}
+.delete-modal-title{font-size:1rem;font-weight:700;color:#0f172a}
+.delete-modal-text{font-size:.9rem;color:#64748b}
+.delete-modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
+.delete-btn{min-width:108px;padding:.78rem 1rem;border-radius:14px;font-size:.9rem;font-weight:600;transition:all .14s;border:none;cursor:pointer}
+.delete-btn-secondary{background:#fff;color:#334155;border:1px solid #e2e8f0}
+.delete-btn-secondary:hover{background:#f8fafc}
+.delete-btn-danger{background:#ef4444;color:#fff;border:1px solid #ef4444}
+.delete-btn-danger:hover{background:#dc2626}
+
+/* HAP-specific extras */
+.ha-panel { border:1px solid rgba(226,232,240,0.9); border-radius:30px; }
+.ha-panel-header { border-bottom:1px solid #eef2f7; background:rgba(255,255,255,0.82); }
+.ha-panel-title { font-family:'Cormorant Garamond',serif; letter-spacing:-0.02em; }
+.ha-muted { color:#64748b; }
+.ha-sparkline { height:0.4rem; border-radius:9999px; background:linear-gradient(90deg,rgba(34,197,94,.1),rgba(34,197,94,.4)); }
+.ha-fade { animation:haFade 0.3s ease-in-out; }
+@keyframes haFade { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+.ha-kpi { position:relative; overflow:hidden; border-radius:28px; border:1px solid rgba(226,232,240,0.9); background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%); }
+.ha-timeline-list { display:grid; gap:0.75rem; list-style:none; padding:0; margin:0; }
+.ha-timeline-item { display:grid; grid-template-columns:auto 1fr auto; gap:0.8rem; align-items:start; border:1px solid #e2e8f0; border-radius:20px; background:#fff; padding:.85rem .95rem; }
+.ha-dot { width:.8rem; height:.8rem; border-radius:9999px; margin-top:.35rem; background:#22c55e; box-shadow:0 0 0 5px rgba(34,197,94,.16); flex-shrink:0; }
+.ha-dot.high   { background:#ef4444; box-shadow:0 0 0 5px rgba(239,68,68,.16); }
+.ha-dot.medium { background:#f59e0b; box-shadow:0 0 0 5px rgba(245,158,11,.16); }
+.ha-table-scroll { overflow-x:auto; }
+.ha-table-scroll::-webkit-scrollbar { height:3px; }
+.ha-table-scroll::-webkit-scrollbar-thumb { background:#d1fae5; border-radius:4px; }
+.ha-table-scroll::-webkit-scrollbar-track { background:transparent; }
+.ha-tr:hover td { background:rgba(240,253,244,0.6); cursor:pointer; }
+.ha-modal-header { background:#fff; border-bottom:1px solid #eef2f7; flex-shrink:0; }
+.ha-modal-body { background:linear-gradient(180deg,#fff 0%,#f8fafc 100%); }
+
+/* HV-specific extras */
+.search-input{width:100%;border:1px solid #dbe4ee;border-radius:14px;padding:.78rem .9rem .78rem 2.5rem;background:#fff;outline:none;transition:border-color .14s ease,box-shadow .14s ease}
+.search-input:focus{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}

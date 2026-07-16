@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { validateLogin } from '../../utils/validators'
 import { getRemainingSeconds, setCooldownFromWait, getCooldownType } from '../../utils/cooldown'
 import CooldownModal from '../../components/CooldownModal'
+import '../../styles/auth.css'
 
 // ─── Design tokens ────────────────────────────────────────────────
 const G = { 800: '#15803d', 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }
@@ -121,26 +122,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
-        *{margin:0;padding:0;box-sizing:border-box}
 
-        @keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-        .fade-up    { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both }
-        .fade-up-d1 { animation:fadeUp .7s  cubic-bezier(.22,1,.36,1) both }
-        .fade-up-d2 { animation:fadeUp .7s  .12s cubic-bezier(.22,1,.36,1) both }
-        .fade-up-d3 { animation:fadeUp .85s .25s cubic-bezier(.22,1,.36,1) both }
-
-        .main-grid { grid-template-columns:1fr }
-        .right-panel,.wave-line,.glow-desk { display:none }
-
-        @media(min-width:1024px) {
-          .main-grid { grid-template-columns:1fr 1fr }
-          .right-panel,.wave-line,.glow-desk { display:block }
-        }
-      `}</style>
 
       <main className="main-grid" style={{
         display:'grid', height:'100vh', width:'100vw', position:'relative',

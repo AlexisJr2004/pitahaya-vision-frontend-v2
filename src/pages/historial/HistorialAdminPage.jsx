@@ -4,6 +4,7 @@ import { getPlantHistories } from '../../services/chatbotService'
 import { toArray } from '../../utils/arrayUtils'
 import { computeSev } from '../../utils/severity'
 import { formatDateWithTime as fmtDate, formatDateLong as fmtDateShort } from '../../utils/formatters'
+import '../../styles/historial.css'
 
 const RANGE_OPTIONS = [
   { key: 'all',    label: 'Todos los registros', param: null    },
@@ -202,59 +203,6 @@ export default function HistorialAdminPage() {
 
   return (
     <>
-      <style>{`
-        .ha-kpi { position:relative; overflow:hidden; border-radius:28px; border:1px solid rgba(226,232,240,0.9); background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%); }
-        .ha-panel { border:1px solid rgba(226,232,240,0.9); border-radius:30px; }
-        .ha-panel-header { border-bottom:1px solid #eef2f7; background:rgba(255,255,255,0.82); }
-        .ha-panel-title { font-family:'Cormorant Garamond',serif; letter-spacing:-0.02em; }
-        .ha-muted { color:#64748b; }
-        .ha-sparkline { height:0.4rem; border-radius:9999px; background:linear-gradient(90deg,rgba(34,197,94,.1),rgba(34,197,94,.4)); }
-        .ha-fade { animation:haFade 0.3s ease-in-out; }
-        @keyframes haFade { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
-
-        .ha-severity-pill { display:inline-flex;align-items:center;padding:.25rem .55rem;border-radius:9999px;font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase; }
-        .ha-sev-low      { background:#ecfdf5; color:#166534; }
-        .ha-sev-medium   { background:#fefce8; color:#a16207; }
-        .ha-sev-high     { background:#fff7ed; color:#c2410c; }
-        .ha-sev-critical { background:#fef2f2; color:#b91c1c; }
-
-        .ha-timeline-list { display:grid; gap:0.75rem; list-style:none; padding:0; margin:0; }
-        .ha-timeline-item { display:grid; grid-template-columns:auto 1fr auto; gap:0.8rem; align-items:start; border:1px solid #e2e8f0; border-radius:20px; background:#fff; padding:.85rem .95rem; }
-        .ha-dot { width:.8rem; height:.8rem; border-radius:9999px; margin-top:.35rem; background:#22c55e; box-shadow:0 0 0 5px rgba(34,197,94,.16); flex-shrink:0; }
-        .ha-dot.high   { background:#ef4444; box-shadow:0 0 0 5px rgba(239,68,68,.16); }
-        .ha-dot.medium { background:#f59e0b; box-shadow:0 0 0 5px rgba(245,158,11,.16); }
-
-        .ha-table-scroll { overflow-x:auto; }
-        .ha-table-scroll::-webkit-scrollbar { height:3px; }
-        .ha-table-scroll::-webkit-scrollbar-thumb { background:#d1fae5; border-radius:4px; }
-        .ha-table-scroll::-webkit-scrollbar-track { background:transparent; }
-        .ha-tr:hover td { background:rgba(240,253,244,0.6); cursor:pointer; }
-
-        .ha-input { width:100%; font-size:.875rem; border:1px solid #e2e8f0; border-radius:.75rem; background:#fff; padding:.6rem .75rem; outline:none; color:#0f172a; transition:border-color .15s,box-shadow .15s; }
-        .ha-input:focus { border-color:#22c55e; box-shadow:0 0 0 2px rgba(34,197,94,.2); }
-
-        /* Modal */
-        .ha-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); z-index:200; align-items:flex-end; justify-content:center; padding:0; }
-        .ha-overlay.open { display:flex; }
-        .ha-modal { width:100%; max-height:92dvh; border-radius:28px 28px 0 0; background:#fff; border:1px solid #eef2f7; box-shadow:0 -8px 48px rgba(15,23,42,.18); overflow:hidden; display:flex; flex-direction:column; }
-        @media(min-width:640px){
-          .ha-overlay { align-items:center; padding:1rem; }
-          .ha-modal { width:min(100%,720px); max-height:min(92dvh,900px); border-radius:24px; box-shadow:0 24px 48px rgba(15,23,42,.18); }
-        }
-        .ha-modal-header { background:#fff; border-bottom:1px solid #eef2f7; flex-shrink:0; }
-        .ha-modal-body { overflow-y:auto; background:linear-gradient(180deg,#fff 0%,#f8fafc 100%); overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
-        .ha-drag-handle { display:none; }
-        @media(max-width:639px){ .ha-drag-handle { display:block; width:36px; height:4px; background:#cbd5e1; border-radius:999px; margin:10px auto 4px; flex-shrink:0; touch-action:none; cursor:grab; } }
-        .ha-detail-section { border:1px solid #e5e7eb; background:#fff; border-radius:22px; padding:1rem; }
-        .ha-detail-section-title { font-size:.78rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#166534; }
-        .ha-detail-badge { display:inline-flex; align-items:center; gap:.35rem; border-radius:9999px; border:1px solid #dcfce7; background:#f0fdf4; color:#15803d; padding:.3rem .7rem; font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-        .ha-detail-field { display:flex; flex-direction:column; gap:.15rem; }
-        .ha-detail-label { font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#94a3b8; }
-        .ha-detail-value { font-size:.9rem; color:#0f172a; line-height:1.4; }
-        .ha-detail-img { width:100%; max-height:260px; object-fit:cover; border-radius:16px; border:1px solid #e5e7eb; }
-        .ha-conf-bar { height:.5rem; border-radius:9999px; background:#f1f5f9; overflow:hidden; }
-        .ha-conf-fill { height:100%; border-radius:9999px; background:linear-gradient(90deg,#22c55e,#16a34a); transition:width .6s ease; }
-      `}</style>
 
       {/* ── Detail Modal ── */}
       {detail && (

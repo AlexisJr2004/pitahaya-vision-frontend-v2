@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+@keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.5} }
+@keyframes spin   { to{transform:rotate(360deg)} }
+
+.fade-up    { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both }
+.fade-up-d1 { animation:fadeUp .7s  cubic-bezier(.22,1,.36,1) both }
+.fade-up-d2 { animation:fadeUp .7s  .12s cubic-bezier(.22,1,.36,1) both }
+.fade-up-d3 { animation:fadeUp .85s .25s cubic-bezier(.22,1,.36,1) both }
+
+.glow-desk{display:none}
+
+@media(min-width:1024px){
+  .glow-desk{display:block}
+}
+
+.auth-grid { grid-template-columns:1fr }
+@media(min-width:1024px) {
+  .auth-grid { grid-template-columns:1fr 1fr }
+}
+
+.register-grid { grid-template-columns:1fr }
+@media(min-width:1024px) {
+  .register-grid{grid-template-columns:1fr 1fr}
+}

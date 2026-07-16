@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { requestPasswordReset } from '../../services/authService'
+import '../../styles/auth.css'
 
 const G = { 800: '#15803d', 600: '#16a34a', 500: '#22c55e', 400: '#4ade80' }
 const GRAY = { 900: '#111827', 700: '#374151', 500: '#6b7280', 400: '#9ca3af', 200: '#e5e7eb', 100: '#F2F4FB' }
@@ -56,15 +57,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
-        *{margin:0;padding:0;box-sizing:border-box}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-        .fade-up{animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both}
-        .glow-desk{display:none}
-        @media(min-width:1024px){.glow-desk{display:block}}
-      `}</style>
+
 
       <main style={{ minHeight:'100vh', width:'100%', position:'relative', background:'#fff', color:GRAY[900], fontFamily:'system-ui,-apple-system,sans-serif', overflowX:'hidden' }}>
 
