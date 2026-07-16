@@ -1,77 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { B, SL, R, SERIF, SANS, MONO, BrandLogo, PdfLoadingOverlay, PdfSectionLabel, resetSections, createPageGeometry, avoidPageCuts } from './pdfCommon'
 
-// ─── Brand tokens ─────────────────────────────────────────────────────────────
-const B  = { 50:'#f0fdf4',100:'#dcfce7',200:'#bbf7d0',300:'#86efac',400:'#4ade80',500:'#22c55e',600:'#16a34a',700:'#15803d',800:'#166534' }
-const SL = { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#cbd5e1',400:'#94a3b8',500:'#64748b',600:'#475569',700:'#334155',800:'#1e293b',900:'#0f172a' }
-const R  = { red:'#dc2626',redL:'#fef2f2',redB:'#fecaca', ora:'#ea580c',oraL:'#fff7ed',oraB:'#fed7aa', amb:'#d97706',ambL:'#fffbeb',ambB:'#fde68a', blu:'#2563eb',bluL:'#eff6ff',bluB:'#bfdbfe', pur:'#7c3aed',purL:'#f5f3ff',purB:'#ddd6fe', tea:'#0d9488',teaL:'#f0fdfa',teaB:'#99f6e4' }
-
-const SERIF = "'Cormorant Garamond', Georgia, serif"
-const SANS  = "Inter, -apple-system, 'Segoe UI', Arial, sans-serif"
-const MONO  = "'IBM Plex Mono', 'Courier New', monospace"
 const W     = 820
-const PAGE_H = Math.round(W * 297 / 210)
 const PAD   = 48
-
-const BAR_COLORS = [B[600],'#0284c7',R.ora,R.amb,R.pur,R.tea,'#db2777']
-
-// ─── Page geometry ────────────────────────────────────────────────────────────
-const A4_W_MM   = 210
 const FOOTER_MM = 9
 const TOPM_MM   = 12
-const MM_TO_PX  = W / A4_W_MM
-const FOOTER_PX = FOOTER_MM * MM_TO_PX
-const TOPM_PX   = TOPM_MM   * MM_TO_PX
-const PAGE1_PX  = PAGE_H - FOOTER_PX
-const PAGEN_PX  = PAGE_H - FOOTER_PX - TOPM_PX
+const geo = createPageGeometry(W, FOOTER_MM, TOPM_MM)
+const { pageEndFor, PAGE1_PX, PAGEN_PX, TOPM_PX } = geo
 
-function pageEndFor(top) {
-  if (top < PAGE1_PX) return PAGE1_PX
-  const k = Math.floor((top - PAGE1_PX) / PAGEN_PX) + 1
-  return PAGE1_PX + k * PAGEN_PX
-}
-
-// ─── Page-cut avoidance ───────────────────────────────────────────────────────
-function avoidPageCuts(template) {
-  template.querySelectorAll('[data-pdf-spacer]').forEach(el => el.remove())
-
-  function absTop(el) {
-    let t = 0, cur = el
-    while (cur && cur !== template) { t += cur.offsetTop; cur = cur.offsetParent }
-    return t
-  }
-
-  let sections = [...template.querySelectorAll('[data-section]')]
-  for (let iter = 0; iter < 40; iter++) {
-    let changed = false
-    for (const s of sections) {
-      const h = s.offsetHeight
-      if (h > PAGEN_PX) continue
-      const top      = absTop(s)
-      const bottom   = top + h
-      const boundary = pageEndFor(top)
-      if (top < boundary && bottom > boundary) {
-        const div = document.createElement('div')
-        div.setAttribute('data-pdf-spacer', '')
-        div.style.cssText = `display:block;height:${boundary - top + 4}px;background:transparent;`
-        s.parentElement.insertBefore(div, s)
-        sections = [...template.querySelectorAll('[data-section]')]
-        changed = true; break
-      }
-    }
-    if (!changed) break
-  }
-}
-
-// ─── Brand logo SVG ───────────────────────────────────────────────────────────
-function BrandLogo({ size = 22, color = B[700] }) {
-  return (
-    <svg viewBox="0 0 24 24" style={{ width:size, height:size, fill:color, display:'block', flexShrink:0 }}>
-      <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-8 2 4-4 8.5-4 8.5-4-8 3.5-9 6-9 6A8 8 0 0 1 17 8z"/>
-    </svg>
-  )
-}
+const BAR_COLORS = [B[600],'#0284c7',R.ora,R.amb,R.pur,R.tea,'#db2777']
 
 // ─── FA icon ──────────────────────────────────────────────────────────────────
 function Icon({ name, color = SL[500], size = 13 }) {
@@ -163,24 +102,7 @@ function RiskPill({ rate }) {
   return                   <Pill label="Sin alertas"                          color={SL[500]} bg={SL[100]} border={SL[200]} />
 }
 
-// ─── Section label with number ────────────────────────────────────────────────
-let _sectionCounter = 0
-function resetSections() { _sectionCounter = 0 }
-function SectionLabel({ children }) {
-  _sectionCounter++
-  const num = String(_sectionCounter).padStart(2, '0')
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:13 }}>
-      <span style={{ fontFamily:MONO, fontSize:10, fontWeight:600, color:B[700], border:`1px solid ${SL[300]}`, borderRadius:7, letterSpacing:'0.04em', flexShrink:0, width:30, height:22, display:'inline-flex', alignItems:'center', justifyContent:'center', paddingBottom:1 }}>
-        {num}
-      </span>
-      <span style={{ fontFamily:SANS, fontSize:11.5, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:SL[800], whiteSpace:'nowrap' }}>
-        {children}
-      </span>
-      <div style={{ flex:1, height:1, background:SL[200] }} />
-    </div>
-  )
-}
+
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 function Card({ children, style }) {
@@ -416,12 +338,12 @@ function UserTemplate({ data, generatedAt }) {
         <ExecutiveSummary bullets={bullets} highlights={highlights} />
 
         <div data-section="kpis" style={{ marginBottom:22 }}>
-          <SectionLabel>Indicadores clave de desempeño</SectionLabel>
+          <PdfSectionLabel>Indicadores clave de desempeño</PdfSectionLabel>
           <KpiGrid items={kpiItems} />
         </div>
 
         <div data-section="health" style={{ marginBottom:22 }}>
-          <SectionLabel>Estado de salud del cultivo</SectionLabel>
+          <PdfSectionLabel>Estado de salud del cultivo</PdfSectionLabel>
           <Card>
             <div style={{ display:'flex', gap:28, alignItems:'center', flexWrap:'wrap' }}>
               <HealthDonut pctHealthy={pctH} size={130} thick={18} />
@@ -442,7 +364,7 @@ function UserTemplate({ data, generatedAt }) {
 
         {topDiseases?.length > 0 && (
           <div data-section="diseases" style={{ marginBottom:22 }}>
-            <SectionLabel>Distribución de enfermedades detectadas</SectionLabel>
+            <PdfSectionLabel>Distribución de enfermedades detectadas</PdfSectionLabel>
             <Card>
               <BarHeader firstLabel="Enfermedad" />
               {topDiseases.map((d, i) => {
@@ -458,7 +380,7 @@ function UserTemplate({ data, generatedAt }) {
 
         {sevTotals?.length > 0 && (
           <div data-section="severity" style={{ marginBottom:22 }}>
-            <SectionLabel>Distribución por nivel de severidad</SectionLabel>
+            <PdfSectionLabel>Distribución por nivel de severidad</PdfSectionLabel>
             <Card>
               <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
                 {sevTotals.map((sv, i) => (
@@ -484,7 +406,7 @@ function UserTemplate({ data, generatedAt }) {
 
         {farmZones?.length > 0 && (
           <div data-section="farmzones" style={{ marginBottom:22 }}>
-            <SectionLabel>Análisis por finca y corporación agrícola</SectionLabel>
+            <PdfSectionLabel>Análisis por finca y corporación agrícola</PdfSectionLabel>
             <Card style={{ padding:0, overflow:'hidden' }}>
               <Table
                 columns={[
@@ -508,7 +430,7 @@ function UserTemplate({ data, generatedAt }) {
 
         {recentAlerts?.length > 0 && (
           <div data-section="alerts" style={{ marginBottom:28 }}>
-            <SectionLabel>Alertas activas de alto riesgo sanitario</SectionLabel>
+            <PdfSectionLabel>Alertas activas de alto riesgo sanitario</PdfSectionLabel>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {recentAlerts.map((h, i) => {
                 const ctx = h.context_detail || {}
@@ -586,12 +508,12 @@ function AdminTemplate({ data, generatedAt }) {
         <ExecutiveSummary bullets={bullets} highlights={highlights} />
 
         <div data-section="kpis" style={{ marginBottom:22 }}>
-          <SectionLabel>Indicadores clave del sistema</SectionLabel>
+          <PdfSectionLabel>Indicadores clave del sistema</PdfSectionLabel>
           <KpiGrid items={kpiItems} />
         </div>
 
         <div data-section="health-sev" style={{ marginBottom:22 }}>
-          <SectionLabel>Estado de salud y distribución por severidad</SectionLabel>
+          <PdfSectionLabel>Estado de salud y distribución por severidad</PdfSectionLabel>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
 
             {health && (
@@ -633,7 +555,7 @@ function AdminTemplate({ data, generatedAt }) {
 
         {topDiseases?.length > 0 && (
           <div data-section="diseases" style={{ marginBottom:22 }}>
-            <SectionLabel>Distribución de enfermedades del sistema</SectionLabel>
+            <PdfSectionLabel>Distribución de enfermedades del sistema</PdfSectionLabel>
             <Card>
               <BarHeader firstLabel="Patología" />
               {topDiseases.map((d, i) => (
@@ -649,7 +571,7 @@ function AdminTemplate({ data, generatedAt }) {
 
         {timeline?.length > 0 && (
           <div data-section="timeline" style={{ marginBottom:22 }}>
-            <SectionLabel>Actividad de análisis — últimos días registrados</SectionLabel>
+            <PdfSectionLabel>Actividad de análisis — últimos días registrados</PdfSectionLabel>
             <Card>
               <div style={{ fontFamily:SANS, fontSize:9, color:SL[400], letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:14 }}>
                 Número de análisis por fecha · {timeline.length} períodos
@@ -661,7 +583,7 @@ function AdminTemplate({ data, generatedAt }) {
 
         {recentAlerts?.length > 0 && (
           <div data-section="alerts" style={{ marginBottom:22 }}>
-            <SectionLabel>Alertas recientes de riesgo sanitario</SectionLabel>
+            <PdfSectionLabel>Alertas recientes de riesgo sanitario</PdfSectionLabel>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {recentAlerts.map((a, i) => {
                 const disease  = a.disease_name_predicted || '—'
@@ -697,7 +619,7 @@ function AdminTemplate({ data, generatedAt }) {
 
         {userCards?.length > 0 && (
           <div data-section="users" style={{ marginBottom:28 }}>
-            <SectionLabel>Análisis por productor registrado en el sistema</SectionLabel>
+            <PdfSectionLabel>Análisis por productor registrado en el sistema</PdfSectionLabel>
             <Card style={{ padding:0, overflow:'hidden' }}>
               <Table
                 columns={[
@@ -724,34 +646,7 @@ function AdminTemplate({ data, generatedAt }) {
   )
 }
 
-// ─── Loading overlay ──────────────────────────────────────────────────────────
-function LoadingOverlay({ status, onClose }) {
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(15,23,42,0.65)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(8px)' }}>
-      <div style={{ background:'#fff', borderRadius:28, padding:'36px 44px', textAlign:'center', minWidth:300, boxShadow:'0 32px 64px rgba(0,0,0,0.2)', border:`1px solid rgba(226,232,240,0.9)` }}>
-        {status === 'error' ? (
-          <>
-            <div style={{ fontFamily:SERIF, fontSize:20, fontWeight:600, color:SL[800], marginBottom:6 }}>Error al generar</div>
-            <div style={{ fontFamily:SANS, fontSize:12, color:SL[500], marginBottom:20 }}>No se pudo crear el PDF. Intenta de nuevo.</div>
-            <button onClick={onClose} style={{ padding:'10px 28px', borderRadius:12, background:B[600], color:'#fff', border:'none', cursor:'pointer', fontFamily:SANS, fontWeight:600, fontSize:13 }}>Cerrar</button>
-          </>
-        ) : status === 'done' ? (
-          <>
-            <div style={{ fontFamily:SERIF, fontSize:20, fontWeight:600, color:SL[800] }}>¡PDF descargado!</div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontFamily:SERIF, fontSize:21, fontWeight:600, color:SL[800], marginBottom:6 }}>Generando reporte...</div>
-            <div style={{ fontFamily:SANS, fontSize:12, color:SL[500], marginBottom:22 }}>Compilando datos, gráficos y diseño del informe</div>
-            <div style={{ height:4, background:SL[100], borderRadius:99, overflow:'hidden' }}>
-              <div style={{ height:'100%', width:'65%', background:`linear-gradient(90deg,${B[400]},${B[600]})`, borderRadius:99 }} />
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
+
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function DashboardReportPDF({ isOpen, onClose, mode = 'user', data = {} }) {
@@ -771,7 +666,7 @@ export default function DashboardReportPDF({ isOpen, onClose, mode = 'user', dat
         const template = templateRef.current
         if (!template) throw new Error('Template not mounted')
 
-        avoidPageCuts(template)
+        avoidPageCuts(template, { pageEndFor, maxPagePx: PAGEN_PX, spacerExtra: 4 })
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
 
         const canvas = await html2canvas(template, {
@@ -835,7 +730,7 @@ export default function DashboardReportPDF({ isOpen, onClose, mode = 'user', dat
 
   return (
     <>
-      <LoadingOverlay status={status} onClose={onClose} />
+      <PdfLoadingOverlay status={status} onClose={onClose} title="Generando reporte..." subtitle="Compilando datos, gráficos y diseño del informe" doneMessage="¡PDF descargado!" buttonStyle={{ padding:'10px 28px', borderRadius:12 }} overlayStyle={{ borderRadius:28, padding:'36px 44px', border:'1px solid rgba(226,232,240,0.9)' }} />
       <div style={{ position:'fixed', top:0, left:'-9999px', zIndex:-1, pointerEvents:'none' }}>
         <div ref={templateRef} style={{ width:W, background:'#fff', fontFamily:SANS, position:'relative' }}>
           {mode === 'admin'
