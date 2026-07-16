@@ -207,7 +207,7 @@ function ZoneCard({ zone, idx }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function DashboardView({ onOpenSidebar }) {
+export default function DashboardView({ onOpenSidebar, climateWeather: propClimateWeather, climateWeatherLoading: propClimateWeatherLoading }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [analyses, setAnalyses] = useState([])
@@ -229,7 +229,7 @@ export default function DashboardView({ onOpenSidebar }) {
   const [mapSevFilter, setMapSevFilter] = useState(new Set([0, 1, 2, 3, 4]))
   const [selectedAnalysis, setSelectedAnalysis] = useState(null)
 
-  const [climateWeather, setClimateWeather] = useState(null)
+  const [climateWeather, setClimateWeather] = useState(propClimateWeather || null)
   const [climateError, setClimateError] = useState('')
 
   const displayName = user?.full_name || user?.username || 'Usuario'
@@ -251,6 +251,7 @@ export default function DashboardView({ onOpenSidebar }) {
 
   // ── weather history (30 días, para correlación clima-enfermedad) ────────────
   useEffect(() => {
+    if (propClimateWeather) return
     if (!navigator.geolocation) { setClimateError('Tu navegador no permite obtener la ubicación.'); return }
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
@@ -526,8 +527,6 @@ export default function DashboardView({ onOpenSidebar }) {
         #dash-main::-webkit-scrollbar{width:3px;}
         #dash-main::-webkit-scrollbar-thumb{background:#d1fae5;border-radius:4px;}
         .export-btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.55rem 1rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;border:1px solid;}
-        .export-btn-pdf{background:#dc2626;color:#fff;border-color:#dc2626;}
-        .export-btn-pdf:hover{background:#b91c1c;}
         .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;}
         .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;font-weight:700;font-size:0.72rem;}
       `}</style>
@@ -576,15 +575,7 @@ export default function DashboardView({ onOpenSidebar }) {
               </div>
             </section>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button onClick={exportPDF} disabled={loading || histories.length === 0}
-                title="Exportar reporte PDF"
-                style={{ background: 'transparent', border: '1.5px solid #f87171', borderRadius: '9999px', color: '#f87171', fontFamily: 'Inter,sans-serif', fontSize: '0.82rem', fontWeight: 600, padding: '0.45rem 1.2rem', cursor: 'pointer', letterSpacing: '0.04em', transition: 'background 0.15s,color 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f87171'; e.currentTarget.style.color = '#fff' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#f87171' }}>
-                Exportar PDF
-              </button>
-            </div>
+
 
             <article className="glass-card p-6">
               <header className="flex items-start justify-between gap-4 mb-5">
@@ -1051,39 +1042,7 @@ export default function DashboardView({ onOpenSidebar }) {
                 }
               </article>
 
-              <article className="glass-card p-6">
-                <header className="mb-5">
-                  <p className="text-xs uppercase tracking-[0.22em] text-slate-500 font-semibold">Reportes</p>
-                  <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Descargar informes</h3>
-                </header>
-                <div className="space-y-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0">
-                        <i className="fas fa-file-pdf text-red-600"></i>
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Reporte PDF del dashboard</p>
-                        <p className="text-xs text-slate-500 mt-0.5">Captura completa con mapa, gráficos e indicadores</p>
-                      </div>
-                    </div>
-                    <button onClick={exportPDF} disabled={loading || histories.length === 0}
-                      className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition"
-                      style={{ background: '#dc2626', border: 'none', cursor: loading || histories.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || histories.length === 0 ? 0.6 : 1 }}>
-                      <i className="fas fa-download mr-2"></i>Descargar PDF
-                    </button>
-                  </div>
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 mb-2">Resumen de datos</p>
-                    <div className="space-y-1.5 text-sm">
-                      <div className="flex justify-between"><span className="text-slate-600">Total análisis</span><span className="font-semibold text-slate-900">{kpis.total}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Con alerta de riesgo</span><span className="font-semibold text-red-700">{kpis.highRisk}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Corporaciones</span><span className="font-semibold text-slate-900">{kpis.farms}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Enfermedades detectadas</span><span className="font-semibold text-slate-900">{topDiseases.length}</span></div>
-                    </div>
-                  </div>
-                </div>
-              </article>
+
             </section>
 
           </div>
@@ -1091,6 +1050,18 @@ export default function DashboardView({ onOpenSidebar }) {
 
         <Footer />
       </main>
+
+      <button onClick={exportPDF} disabled={loading || histories.length === 0}
+        className="fixed bottom-24 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg shadow-red-600/30 hover:shadow-xl hover:shadow-red-600/40 active:scale-95 transition-all duration-200"
+        style={{
+          background: loading || histories.length === 0 ? '#9ca3af' : '#dc2626',
+          border: 'none',
+          cursor: loading || histories.length === 0 ? 'not-allowed' : 'pointer',
+          opacity: loading || histories.length === 0 ? 0.6 : 1,
+        }}>
+        <i className="fas fa-file-pdf text-sm"></i>
+        <span>PDF</span>
+      </button>
 
       <FloatingChatButton />
 

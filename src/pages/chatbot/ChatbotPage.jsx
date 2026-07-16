@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import './ChatbotPage.css'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import ProfileModal from '../../components/ProfileModal'
@@ -15,15 +16,13 @@ import ConversationPDF from '../../components/pdf/ConversationPDF'
 import WelcomeScreen from './components/WelcomeScreen'
 import SuggestedQuestions from './components/SuggestedQuestions'
 import AnalysisCard from './components/AnalysisCard'
-import AppLogo from '../../components/AppLogo'
+import Sidebar from '../../components/Sidebar'
 import { UserBubble, AssistantBubble, LoadingDots } from './components/MessageBubble'
 
 export default function ChatbotPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPos, setMenuPos] = useState({ left: 0, bottom: 0 })
   const [inputValue, setInputValue] = useState('')
   const [messages, setMessages] = useState([])
   const [showWelcome, setShowWelcome] = useState(true)
@@ -71,8 +70,6 @@ export default function ChatbotPage() {
   const [farmError, setFarmError] = useState('')
   const [plotError, setPlotError] = useState('')
   const [streamDoneIds, setStreamDoneIds] = useState(new Set())
-  const menuRef = useRef(null)
-  const triggerRef = useRef(null)
   const chatAreaRef = useRef(null)
   const fileInputRef = useRef(null)
   const inpRef = useRef(null)
@@ -157,7 +154,12 @@ export default function ChatbotPage() {
     } catch { return [] }
   }
 
-  useEffect(() => { loadFarms(); loadConversations(); loadPlantHistories() }, [])
+  useEffect(() => {
+    loadFarms()
+    const t1 = setTimeout(() => loadConversations(), 300)
+    const t2 = setTimeout(() => loadPlantHistories(), 600)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
 
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -189,17 +191,6 @@ export default function ChatbotPage() {
       }
     }
   }, [targetConvId])
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (!menuOpen) return
-      if (menuRef.current && !menuRef.current.contains(e.target) && triggerRef.current && !triggerRef.current.contains(e.target)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
-  }, [menuOpen])
 
   useEffect(() => {
     if (chatAreaRef.current) chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight
@@ -724,20 +715,7 @@ export default function ChatbotPage() {
   }, [showParcelasModal, showAddFarmModal, showAddPlotModal, showContextModal])
   const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
   const closeSidebar = () => { setSidebarOpen(false); document.body.style.overflow = '' }
-  const toggleUserMenu = () => {
-    if (menuOpen) { setMenuOpen(false); return }
-    const trigger = triggerRef.current
-    if (!trigger) return
-    const rect = trigger.getBoundingClientRect()
-    const W = 383, MARGIN = 10
-    let left = rect.left
-    let bottom = window.innerHeight - rect.top + 10
-    if (left + W > window.innerWidth - MARGIN) left = window.innerWidth - W - MARGIN
-    if (left < MARGIN) left = MARGIN
-    setMenuPos({ left, bottom })
-    setMenuOpen(true)
-  }
-  const handleLogout = async () => { setMenuOpen(false); await logout(); navigate('/login', { replace: true }) }
+  const handleLogout = async () => { await logout(); navigate('/login', { replace: true }) }
 
   const newChat = () => {
     setMessages([]); setInputValue(''); removeImage()
@@ -1155,239 +1133,6 @@ export default function ChatbotPage() {
 
   return (
     <>
-      <style>{`
-        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
-        html, body { margin: 0; height: 100%; }
-        body { padding-bottom: env(safe-area-inset-bottom); }
-        .font-cormorant { font-family: 'Cormorant Garamond', serif; }
-        .brand-avatar { background: linear-gradient(135deg, #16a34a, #22c55e, #4ade80); }
-        #chatArea::-webkit-scrollbar { width: 3px; }
-        #chatArea::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 4px; }
-        #historyList::-webkit-scrollbar { width: 2px; }
-        #historyList::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
-        textarea { resize: none; outline: none; background: transparent; }
-        .input-box:focus-within { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, .15); }
-        .chip:hover { background: #f0fdf4; border-color: #16a34a; }
-        .chip:active { background: #dcfce7; }
-        .send-active { background: linear-gradient(135deg, #16a34a, #22c55e); cursor: pointer; }
-        .send-inactive { background: #e5e7eb; cursor: not-allowed; }
-        .send-inactive svg { color: #9ca3af !important; }
-        .bot-text { color: #1f2937; }
-        .user-bubble { background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; }
-        .bot-text strong { font-weight: 600; }
-        .bot-text code { background: #f0fdf4; padding: 1px 5px; border-radius: 4px; font-size: .85em; font-family: monospace; color: #15803d; }
-        .action-btn:hover { background: #f0fdf4; color: #15803d; }
-        .action-btn:active { background: #dcfce7; }
-        #drawerOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; }
-        #drawerOverlay.open { display: block; }
-        #sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 272px; background: #fff; border-right: 1px solid #f3f4f6; display: flex; flex-direction: column; padding: 1rem; gap: 0.75rem; z-index: 50; overflow: hidden; transform: translateX(0); transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
-        @media (max-width: 767px) { #sidebar { transform: translateX(-100%); } #sidebar.open { transform: translateX(0); } }
-        @media (min-width: 768px) { #sidebar { position: relative; flex-shrink: 0; } #drawerOverlay { display: none !important; } #menuBtn { display: none !important; } }
-        .botanical-bg { position: absolute; bottom: -0.75rem; left: -0.75rem; width: 11rem; opacity: 0.08; pointer-events: none; }
-        .chips-grid { display: grid; gap: 0.75rem; grid-template-columns: 1fr 1fr; }
-        @media (max-width: 360px) { .chips-grid { grid-template-columns: 1fr; } }
-        .input-zone { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
-        @keyframes popUp { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        #userMenu { animation: popUp 0.22s cubic-bezier(0.34, 1.18, 0.64, 1) both; }
-        .um-option { display: flex; align-items: center; gap: 13px; padding: 11px 18px; text-decoration: none; transition: background 0.12s; cursor: pointer; }
-        .um-option:hover { background: #f9fafb; }
-        .um-option:active { background: #f3f4f6; }
-        .um-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.78rem; transition: background 0.15s, color 0.15s; }
-        #userTrigger { transition: background 0.15s; }
-        #userTrigger:hover { background: #f9fafb; }
-        #userTrigger:active { background: #f0fdf4; }
-        .trigger-ring { transition: box-shadow 0.15s; }
-        #userTrigger:hover .trigger-ring { box-shadow: 0 0 0 2px #4ade80; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-up { animation: fadeUp 0.3s ease-out both; }
-        @keyframes dotBounce { 0%,80%,100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-6px); opacity: 1; } }
-        .animate-dot { animation: dotBounce 1.3s infinite; }
-        .animate-dot-2 { animation: dotBounce 1.3s .15s infinite; }
-        .animate-dot-3 { animation: dotBounce 1.3s .30s infinite; }
-        @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.5); } 70% { box-shadow: 0 0 0 9px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
-        .animate-pulse-ring { animation: pulseRing 1.4s infinite; }
-        @keyframes wave { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
-        .mic-on { background: #ef4444 !important; animation: pulseRing 1.4s infinite; }
-        .wb { width: 3px; height: 14px; background: #fff; border-radius: 2px; transform-origin: center; }
-        @keyframes slideIn { 0% { transform: translateX(-100%); } 100% { transform: translateX(0); } }
-        .animate-slide-in { animation: slideIn 0.28s cubic-bezier(0.22,1,0.36,1) both; }
-        .animate-wave-1 { animation: wave .7s 0s ease-in-out infinite; }
-        .animate-wave-2 { animation: wave .7s .1s ease-in-out infinite; }
-        .animate-wave-3 { animation: wave .7s .2s ease-in-out infinite; }
-        .animate-wave-4 { animation: wave .7s .1s ease-in-out infinite; }
-        .animate-wave-5 { animation: wave .7s 0s ease-in-out infinite; }
-        .sidebar-btn { display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; font-size: 0.875rem; color: #4b5563; transition: all 0.14s ease; border: 1px solid #d1d5dba0; cursor: pointer; width: 100%; text-align: left; background: none; }
-        .sidebar-btn:hover { background: #f0fdf4; border-color: #22c55e; }
-        .sidebar-btn:active { background: #dcfce7; }
-        .sidebar-btn.active { background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 500; }
-        .context-overlay { position: fixed; inset: 0; z-index: 230; display: none; align-items: flex-end; justify-content: center; padding: 0; background: rgba(15, 23, 42, .45); backdrop-filter: blur(4px); }
-        .context-overlay.open { display: flex; }
-        .context-modal { width: 100%; max-height: 92dvh; border-radius: 28px 28px 0 0; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 -8px 48px rgba(15, 23, 42, .18); overflow: hidden; display: flex; flex-direction: column; }
-        @media (min-width: 640px) {
-          .context-overlay { align-items: center; padding: 1rem; }
-          .context-modal { width: min(100%, 980px); max-height: min(92dvh, 960px); border-radius: 28px; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); }
-        }
-        .context-modal-header { background: #fff; color: #0f172a; border-bottom: 1px solid #eef2f7; flex-shrink: 0; }
-        .context-modal-body { overflow-y: auto; background: linear-gradient(180deg, #fff 0%, #f8fafc 100%); flex: 1; }
-        .drag-handle { display: none; }
-        @media (max-width: 639px) {
-          .drag-handle { display: block; width: 36px; height: 4px; background: #cbd5e1; border-radius: 999px; margin: 10px auto 4px; flex-shrink: 0; touch-action: none; cursor: grab; }
-        }
-        .modal-footer-btns { display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; }
-        @media (max-width: 480px) {
-          .modal-footer-btns { flex-direction: column-reverse; }
-          .modal-footer-btns .context-save-btn,
-          .modal-footer-btns .context-secondary-btn { width: 100%; min-width: 0; text-align: center; font-size: 0.88rem; }
-        }
-        .context-section { border: 1px solid #e5e7eb; background: #fff; border-radius: 22px; padding: 1rem; }
-        .context-section-title { font-size: 0.78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #166534; }
-        .context-badge { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 9999px; border: 1px solid #dcfce7; background: #f0fdf4; color: #15803d; padding: 0.3rem 0.7rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-        .context-input, .context-select, .context-textarea { width: 100%; border: 1px solid #dbe4ee; border-radius: 14px; background: #fff; color: #0f172a; padding: 0.78rem 0.9rem; font-size: 0.92rem; transition: border-color 0.14s ease, box-shadow 0.14s ease; }
-        .context-input:focus, .context-select:focus, .context-textarea:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, .12); }
-        .context-textarea { min-height: 104px; resize: vertical; }
-        .context-save-btn { min-width: 130px; padding: 0.82rem 1.15rem; border-radius: 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; font-size: 0.9rem; font-weight: 700; transition: transform 0.14s ease, box-shadow 0.14s ease; box-shadow: 0 14px 26px rgba(22, 163, 74, .18); border: none; cursor: pointer; }
-        .context-save-btn:hover { transform: translateY(-1px); }
-        .context-secondary-btn { min-width: 90px; padding: 0.82rem 1.1rem; border-radius: 16px; border: 1px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.14s; }
-        .context-secondary-btn:hover { background: #f8fafc; }
-        @media (max-width: 400px) {
-          .context-save-btn, .context-secondary-btn { min-width: 0; flex: 1; font-size: 0.85rem; padding: 0.78rem 0.9rem; }
-        }
-        .context-summary { border: 1px dashed #dcfce7; background: #f8fafc; border-radius: 18px; padding: 0.9rem 1rem; }
-        .settings-field { border: 1px solid #edf2f7; border-radius: 18px; background: #f8fafc; padding: 0.9rem; }
-        .settings-add-row { display: flex; gap: 0.65rem; flex-wrap: wrap; }
-        .settings-add-row input { min-width: 0; flex: 1 1 220px; }
-        .settings-add-btn { min-width: 112px; padding: 0.82rem 1rem; border-radius: 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; font-size: 0.9rem; font-weight: 700; border: none; cursor: pointer; }
-        .settings-chip-list { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.85rem; }
-        .settings-chip { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.42rem 0.7rem; border-radius: 9999px; background: #fff; border: 1px solid #dbe4ee; color: #334155; font-size: 0.8rem; }
-        .settings-chip button { width: 1.1rem; height: 1.1rem; border-radius: 9999px; background: #e2e8f0; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; flex-shrink: 0; border: none; cursor: pointer; }
-        .settings-chip button:hover { background: #cbd5e1; }
-        .parcelas-farm-card { border: 1px solid #eef2f7; border-radius: 22px; background: #fff; overflow: hidden; }
-        .parcelas-farm-header { border-bottom: 1px solid #eef2f7; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
-        .parcelas-farm-body { padding: 0.75rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .parcelas-plots-table { width: 100%; border-collapse: collapse; min-width: 480px; }
-        .parcelas-plots-table thead { border-bottom: 1.5px solid #eef2f7; }
-        .parcelas-plots-table th { padding: 9px 10px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
-        .parcelas-plots-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; color: #0f172a; white-space: nowrap; }
-        .parcelas-plots-table tbody tr:last-child td { border-bottom: none; }
-        .parcelas-plots-table tbody tr:hover { background: #f8fafc; }
-        .parcelas-select-btn { padding: 4px 10px; border-radius: 999px; border: 1px solid #dbe4ee; background: #fff; color: #16a34a; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 0.12s; white-space: nowrap; }
-        .parcelas-select-btn:hover { background: #f0fdf4; border-color: #22c55e; }
-        .parcelas-empty-state { text-align: center; padding: 2.5rem 1rem; color: #94a3b8; display: flex; flex-direction: column; align-items: center; }
-        .session-card { position: relative; }
-        .session-card:hover .session-actions, .session-card:focus-within .session-actions, .session-card.menu-open .session-actions { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
-        .session-actions { position: absolute; top: 50%; right: 0.7rem; transform: translateY(-50%) scale(0.98); opacity: 0; pointer-events: none; transition: opacity 0.14s ease, transform 0.14s ease; }
-        .session-dot-btn { width: 1.85rem; height: 1.85rem; border-radius: 9999px; background: rgba(255,255,255,.96); border: 1px solid #e5e7eb; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: none; cursor: pointer; }
-        .session-dot-btn span { display: block; width: 4px; height: 4px; border-radius: 9999px; background: #64748b; margin: 1px 0; }
-        .session-menu-overlay { position: fixed; inset: 0; z-index: 180; display: none; background: transparent; }
-        .session-menu-overlay.open { display: block; }
-        .session-menu { position: fixed; z-index: 190; min-width: 196px; border-radius: 18px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 2px 8px rgba(15,23,42,.05); padding: 0.35rem; }
-        .session-menu-item { width: 100%; display: flex; align-items: center; gap: 0.7rem; padding: 0.72rem 0.8rem; border-radius: 14px; text-align: left; transition: background 0.14s ease, color 0.14s ease; background: transparent; border: none; cursor: pointer; }
-        .session-menu-item:hover { background: #f8fafc; }
-        .session-pin { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #15803d; background: #dcfce7; border-radius: 9999px; padding: 0.18rem 0.45rem; }
-        .delete-overlay { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .36); backdrop-filter: blur(1px); }
-        .delete-overlay.open { display: flex; }
-        .delete-modal { width: min(100%, 420px); border-radius: 24px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); overflow: hidden; }
-        .delete-modal-title { font-size: 1rem; font-weight: 700; color: #0f172a; }
-        .delete-modal-text { font-size: 0.9rem; color: #64748b; }
-        .delete-modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
-        .delete-btn { min-width: 108px; padding: 0.78rem 1rem; border-radius: 14px; font-size: 0.9rem; font-weight: 600; transition: all 0.14s; border: none; cursor: pointer; }
-        .delete-btn-secondary { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
-        .delete-btn-secondary:hover { background: #f8fafc; }
-        .delete-btn-danger { background: #ef4444; color: #fff; border: 1px solid #ef4444; }
-        .delete-btn-danger:hover { background: #dc2626; }
-        /* Onboarding */
-        .onboard-step { display: flex; align-items: center; gap: 0.85rem; text-align: left; border-radius: 18px; padding: 0.85rem 1rem; border: 1px solid; transition: all 0.18s; }
-        .onboard-step.active { background: #f0fdf4; border-color: #bbf7d0; }
-        .onboard-step.inactive { background: #f8fafc; border-color: #e2e8f0; opacity: 0.55; }
-        .onboard-num { width: 2rem; height: 2rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700; flex-shrink: 0; }
-        .onboard-num.active { background: linear-gradient(135deg,#16a34a,#22c55e); color: #fff; }
-        .onboard-num.inactive { background: #e2e8f0; color: #94a3b8; }
-        /* No-farm hint */
-        @keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-        .farm-hint { animation: slideDown 0.22s ease-out; }
-        /* Icon inputs — fuerza padding-left para que el ícono no tape el texto */
-        .ctx-icon-input { padding-left: 2.65rem !important; }
-        /* GPS map */
-        .map-wrap { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; position: relative; }
-        .leaflet-container { font-family: 'Inter', sans-serif !important; background: #e8f4ea !important; }
-        .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;} .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;}
-        .leaflet-control-layers-selector { accent-color: #16a34a; }
-        .leaflet-control-scale-line { border-color: #16a34a; border-top: none; background: rgba(255,255,255,.85); color: #166534; font-size: 0.7rem; font-family: 'Inter', sans-serif; }
-        .leaflet-bar a { border-color: #e2e8f0 !important; color: #374151 !important; font-size: 0.95rem !important; }
-        .leaflet-bar a:hover { background: #f0fdf4 !important; color: #16a34a !important; }
-        /* Coordenadas badge */
-        .gps-badge { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 0.55rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #15803d; font-weight: 500; }
-        /* Geoloc button */
-        .geo-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; border-radius: 12px; border: 1.5px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.14s; white-space: nowrap; }
-        .geo-btn:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
-        .geo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        /* Plot modal two-column */
-        .plot-modal-body { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr; gap: 1.25rem; padding: 1.25rem 1.5rem; align-items: start; }
-        @media (min-width: 768px) { .plot-modal-body { grid-template-columns: 1fr 1fr; align-items: stretch; } }
-        .plot-col { display: flex; flex-direction: column; gap: 1rem; }
-        .plot-map-col { display: flex; flex-direction: column; gap: 0.75rem; }
-        .plot-map-fill { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; height: 220px; }
-        @media (min-width: 768px) { .plot-map-fill { height: 320px; } }
-        /* ── Settings tabs & option cards ── */
-        .set-tab { border-radius: 9999px; border: 1px solid #e2e8f0; padding: 0.45rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.14s; background: #fff; color: #64748b; display: inline-flex; align-items: center; gap: 0.4rem; }
-        .set-tab.active { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
-        .set-tab:hover:not(.active) { background: #f8fafc; border-color: #cbd5e1; }
-        .set-opt { border-radius: 12px; padding: 0.85rem 1rem; cursor: pointer; transition: all 0.14s; border: 1px solid #e2e8f0; background: #fff; text-align: left; width: 100%; display: block; }
-        .set-opt:hover { border-color: #86efac; box-shadow: 0 2px 6px rgba(0,0,0,.05); }
-        .set-opt.active { border-color: #bbf7d0 !important; background: #f0fdf4 !important; }
-        /* ── Suggested questions ── */
-        .suggested-q { background:#f3f4f6; border:1px solid #e5e7eb; border-radius:14px; padding:7px 14px; font-size:0.8rem; color:#374151; text-align:left; cursor:pointer; line-height:1.4; transition:background 0.15s,border-color 0.15s; max-width:90%; display:block; }
-        .suggested-q:hover { background:#e5e7eb; border-color:#d1d5db; }
-        .suggested-label { color:#9ca3af; }
-      `}</style>
-
-      {/* DRAWER OVERLAY */}
-      <div id="drawerOverlay" className={sidebarOpen ? 'open' : ''} onClick={closeSidebar}></div>
-
-      {/* USER MENU */}
-      {menuOpen && (
-        <div id="userMenu" ref={menuRef} style={{ position: 'fixed', zIndex: 200, width: '383px', background: '#fff', borderRadius: '18px', overflow: 'hidden', border: '1px solid #f3f4f6', boxShadow: '0 24px 48px rgba(15, 23, 42, .18)', left: menuPos.left + 'px', bottom: menuPos.bottom + 'px', top: 'auto' }}>
-          <div className="flex items-center justify-between px-5 pt-4 pb-2 gap-2">
-            <p className="text-[0.75rem] font-medium text-gray-500 truncate text-center w-full">{userEmail}</p>
-          </div>
-          <div className="flex flex-col items-center px-6 pt-1 pb-6">
-            <div className="mb-3 flex-shrink-0" style={{ padding: 3, background: 'linear-gradient(135deg,#16a34a,#4ade80)', borderRadius: '9999px', boxShadow: '0 4px 18px rgba(22,163,74,.25)' }}>
-              <div className="w-[78px] h-[78px] rounded-full overflow-hidden bg-white p-0.5">
-                {profilePhotoUrl ? <img src={profilePhotoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover select-none" /> : <div className="w-full h-full rounded-full flex items-center justify-center text-2xl font-bold text-white select-none brand-avatar">{initials}</div>}
-              </div>
-            </div>
-            <p className="text-[1.1rem] font-semibold text-gray-800 mb-0.5">¡Hola, {displayName.split(' ')[0]}!</p>
-            <p className="text-[0.72rem] text-gray-400 mb-4 text-center">{displayName}</p>
-            <button onClick={openProfileModal} className="w-full text-center border border-brand-600 text-brand-700 rounded-full py-2 px-4 text-[0.82rem] font-medium hover:bg-brand-50 active:bg-brand-100 transition-colors cursor-pointer" style={{ background: 'none' }}>
-              Gestionar mi perfil
-            </button>
-          </div>
-          <div className="h-px bg-gray-100"></div>
-          <div className="py-1.5">
-            <div onClick={openProfileModal} className="um-option group">
-              <div className="um-icon bg-gray-100 text-gray-500 group-hover:bg-brand-100 group-hover:text-brand-600"><i className="fas fa-user"></i></div>
-              <div><p className="text-sm font-medium text-gray-700 leading-tight">Perfil</p><p className="text-[0.68rem] text-gray-400 mt-0.5">Ver y editar tu perfil</p></div>
-            </div>
-            <div onClick={openSettingsModal} className="um-option group">
-              <div className="um-icon bg-gray-100 text-gray-500 group-hover:bg-brand-100 group-hover:text-brand-600"><i className="fas fa-gear"></i></div>
-              <div><p className="text-sm font-medium text-gray-700 leading-tight">Configuraciones</p><p className="text-[0.68rem] text-gray-400 mt-0.5">Preferencias y ajustes</p></div>
-            </div>
-          </div>
-          <div className="h-px bg-gray-100"></div>
-          <div className="py-1.5">
-            <div onClick={handleLogout} className="um-option group">
-              <div className="um-icon bg-red-50 text-red-400 group-hover:bg-red-100 group-hover:text-red-500"><i className="fas fa-arrow-right-from-bracket"></i></div>
-              <p className="text-sm font-semibold text-red-500">Cerrar sesion</p>
-            </div>
-          </div>
-          <div className="h-px bg-gray-100"></div>
-          <div className="py-3 flex items-center justify-center gap-2.5">
-            <a href="#" className="text-[0.63rem] text-gray-400 hover:text-gray-600 hover:underline transition-colors">Politica de privacidad</a>
-            <span className="text-gray-300 select-none text-xs">·</span>
-            <a href="#" className="text-[0.63rem] text-gray-400 hover:text-gray-600 hover:underline transition-colors">Terminos de servicio</a>
-          </div>
-        </div>
-      )}
 
       {/* SESSION MENU */}
       <div className={`session-menu-overlay ${sessionMenuState.open ? 'open' : ''}`} onClick={closeSessionMenu}></div>
@@ -1431,7 +1176,7 @@ export default function ChatbotPage() {
           <div className="px-6 pb-6">
             <div className="delete-modal-actions">
               <button className="delete-btn delete-btn-secondary" onClick={() => setRenamingConvId(null)}>Cancelar</button>
-              <button className="delete-btn delete-btn-danger" style={{ background: '#16a34a', borderColor: '#16a34a' }} onClick={handleRenameConversation}>Guardar</button>
+              <button className="delete-btn delete-btn-danger delete-btn-green" onClick={handleRenameConversation}>Guardar</button>
             </div>
           </div>
         </div>
@@ -1450,46 +1195,24 @@ export default function ChatbotPage() {
 
       {/* LAYOUT */}
       <div id="appLayout" className="h-screen flex overflow-hidden bg-white">
-        {/* SIDEBAR */}
-        <aside id="sidebar" className={sidebarOpen ? 'open' : ''}>
-          <svg className="botanical-bg" viewBox="0 0 220 280" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-            <path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-            <path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
-            <path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" />
-            <ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" />
-            <ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" />
-            <ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" />
-          </svg>
-          <div className="flex items-center gap-2 mb-1" style={{ position: 'relative', zIndex: 1 }}>
-            <div className="brand-avatar w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
-              <AppLogo className="w-4 h-4 fill-white" />
-            </div>
-            <span className="font-cormorant font-semibold text-base text-gray-900">Pitahaya Vision</span>
-          </div>
-          <nav style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <button onClick={() => navigate('/dashboard')} className="sidebar-btn">
-              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
-              Dashboard
-            </button>
-            <button onClick={openParcelasModal} className="sidebar-btn">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
-              </svg>
-              Mis parcelas
-            </button>
-            <button onClick={() => navigate('/historial')} className="sidebar-btn">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M7 6h10" /><path d="M7 18h10" /></svg>
-              Historial de analisis
-            </button>
-            <button onClick={newChat} className="sidebar-btn">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              Nueva conversacion
-            </button>
-          </nav>
-          <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1" style={{ position: 'relative', zIndex: 1 }}>Recientes</p>
-          <ul id="historyList" className="flex flex-col gap-1 overflow-y-auto flex-1" style={{ position: 'relative', zIndex: 1 }}>
+        <Sidebar
+          navItems={[
+            { key: 'dashboard', label: 'Dashboard', active: false, onClick: () => { closeSidebar(); navigate('/dashboard') }, icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg> },
+            { key: 'historial', label: 'Historial', active: false, onClick: () => { closeSidebar(); navigate('/historial') }, icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M7 6h10" /><path d="M7 18h10" /></svg> },
+            { key: 'parcelas', label: 'Parcelas', active: false, onClick: openParcelasModal, icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" /></svg> },
+            { key: 'newchat', label: 'Nueva conversacion', active: false, onClick: newChat, icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> },
+          ]}
+          hideWeather
+          user={{ displayName, email: userEmail, profilePhotoUrl, initials }}
+          onProfile={() => setShowProfileModal(true)}
+          onSettings={() => setShowSettingsModal(true)}
+          onLogout={handleLogout}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={setSidebarOpen}
+          sidebarId="chatbot-sidebar"
+        >
+          <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1">Recientes</p>
+          <ul id="historyList" className="flex flex-col gap-1 overflow-y-auto flex-1">
             {sortedConversations.length === 0 ? (
               <p className="text-xs text-gray-300 px-2">Sin conversaciones aun</p>
             ) : (
@@ -1500,7 +1223,6 @@ export default function ChatbotPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <p className={`text-xs font-semibold truncate ${activeConvId === conv.id ? 'text-brand-800' : 'text-gray-700'}`}>{esc(conv.title || 'Nueva conversacion')}</p>
                         {conv.pinnedAt ? <span className="session-pin"><i className="fas fa-thumbtack text-[0.55rem]"></i> Fijada</span> : null}
-
                       </div>
                       <p className={`text-[0.68rem] mt-0.5 truncate ${activeConvId === conv.id ? 'text-brand-700/80' : 'text-gray-400'}`}>{conv.preview || 'Sesion en blanco'}</p>
                     </div>
@@ -1515,19 +1237,7 @@ export default function ChatbotPage() {
               ))
             )}
           </ul>
-          <div className="border-t border-gray-100 pt-3 mt-1" style={{ position: 'relative', zIndex: 1 }}>
-            <button id="userTrigger" ref={triggerRef} onClick={toggleUserMenu} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left group" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              <div className="trigger-ring w-9 h-9 rounded-full flex-shrink-0 p-0.5" style={{ background: 'linear-gradient(135deg,#16a34a,#4ade80)', boxShadow: '0 0 0 2px white' }}>
-                {profilePhotoUrl ? <img src={profilePhotoUrl} alt="Avatar" className="brand-avatar w-full h-full rounded-full object-cover select-none" /> : <div className="w-full h-full rounded-full flex items-center justify-center text-[0.6rem] font-bold text-white select-none brand-avatar">{initials}</div>}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[0.82rem] font-semibold text-gray-800 truncate leading-tight">{displayName}</p>
-                <p className="text-[0.68rem] text-gray-400 truncate leading-tight">{userEmail}</p>
-              </div>
-              <i className={`fas fa-chevron-up text-[0.62rem] text-gray-400 flex-shrink-0 transition-transform duration-200 ${menuOpen ? 'rotate-0' : 'rotate-180'}`}></i>
-            </button>
-          </div>
-        </aside>
+        </Sidebar>
 
         {/* MAIN */}
         <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
@@ -1586,10 +1296,10 @@ export default function ChatbotPage() {
                     <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu corporación agrícola</p>
                     <p className="text-xs text-amber-700 mt-0.5">Necesitas al menos una parcela para empezar el análisis.</p>
                   </div>
-                  <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="flex-shrink-0 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100 transition" style={{ cursor: 'pointer' }}>
+                  <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="flex-shrink-0 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100 transition btn-reset">
                     Crear corporación agrícola
                   </button>
-                  <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
+                  <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition icon-btn">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                   </button>
                 </div>
@@ -1605,12 +1315,11 @@ export default function ChatbotPage() {
                   </div>
                   <button
                     onClick={() => { setShowNoContextHint(false); setShowContextModal(true) }}
-                    className="flex-shrink-0 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-200 transition"
-                    style={{ cursor: 'pointer' }}
+                    className="flex-shrink-0 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-200 transition btn-reset"
                   >
                     Seleccionar parcela
                   </button>
-                  <button onClick={() => setShowNoContextHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-500 hover:bg-blue-200 flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
+                  <button onClick={() => setShowNoContextHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-500 hover:bg-blue-200 flex items-center justify-center transition icon-btn">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                   </button>
                 </div>
@@ -1618,7 +1327,7 @@ export default function ChatbotPage() {
               <div id="imgPreview" className={`${imagePreview ? 'flex' : 'hidden'} items-center gap-3 mb-3 px-1`}>
                 <div className="relative">
                   <img id="previewImg" src={imagePreview || ''} alt="preview" className="h-14 w-14 sm:h-16 sm:w-16 object-cover rounded-2xl border border-brand-200 shadow-sm" />
-                  <button onClick={removeImage} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-700 hover:bg-gray-900 rounded-full flex items-center justify-center transition" style={{ border: 'none', cursor: 'pointer' }}>
+                  <button onClick={removeImage} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-700 hover:bg-gray-900 rounded-full flex items-center justify-center transition icon-btn">
                     <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                   </button>
                 </div>
@@ -1635,8 +1344,7 @@ export default function ChatbotPage() {
                     fileInputRef.current?.click()
                   }}
                   title="Adjuntar imagen"
-                  className="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                  className="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600 btn-reset"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
                 </button>
@@ -1651,7 +1359,7 @@ export default function ChatbotPage() {
                   placeholder={farms.length === 0 ? 'Registra una corporación agrícola para comenzar...' : 'Escribe sobre tu cultivo...'}
                   className="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"
                 />
-                <button ref={micRef} onClick={toggleMic} title="Usar microfono" className="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200" style={{ border: 'none', cursor: 'pointer' }}>
+                <button ref={micRef} onClick={toggleMic} title="Usar microfono" className="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200 icon-btn">
                   <svg ref={micIconRef} className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
                   <div ref={micWaveRef} className="hidden items-center gap-0.5">
                     <div className="wb animate-wave-1"></div>
