@@ -1,16 +1,65 @@
+import { useState, useEffect } from 'react'
+
+const SUGGESTIONS = [
+  {
+    icon: 'fa-leaf',
+    gradient: 'from-emerald-400 to-green-600',
+    label: 'Enfermedades',
+    desc: 'Diagnóstico de cultivos',
+    msg: '¿Cuales son las enfermedades mas comunes de la pitahaya?',
+  },
+  {
+    icon: 'fa-chart-line',
+    gradient: 'from-blue-400 to-indigo-600',
+    label: 'Rendimiento',
+    desc: 'Optimización agrícola',
+    msg: '¿Como puedo mejorar el rendimiento de mi cultivo de pitahaya?',
+  },
+  {
+    icon: 'fa-bug',
+    gradient: 'from-amber-400 to-orange-600',
+    label: 'Control de plagas',
+    desc: 'Protección del cultivo',
+    msg: '¿Que plagas afectan a la pitahaya y como controlarlas?',
+  },
+  {
+    icon: 'fa-droplet',
+    gradient: 'from-sky-400 to-cyan-600',
+    label: 'Riego',
+    desc: 'Gestión del agua',
+    msg: '¿Cual es el mejor sistema de riego para pitahaya?',
+  },
+]
+
+const WELCOME_VARIANTS = [
+  (name) => <>¿En qué puedo <span className="text-brand-600 font-cormorant">ayudarte</span>, {name}?</>,
+  (name) => <>¿Qué <span className="text-brand-600 font-cormorant">cultivas</span> hoy, {name}?</>,
+  (name) => <>Hola, {name}. ¿Necesitas <span className="text-brand-600 font-cormorant">asistencia</span>?</>,
+  (name) => <>¿Listo para <span className="text-brand-600 font-cormorant">analizar</span>, {name}?</>,
+  (name) => <>Bienvenido, {name}. ¿<span className="text-brand-600 font-cormorant">Diagnosticamos</span> algo?</>,
+  (name) => <>¿Qué tal, {name}? ¿<span className="text-brand-600 font-cormorant">Revisamos</span> tu cultivo?</>,
+  (name) => <>Hola de nuevo, {name}. ¿<span className="text-brand-600 font-cormorant">Empezamos</span>?</>,
+  (name) => <>Cuéntame, {name}. ¿<span className="text-brand-600 font-cormorant">Cómo</span> va tu cultivo?</>,
+]
+
 export default function WelcomeScreen({ displayName, farms, openAddFarmModal, suggest }) {
+  const [variant, setVariant] = useState(0)
+
+  useEffect(() => {
+    setVariant(Math.floor(Math.random() * WELCOME_VARIANTS.length))
+  }, [])
+
+  const first = displayName?.split(' ')[0] || ''
+
   return (
     <div id="welcome" className="flex flex-col items-center justify-center min-h-full text-center px-3">
-      <svg className="absolute bottom-0 left-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
-      <svg className="absolute bottom-0 right-0 w-40 sm:w-52 opacity-[0.06] pointer-events-none scale-x-[-1]" viewBox="0 0 220 280"><path d="M40 270 C 40 190, 80 160, 65 70" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 20 50, 8 15" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M65 70 C 65 70, 115 45, 130 8" stroke="#16a34a" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 8 142, -8 122" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><path d="M52 155 C 52 155, 96 130, 120 112" stroke="#16a34a" strokeWidth="1" fill="none" strokeLinecap="round" /><ellipse cx="130" cy="8" rx="13" ry="7.5" fill="#16a34a" opacity=".55" transform="rotate(-30 130 8)" /><ellipse cx="-8" cy="122" rx="11" ry="6" fill="#16a34a" opacity=".55" transform="rotate(20 -8 122)" /><ellipse cx="120" cy="112" rx="12" ry="6.5" fill="#16a34a" opacity=".55" transform="rotate(-15 120 112)" /></svg>
-
       {farms.length === 0 ? (
         <div className="w-full max-w-sm animate-fade-up">
           <div className="brand-avatar w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4 mx-auto">
             <svg className="w-7 h-7 fill-white" viewBox="0 0 24 24"><path d="M12 21C6 21 3 16.5 3 12S6 3 12 3s9 4.5 9 9-3 9-9 9zM11 3V1h2v2M7 6.5L5 4.5l3.5 2.5M17 6.5l2-2-3.5 2.5M4 11.5l-2-1L4.5 13M20 11.5l2-1-2.5 2.5M7 17.5l-2 2 3.5-2M17 17.5l2 2-3.5-2" /></svg>
           </div>
           <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Bienvenido al sistema</p>
-          <h2 className="font-cormorant text-3xl font-medium text-gray-900 mb-2 leading-tight">¡Hola, {displayName.split(' ')[0]}!<br /><em className="text-brand-600">Comencemos</em></h2>
+          <h2 className="font-cormorant text-3xl font-medium text-gray-900 mb-2 leading-tight">¡Hola, {first}!<br /><span className="text-brand-600 cormorant">Comencemos</span></h2>
           <p className="text-gray-400 text-sm mb-7 font-light leading-relaxed">Para analizar tu cultivo primero necesitas<br />registrar tu corporación agrícola y una parcela.</p>
           <div className="space-y-2.5 mb-7 text-left">
             <div className="onboard-step active">
@@ -32,25 +81,23 @@ export default function WelcomeScreen({ displayName, farms, openAddFarmModal, su
         </div>
       ) : (
         <>
-          <div className="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-4">
+          <div className="brand-avatar w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-green-600/20 mb-5">
             <svg className="w-7 h-7 sm:w-8 sm:h-8 fill-white" viewBox="0 0 24 24"><path d="M12 21C6 21 3 16.5 3 12S6 3 12 3s9 4.5 9 9-3 9-9 9zM11 3V1h2v2M7 6.5L5 4.5l3.5 2.5M17 6.5l2-2-3.5 2.5M4 11.5l-2-1L4.5 13M20 11.5l2-1-2.5 2.5M7 17.5l-2 2 3.5-2M17 17.5l2 2-3.5-2" /></svg>
           </div>
-          <p className="text-[0.65rem] font-bold uppercase tracking-widest text-brand-600 mb-2">Sistema de diagnostico inteligente</p>
-          <h2 className="font-cormorant text-3xl sm:text-4xl font-medium leading-tight text-gray-900 mb-1">Hola, ¿como puedo<br /><em className="italic text-brand-600">ayudarte hoy?</em></h2>
-          <p className="text-gray-400 text-sm mt-2 mb-6 font-light">Escribe, habla o envia una imagen de tu cultivo.</p>
-          <div className="chips-grid w-full max-w-md">
-            <button onClick={() => suggest('¿Cuales son las enfermedades mas comunes de la pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-              <div className="text-lg sm:text-xl mb-1">🌵</div><div className="font-medium text-gray-800 text-xs">Enfermedades comunes</div><div className="text-gray-400 text-xs mt-0.5">Diagnostico de cultivos</div>
-            </button>
-            <button onClick={() => suggest('¿Como puedo mejorar el rendimiento de mi cultivo de pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-              <div className="text-lg sm:text-xl mb-1">📈</div><div className="font-medium text-gray-800 text-xs">Mejorar rendimiento</div><div className="text-gray-400 text-xs mt-0.5">Optimizacion agricola</div>
-            </button>
-            <button onClick={() => suggest('¿Que plagas afectan a la pitahaya y como controlarlas?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-              <div className="text-lg sm:text-xl mb-1">🐛</div><div className="font-medium text-gray-800 text-xs">Control de plagas</div><div className="text-gray-400 text-xs mt-0.5">Proteccion del cultivo</div>
-            </button>
-            <button onClick={() => suggest('¿Cual es el mejor sistema de riego para pitahaya?')} className="chip text-left px-3 sm:px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all text-sm hover:shadow-sm active:scale-[.97]">
-              <div className="text-lg sm:text-xl mb-1">💧</div><div className="font-medium text-gray-800 text-xs">Sistema de riego</div><div className="text-gray-400 text-xs mt-0.5">Gestion del agua</div>
-            </button>
+          <h2 className="font-cormorant text-3xl sm:text-4xl font-semibold leading-tight text-gray-900 mb-1">
+            {WELCOME_VARIANTS[variant](first)}
+          </h2>
+          <p className="text-gray-400 text-sm mt-2 mb-7 font-light">Escribe, habla o envía una imagen de tu cultivo.</p>
+          <div className="chips-grid w-full max-w-lg">
+            {SUGGESTIONS.map((s, i) => (
+              <button key={i} onClick={() => suggest(s.msg)} className="chip">
+                <div className={`chip-icon bg-gradient-to-br ${s.gradient} text-white`}>
+                  <i className={`fas ${s.icon} text-sm`}></i>
+                </div>
+                <div className="font-semibold text-gray-800 text-[0.75rem] leading-snug">{s.label}</div>
+                <div className="text-gray-400 text-[0.6rem] leading-tight">{s.desc}</div>
+              </button>
+            ))}
           </div>
         </>
       )}
