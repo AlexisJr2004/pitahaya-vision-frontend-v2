@@ -3,16 +3,18 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ProfileModal from '../components/ProfileModal'
 import SettingsModal from '../components/SettingsModal'
+import ContextModal from '../components/modals/ContextModal'
+import ParcelasModal from '../components/modals/ParcelasModal'
+import AddFarmModal from '../components/modals/AddFarmModal'
+import AddPlotModal from '../components/modals/AddPlotModal'
+import ConfirmDeleteModal from '../components/modals/ConfirmDeleteModal'
 import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../services/analysisService'
-import WeatherWidget from '../components/WeatherWidget'
 import ConversationPDF from '../components/ConversationPDF'
 import WelcomeScreen from '../components/chat/WelcomeScreen'
 import SuggestedQuestions from '../components/chat/SuggestedQuestions'
 import AnalysisCard from '../components/chat/AnalysisCard'
 import { UserBubble, AssistantBubble, LoadingDots } from '../components/chat/MessageBubble'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
 export default function ChatbotPage() {
   const { user, logout } = useAuth()
@@ -60,7 +62,6 @@ export default function ChatbotPage() {
   const [contextOptions, setContextOptions] = useState({ lotId: [], zone: [], rows: [] })
   const [showNoFarmHint, setShowNoFarmHint] = useState(false)
   const [showNoContextHint, setShowNoContextHint] = useState(false)
-  const [geoLoading, setGeoLoading] = useState(false)
   const [weatherData, setWeatherData] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherCondition, setWeatherCondition] = useState('')
@@ -68,9 +69,6 @@ export default function ChatbotPage() {
   const [farmError, setFarmError] = useState('')
   const [plotError, setPlotError] = useState('')
   const [streamDoneIds, setStreamDoneIds] = useState(new Set())
-  const mapContainerRef = useRef(null)
-  const leafletMapRef = useRef(null)
-  const mapMarkerRef = useRef(null)
   const menuRef = useRef(null)
   const triggerRef = useRef(null)
   const chatAreaRef = useRef(null)
@@ -177,147 +175,7 @@ export default function ChatbotPage() {
     return () => { cancelled = true }
   }, [contextSelectedPlotId, farms])
 
-  // Leaflet map lifecycle — init when plot modal opens, destroy when it closes
-  useEffect(() => {
-    if (!showAddPlotModal) {
-      if (leafletMapRef.current) {
-        leafletMapRef.current.remove()
-        leafletMapRef.current = null
-        mapMarkerRef.current = null
-      }
-      return
-    }
-
-    const TILE_CFGS = {
-      street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',    attribution: '© OpenStreetMap contributors', subdomains: 'abc',  maxNativeZoom: 19, maxZoom: 21 },
-      satellite: { url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: '© Google',                     subdomains: '0123', maxNativeZoom: 20, maxZoom: 21 },
-      terrain:   { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',      attribution: '© OpenTopoMap contributors',   subdomains: 'abc',  maxNativeZoom: 17, maxZoom: 21 },
-    }
-
-    const mkIcon = () => L.divIcon({
-      html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))">
-        <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#16a34a,#22c55e);border:3px solid #fff"></div>
-        <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #16a34a;margin-top:-2px"></div>
-      </div>`,
-      iconSize: [22, 30], iconAnchor: [11, 30], className: '',
-    })
-
-    // Parse existing GPS if editing a plot
-    const parts = plotGps ? plotGps.split(',').map(s => parseFloat(s.trim())) : []
-    const hasExisting = parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])
-
-    const timer = setTimeout(() => {
-      if (!mapContainerRef.current || leafletMapRef.current) return
-
-      const initLat  = hasExisting ? parts[0] : -2.0
-      const initLng  = hasExisting ? parts[1] : -79.0
-      const initZoom = hasExisting ? 15 : 7
-
-      const map = L.map(mapContainerRef.current, { center: [initLat, initLng], zoom: initZoom, zoomControl: true, maxZoom: 21 })
-      map.getContainer().style.background = '#e8f4ea'
-
-      // Build tile layers
-      const tileLayers = {}
-      Object.entries(TILE_CFGS).forEach(([key, cfg]) => {
-        tileLayers[key] = L.tileLayer(cfg.url, {
-          attribution: cfg.attribution,
-          subdomains:  cfg.subdomains,
-          maxNativeZoom: cfg.maxNativeZoom,
-          maxZoom:       cfg.maxZoom,
-        })
-      })
-      tileLayers.street.addTo(map)
-
-      // Custom styled layer switcher (matches dashboard toolbar)
-      const LayerSwitcher = L.Control.extend({
-        onAdd() {
-          const wrap = L.DomUtil.create('div', '')
-          wrap.style.cssText = 'display:flex;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1);'
-          L.DomEvent.disableClickPropagation(wrap)
-          L.DomEvent.disableScrollPropagation(wrap)
-          const items = [['street', 'Mapa'], ['satellite', 'Satélite'], ['terrain', 'Terreno']]
-          const btns = {}
-          const activate = (activeKey) => {
-            items.forEach(([k]) => {
-              if (!btns[k]) return
-              btns[k].style.background = k === activeKey ? '#16a34a' : '#fff'
-              btns[k].style.color      = k === activeKey ? '#fff'    : '#64748b'
-            })
-          }
-          items.forEach(([key, label], idx) => {
-            const btn = L.DomUtil.create('button', '', wrap)
-            btn.textContent = label
-            btn.style.cssText = `padding:0.3rem 0.75rem;font-size:0.68rem;font-weight:600;border:none;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s;${idx < items.length - 1 ? 'border-right:1px solid #e2e8f0;' : ''}`
-            btns[key] = btn
-            L.DomEvent.on(btn, 'click', () => {
-              Object.values(tileLayers).forEach(l => { if (map.hasLayer(l)) map.removeLayer(l) })
-              tileLayers[key].addTo(map)
-              activate(key)
-            })
-          })
-          activate('street')
-          return wrap
-        },
-        onRemove() {},
-      })
-      new LayerSwitcher({ position: 'topleft' }).addTo(map)
-
-      L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map)
-
-      // Pre-place marker when editing a plot with existing coordinates
-      if (hasExisting) {
-        mapMarkerRef.current = L.marker([initLat, initLng], { icon: mkIcon() }).addTo(map)
-      }
-
-      // Click anywhere to place / move the location pin
-      map.on('click', e => {
-        const clat = e.latlng.lat.toFixed(6)
-        const clng = e.latlng.lng.toFixed(6)
-        setPlotGps(`${clat}, ${clng}`)
-        setPlotGpsCoords({ lat: clat, lng: clng })
-        if (mapMarkerRef.current) {
-          mapMarkerRef.current.setLatLng([parseFloat(clat), parseFloat(clng)])
-        } else {
-          mapMarkerRef.current = L.marker([parseFloat(clat), parseFloat(clng)], { icon: mkIcon() }).addTo(map)
-        }
-      })
-
-      leafletMapRef.current = map
-      setTimeout(() => map.invalidateSize(), 100)
-    }, 200)
-    return () => clearTimeout(timer)
-  }, [showAddPlotModal])
-
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return }
-    setGeoLoading(true)
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const lat = coords.latitude.toFixed(6)
-        const lng = coords.longitude.toFixed(6)
-        setPlotGps(`${lat}, ${lng}`)
-        setPlotGpsCoords({ lat, lng })
-        if (leafletMapRef.current) {
-          leafletMapRef.current.setView([parseFloat(lat), parseFloat(lng)], 15)
-          const geoIcon = L.divIcon({
-            html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))">
-              <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#16a34a,#22c55e);border:3px solid #fff"></div>
-              <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #16a34a;margin-top:-2px"></div>
-            </div>`,
-            iconSize: [22, 30], iconAnchor: [11, 30], className: '',
-          })
-          if (mapMarkerRef.current) {
-            mapMarkerRef.current.setLatLng([parseFloat(lat), parseFloat(lng)])
-          } else {
-            mapMarkerRef.current = L.marker([parseFloat(lat), parseFloat(lng)], { icon: geoIcon }).addTo(leafletMapRef.current)
-          }
-        }
-        setGeoLoading(false)
-      },
-      () => { setGeoLoading(false); alert('No se pudo obtener la ubicación. Verifica los permisos del navegador.') },
-      { timeout: 10000, enableHighAccuracy: true }
-    )
-  }
+  // Leaflet map lifecycle is now handled inside AddPlotModal
 
   const getSelectedPlotContext = () => {
     const plotVal = contextSelectedPlotId || contextRowsRef.current?.value || ''
@@ -754,14 +612,6 @@ export default function ChatbotPage() {
 
   const openParcelasModal = () => { setShowParcelasModal(true); closeSidebar() }
   const closeParcelasModal = () => { setShowParcelasModal(false) }
-
-  const animateClose = useCallback((modalRef, closeFn) => {
-    if (window.innerWidth >= 640 || !modalRef.current) { closeFn(); return }
-    const m = modalRef.current
-    m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-    m.style.transform = 'translateY(110%)'
-    setTimeout(() => { m.style.transform = ''; m.style.transition = ''; animatedModalRefs.current.delete(modalRef); closeFn() }, 340)
-  }, [])
 
   useEffect(() => {
     if (window.innerWidth >= 640) return
@@ -1540,21 +1390,13 @@ export default function ChatbotPage() {
       {/* CONVERSATION PDF EXPORT */}
       <ConversationPDF isOpen={!!pdfConversationData} onClose={() => setPdfConversationData(null)} data={pdfConversationData} />
 
-      {/* DELETE CONVERSATION MODAL */}
-      <div className={`delete-overlay ${confirmDeleteConv ? 'open' : ''}`} onClick={() => setConfirmDeleteConv(null)}>
-        <div className="delete-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
-          <div className="px-6 pt-6 pb-4">
-            <h3 className="delete-modal-title">¿Eliminar conversacion?</h3>
-            <p className="delete-modal-text mt-3">Se eliminaran las peticiones, las respuestas y los comentarios de tu ajuste, ademas de cualquier contenido que hayas creado.</p>
-          </div>
-          <div className="px-6 pb-6">
-            <div className="delete-modal-actions">
-              <button className="delete-btn delete-btn-secondary" onClick={() => setConfirmDeleteConv(null)}>Cancelar</button>
-              <button className="delete-btn delete-btn-danger" onClick={handleDeleteConversation}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ConfirmDeleteModal
+        isOpen={!!confirmDeleteConv}
+        onClose={() => setConfirmDeleteConv(null)}
+        title="¿Eliminar conversacion?"
+        message="Se eliminaran las peticiones, las respuestas y los comentarios de tu ajuste, ademas de cualquier contenido que hayas creado."
+        onConfirm={handleDeleteConversation}
+      />
 
       {/* LAYOUT */}
       <div id="appLayout" className="h-screen flex overflow-hidden bg-white">
@@ -1806,537 +1648,98 @@ export default function ChatbotPage() {
       {/* SETTINGS MODAL */}
       <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
 
-      {/* CONTEXT MODAL */}
-      <div className={`context-overlay ${showContextModal ? 'open' : ''}`} onClick={() => animateClose(contextSelModalRef, () => setShowContextModal(false))}>
-        <div className="context-modal" ref={contextSelModalRef} onClick={e => e.stopPropagation()}>
-          <div className="drag-handle" />
-          <header className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <span className="context-badge">Contexto de conversacion</span>
-                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Registrar datos de la planta antes del escaneo</h3>
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Guarda solo lo que ayuda a entender la planta enferma y a tomar decisiones futuras en el cultivo.</p>
-              </div>
-              <button onClick={() => animateClose(contextSelModalRef, () => setShowContextModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </div>
-            <div className="context-summary mt-5 grid gap-2 sm:grid-cols-2">
-              <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Uso</p><p className="text-sm text-gray-700 mt-1">Conectar diagnostico, contexto del lote y resultado final.</p></div>
-              <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Salida</p><p className="text-sm text-gray-700 mt-1">Datos listos para analisis historico de la planta.</p></div>
-            </div>
-          </header>
-          <div className="context-modal-body px-4 sm:px-6 py-5">
-            <form className="space-y-4" onSubmit={e => e.preventDefault()}>
-              <div className="context-section">
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  <div>
-                    <p className="context-section-title">Identificacion de la planta</p>
-                    <p className="text-sm text-slate-500 mt-1">Ubica con precision la planta afectada.</p>
-                  </div>
-                  <button type="button" onClick={() => { setShowContextModal(false); openParcelasModal() }} className="text-[0.7rem] font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition px-3 py-1.5 rounded-full flex items-center gap-1.5 flex-shrink-0 cursor-pointer" style={{ border: 'none' }}>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Mis parcelas
-                  </button>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Fecha y hora</span><input type="datetime-local" ref={contextDatetimeRef} className="context-input" /></label>
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">ID del lote o sector</span>
-                    <select ref={contextLotRef} className="context-select" value={contextSelectedFarmId} onChange={e => { setContextSelectedFarmId(e.target.value); setContextSelectedZone('') }}>
-                      <option value="">Seleccionar lote</option>
-                      {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                    </select>
-                  </label>
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Zona</span>
-                    <select ref={contextZoneRef} className="context-select" value={contextSelectedZone} onChange={e => setContextSelectedZone(e.target.value)}>
-                      <option value="">Seleccionar zona</option>
-                      {farms.filter(f => String(f.id) === String(contextSelectedFarmId)).flatMap(f => (f.plots || []).filter((p, i, arr) => arr.findIndex(x => x.zone === p.zone) === i).map(p => <option key={p.zone} value={p.zone}>{p.zone || 'Sin zona'}</option>))}
-                    </select>
-                  </label>
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Parcela e hileras</span>
-                    <select ref={contextRowsRef} className="context-select" onChange={e => setContextSelectedPlotId(e.target.value)}>
-                      <option value="">Seleccionar parcela</option>
-                      {farms.filter(f => String(f.id) === String(contextSelectedFarmId)).flatMap(f => (f.plots || []).filter(p => !contextSelectedZone || p.zone === contextSelectedZone).map(p => <option key={p.id} value={p.id}>{p.name}{p.rows ? ` (${p.rows})` : ''}</option>))}
-                    </select>
-                  </label>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-4">
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Planta / unidad</span><input type="text" ref={contextPlantRef} className="context-input" placeholder="Ej: Planta 0147, Unidad 12" /></label>
-                  <label className="block lg:col-span-2"><span className="block text-sm font-medium text-slate-700 mb-2">GPS o ubicacion exacta</span><input type="text" ref={contextLocationRef} className="context-input" placeholder="Lat. -1.234567, Lon. -79.123456 o referencia en campo" /></label>
-                </div>
-                <div className="mt-4">
-                  <span className="block text-sm font-medium text-slate-700 mb-2">Condiciones climaticas recientes</span>
-                  <WeatherWidget
-                    data={weatherData}
-                    loading={weatherLoading}
-                    variant="panel"
-                    pastDaysLimit={3}
-                    conditionValue={weatherCondition}
-                    onConditionChange={v => setWeatherCondition(v)}
-                    fallback={
-                      <select value={weatherCondition} onChange={e => setWeatherCondition(e.target.value)} className="context-select">
-                        <option value="">Seleccionar condición</option>
-                        <option value="Lluvioso">Lluvioso (últimos 3-5 días)</option>
-                        <option value="Húmedo sin lluvia">Húmedo sin lluvia</option>
-                        <option value="Normal para la época">Normal para la época</option>
-                        <option value="Período seco">Período seco</option>
-                      </select>
-                    }
-                  />
-                </div>
-              </div>
-              <div className="context-section">
-                <div className="mb-4">
-                  <p className="context-section-title">Estado sanitario de la planta</p>
-                  <p className="text-sm text-slate-500 mt-1">Describe lo mas importante que ves antes de escanear la imagen.</p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <label className="block lg:col-span-2"><span className="block text-sm font-medium text-slate-700 mb-2">Sintoma principal</span><input type="text" ref={contextSymptomRef} className="context-input" placeholder="Manchas, clorosis, pudricion, marchitez, dano en tallo..." /></label>
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Organo afectado</span>
-                    <select ref={contextPartRef} className="context-select"><option value="">Seleccionar</option><option>Cladodio / brazo</option><option>Fruto</option><option>Tallo principal</option><option>Raíz</option><option>Ramita / brote joven</option><option>Flor</option></select>
-                  </label>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 mt-4">
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Fase fenologica</span>
-                    <select ref={contextStageRef} className="context-select"><option value="">Seleccionar</option><option>Vegetativo / Crecimiento</option><option>Brotacion floral</option><option>Antesis (Floracion)</option><option>Amarre o Cuajado</option><option>Madurez y Cosecha</option><option>Post-cosecha</option></select>
-                  </label>
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Severidad observada</span>
-                    <select ref={contextSeverityRef} className="context-select"><option value="">Seleccionar</option><option>Ninguna</option><option>Baja</option><option>Moderada</option><option>Alta</option><option>Critica</option></select>
-                  </label>
-                </div>
-                <div className="mt-4">
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Notas de campo</span><textarea ref={contextNotesRef} className="context-textarea" placeholder="Ejemplo: inicio despues del riego, la planta esta en borde del lote, hay humedad acumulada, se observo olor raro..."></textarea></label>
-                </div>
-              </div>
-              <div className="context-section">
-                <div className="mb-4">
-                  <p className="context-section-title">Antecedentes minimos</p>
-                  <p className="text-sm text-slate-500 mt-1">Solo lo necesario para explicar el estado actual de la planta.</p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Riego reciente</span><input type="text" ref={contextIrrigationRef} className="context-input" placeholder="Frecuencia, volumen o cambio reciente" /></label>
-                  <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Aplicacion fitosanitaria</span><input type="text" ref={contextPhytoRef} className="context-input" placeholder="Producto, fecha y motivo" /></label>
-                </div>
-              </div>
-              <div className="context-section">
-                <div className="flex flex-wrap gap-3 justify-end">
-                  <button type="button" className="context-secondary-btn" onClick={() => {
-                    if (contextDatetimeRef.current) contextDatetimeRef.current.value = ''
-                    if (contextLotRef.current) contextLotRef.current.value = ''
-                    if (contextZoneRef.current) contextZoneRef.current.value = ''
-                    if (contextRowsRef.current) contextRowsRef.current.value = ''
-                    if (contextPlantRef.current) contextPlantRef.current.value = ''
-                    if (contextLocationRef.current) contextLocationRef.current.value = ''
-                    if (contextSymptomRef.current) contextSymptomRef.current.value = ''
-                    if (contextPartRef.current) contextPartRef.current.value = ''
-                    if (contextStageRef.current) contextStageRef.current.value = ''
-                    if (contextSeverityRef.current) contextSeverityRef.current.value = ''
-                    if (contextIrrigationRef.current) contextIrrigationRef.current.value = ''
-                    if (contextPhytoRef.current) contextPhytoRef.current.value = ''
-                    if (contextNotesRef.current) contextNotesRef.current.value = ''
-                    setWeatherData(null); setWeatherCondition('')
-                  }}>Limpiar</button>
-                  <button type="button" className="context-secondary-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false) }}>Guardar</button>
-                  <button type="button" className="context-save-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false); setTimeout(() => fileInputRef.current?.click(), 300) }}>Guardar y cargar imagen</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
+      <ContextModal
+        show={showContextModal}
+        modalRef={contextSelModalRef}
+        farms={farms}
+        contextSelectedFarmId={contextSelectedFarmId}
+        contextSelectedZone={contextSelectedZone}
+        contextSelectedPlotId={contextSelectedPlotId}
+        weatherData={weatherData}
+        weatherLoading={weatherLoading}
+        weatherCondition={weatherCondition}
+        contextDatetimeRef={contextDatetimeRef}
+        contextLotRef={contextLotRef}
+        contextZoneRef={contextZoneRef}
+        contextRowsRef={contextRowsRef}
+        contextPlantRef={contextPlantRef}
+        contextLocationRef={contextLocationRef}
+        contextSymptomRef={contextSymptomRef}
+        contextPartRef={contextPartRef}
+        contextStageRef={contextStageRef}
+        contextSeverityRef={contextSeverityRef}
+        contextIrrigationRef={contextIrrigationRef}
+        contextPhytoRef={contextPhytoRef}
+        contextNotesRef={contextNotesRef}
+        setShowContextModal={setShowContextModal}
+        setContextSelectedFarmId={setContextSelectedFarmId}
+        setContextSelectedZone={setContextSelectedZone}
+        setContextSelectedPlotId={setContextSelectedPlotId}
+        setWeatherData={setWeatherData}
+        setWeatherCondition={setWeatherCondition}
+        openParcelasModal={openParcelasModal}
+        handleSaveContext={handleSaveContext}
+        fileInputRef={fileInputRef}
+      />
 
-      {/* PARCELAS MODAL */}
-      <div className={`context-overlay ${showParcelasModal ? 'open' : ''}`} onClick={() => animateClose(parcelasModalRef, closeParcelasModal)}>
-        <div className="context-modal" ref={parcelasModalRef} onClick={e => e.stopPropagation()}>
-          <div className="drag-handle" />
-          {/* ── Header ── */}
-          <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="context-badge">Gestión de propiedades</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Mis Parcelas</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Administra tus corporaciones agrícolas y asocia parcelas al análisis.</p>
-                </div>
-              </div>
-              <button onClick={() => animateClose(parcelasModalRef, closeParcelasModal)} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              </button>
-            </div>
-          </header>
+      <ParcelasModal
+        show={showParcelasModal}
+        modalRef={parcelasModalRef}
+        farms={farms}
+        onClose={closeParcelasModal}
+        openAddFarmModal={openAddFarmModal}
+        openAddPlotModal={openAddPlotModal}
+        openEditFarmModal={openEditFarmModal}
+        openEditPlotModal={openEditPlotModal}
+        handleDeleteFarm={handleDeleteFarm}
+        handleDeletePlot={handleDeletePlot}
+        handleSelectPlot={handleSelectPlot}
+      />
 
-          {/* ── Body ── */}
-          <div className="context-modal-body px-5 sm:px-7 py-5">
-            {/* Botón agregar corporación agrícola */}
-            <button onClick={openAddFarmModal} className="w-full mb-5 flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 border-dashed border-gray-200 hover:border-brand-400 hover:bg-brand-50 transition-all group cursor-pointer" style={{ background: 'none' }}>
-              <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 group-hover:bg-brand-100 transition flex-shrink-0">
-                <svg className="w-4 h-4 text-gray-500 group-hover:text-brand-600 transition" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              </span>
-              <div className="text-left">
-                <p className="text-sm font-semibold text-gray-600 group-hover:text-brand-700 transition">Agregar nueva corporación agrícola</p>
-                <p className="text-xs text-gray-400 group-hover:text-brand-500 transition">Registra una propiedad agrícola</p>
-              </div>
-            </button>
+      <AddFarmModal
+        show={showAddFarmModal}
+        modalRef={addFarmModalRef}
+        editingFarm={editingFarm}
+        farmName={farmName}
+        farmLocation={farmLocation}
+        farmError={farmError}
+        setShowAddFarmModal={setShowAddFarmModal}
+        setFarmName={setFarmName}
+        setFarmLocation={setFarmLocation}
+        setFarmError={setFarmError}
+        handleCreateFarm={handleCreateFarm}
+      />
 
-            {/* Lista de corporaciones agrícolas */}
-            <div id="parcelasFarmsList" className="space-y-3">
-              {farms.length === 0 ? (
-                <div className="parcelas-empty-state">
-                  <span className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-3" style={{ background: 'linear-gradient(135deg,#dcfce7,#bbf7d0)' }}>
-                    <svg className="w-7 h-7 text-brand-600" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 22v-3" /><circle cx="10" cy="10" r="3" /></svg>
-                  </span>
-                  <p className="font-medium text-gray-600">Aún no tienes corporaciones agrícolas registradas</p>
-                  <p className="text-xs mt-1 text-gray-400">Crea tu primera corporación agrícola para administrar tus parcelas.</p>
-                </div>
-              ) : (
-                farms.map(farm => (
-                  <div key={farm.id} className="parcelas-farm-card">
-                    <div className="parcelas-farm-header">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg,#dcfce7,#bbf7d0)' }}>
-                          <svg className="w-3.5 h-3.5 text-brand-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><circle cx="10" cy="10" r="3" /></svg>
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-900 text-sm truncate">{farm.name}</p>
-                          <p className="text-xs text-gray-400 flex items-center gap-1">
-                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" /><circle cx="12" cy="10" r="3" /></svg>
-                            {farm.location || 'Sin ubicación'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => openAddPlotModal(farm)} className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition px-3 py-1.5 rounded-xl cursor-pointer" style={{ border: 'none' }}>
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                          Parcela
-                        </button>
-                        <button onClick={() => openEditFarmModal(farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Editar corporación agrícola">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                        </button>
-                        <button onClick={() => handleDeleteFarm(farm.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar corporación agrícola">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                    {farm.plots && farm.plots.length > 0 && (
-                      <div className="parcelas-farm-body">
-                        <table className="parcelas-plots-table">
-                          <thead>
-                            <tr>
-                              <th>Parcela</th><th>Zona</th><th>Hilera</th><th>GPS</th><th>Ha.</th><th></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {farm.plots.map(plot => (
-                              <tr key={plot.id}>
-                                <td className="font-medium">{plot.name}</td>
-                                <td>{plot.zone || '—'}</td>
-                                <td>{plot.rows || '—'}</td>
-                                <td className="text-xs">{plot.gps_location || '—'}</td>
-                                <td>{plot.hectares || '—'}</td>
-                                <td>
-                                  <div className="flex items-center gap-1">
-                                    <button onClick={() => handleSelectPlot(plot, farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 transition cursor-pointer" style={{ border: 'none' }} title="Seleccionar parcela">
-                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-                                    </button>
-                                    <button onClick={() => openEditPlotModal(plot, farm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Editar parcela">
-                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                                    </button>
-                                    <button onClick={() => handleDeletePlot(plot.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer" style={{ background: 'none', border: 'none' }} title="Eliminar parcela">
-                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    {(!farm.plots || farm.plots.length === 0) && (
-                      <div className="px-4 py-3 flex items-center gap-2 text-xs text-gray-400 border-t border-gray-100">
-                        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                        Sin parcelas. Añade una para iniciar análisis.
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <AddPlotModal
+        show={showAddPlotModal}
+        modalRef={addPlotModalRef}
+        selectedFarmForPlot={selectedFarmForPlot}
+        editingPlot={editingPlot}
+        plotName={plotName}
+        plotGps={plotGps}
+        plotGpsCoords={plotGpsCoords}
+        plotHectares={plotHectares}
+        plotZone={plotZone}
+        plotRows={plotRows}
+        plotError={plotError}
+        setShowAddPlotModal={setShowAddPlotModal}
+        setPlotName={setPlotName}
+        setPlotGps={setPlotGps}
+        setPlotGpsCoords={setPlotGpsCoords}
+        setPlotHectares={setPlotHectares}
+        setPlotZone={setPlotZone}
+        setPlotRows={setPlotRows}
+        setPlotError={setPlotError}
+        handleCreatePlot={handleCreatePlot}
+      />
 
-      {/* ADD FARM MODAL */}
-      <div className={`context-overlay ${showAddFarmModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))}>
-        <div className="context-modal" ref={addFarmModalRef} style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
-          <div className="drag-handle" />
-          <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><path d="M18 22v-3" /><circle cx="10" cy="10" r="3" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="context-badge">{editingFarm ? 'Editar corporación agrícola' : 'Nueva corporación agrícola'}</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">{editingFarm ? 'Editar corporación agrícola' : 'Registrar corporación agrícola'}</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">{editingFarm ? 'Actualiza el nombre o la ubicación.' : 'Después podrás agregar parcelas.'}</p>
-                </div>
-              </div>
-              <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              </button>
-            </div>
-          </header>
-          <div className="context-modal-body px-5 sm:px-7 py-6">
-            <div className="context-section space-y-4">
-              <p className="context-section-title">Datos de la corporación agrícola</p>
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Nombre de la corporación agrícola <span className="text-red-400">*</span></span>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z" /><path d="M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2" /><circle cx="10" cy="10" r="3" /></svg>
-                  </span>
-                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Corporación agrícola El Paraíso" value={farmName}
-                    onChange={e => { setFarmName(e.target.value); if (farmError) setFarmError('') }}
-                    onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
-                </div>
-              </label>
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Ubicación / Sector</span>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" /><circle cx="12" cy="10" r="3" /></svg>
-                  </span>
-                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Machala, El Oro, Ecuador" value={farmLocation}
-                    onChange={e => setFarmLocation(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleCreateFarm()} />
-                </div>
-              </label>
-              {farmError && (
-                <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                  {farmError}
-                </p>
-              )}
-              <div className="flex items-start gap-2.5 bg-brand-50 border border-brand-100 rounded-2xl px-4 py-3">
-                <svg className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                <p className="text-xs text-brand-700 leading-relaxed">Al crear la corporación agrícola, podrás agregar parcelas de inmediato. Necesitas al menos una parcela para iniciar un análisis.</p>
-              </div>
-            </div>
-          </div>
-          <div className="px-5 sm:px-7 py-5 border-t border-gray-100 modal-footer-btns">
-            <button onClick={() => animateClose(addFarmModalRef, () => setShowAddFarmModal(false))} className="context-secondary-btn">Cancelar</button>
-            <button onClick={handleCreateFarm} className="context-save-btn flex items-center justify-center gap-2">
-              {editingFarm ? 'Guardar cambios' : 'Crear corporación agrícola y agregar parcela'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ADD PLOT MODAL — Rediseñado con mapa GPS */}
-      <div className={`context-overlay ${showAddPlotModal ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))}>
-        <div className="context-modal" ref={addPlotModalRef} style={{ maxWidth: '960px' }} onClick={e => e.stopPropagation()}>
-          <div className="drag-handle" />
-          <header className="context-modal-header px-5 py-4 sm:px-7 sm:py-5">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <path d="M12 2a9.5 9.5 0 0 0 0 19c1.6 0 3-.4 4.2-1" /><path d="M12 2c2 4 4 6 4 9a4 4 0 0 1-8 0c0-3 2-5 4-9z" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="context-badge">{editingPlot ? 'Editar parcela' : 'Nueva parcela'}</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">
-                    {editingPlot ? 'Editar parcela' : 'Registrar parcela'}
-                    {selectedFarmForPlot && <span className="font-cormorant text-brand-600"> — {selectedFarmForPlot.name}</span>}
-                  </h3>
-                </div>
-              </div>
-              <button onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              </button>
-            </div>
-          </header>
-
-          {/* DOS COLUMNAS: izquierda datos | derecha GPS + mapa */}
-          <div className="plot-modal-body">
-
-            {/* COLUMNA IZQUIERDA — Datos de la parcela */}
-            <div className="context-section plot-col">
-              <p className="context-section-title mb-4">Datos de la parcela</p>
-
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Nombre <span className="text-red-400">*</span></span>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
-                  </span>
-                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Parcela A, Hilera 1-5" value={plotName}
-                    onChange={e => { setPlotName(e.target.value); if (plotError) setPlotError('') }} />
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Zona</span>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><path d="m12 16 .01 0" /></svg>
-                  </span>
-                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: Zona norte" value={plotZone} onChange={e => setPlotZone(e.target.value)} />
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Hileras</span>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
-                  </span>
-                  <input type="text" className="context-input ctx-icon-input" placeholder="Ej: 1-10" value={plotRows} onChange={e => setPlotRows(e.target.value)} />
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-2">Hectáreas</span>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 3H3" /><path d="M21 21H3" /><path d="M3 3v18" /><path d="M21 3v18" /><path d="m3 12 5-5 4 4 5-6 4 5" /></svg>
-                  </span>
-                  <input type="number" className="context-input ctx-icon-input" placeholder="Ej: 2.5" step="0.1" min="0" value={plotHectares} onChange={e => setPlotHectares(e.target.value)} />
-                </div>
-              </label>
-
-              {plotError && (
-                <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                  {plotError}
-                </p>
-              )}
-              <div className="mt-auto pt-3 border-t border-gray-100">
-                <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                  Solo el nombre es obligatorio. Puedes editar los demás datos después.
-                </p>
-              </div>
-            </div>
-
-            {/* COLUMNA DERECHA — GPS + Mapa */}
-            <div className="context-section plot-map-col">
-              {/* Header GPS con botón */}
-              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                <div>
-                  <p className="context-section-title">Ubicación GPS</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Toca el mapa o ingresa coordenadas manualmente</p>
-                </div>
-                <button onClick={handleGetLocation} disabled={geoLoading} className="geo-btn">
-                  {geoLoading
-                    ? <><svg className="w-4 h-4 text-brand-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg><span>Obteniendo...</span></>
-                    : <><svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><path d="M12 5a7 7 0 1 0 7 7" /></svg><span>Mi ubicación</span></>
-                  }
-                </button>
-              </div>
-
-              {/* Lat / Lng manuales */}
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <label className="block">
-                  <span className="block text-xs font-semibold text-slate-600 mb-1.5">Latitud</span>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10"><svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2v20M5 9l7-7 7 7M5 15l7 7 7-7" /></svg></span>
-                    <input
-                      type="number" step="any" className="context-input ctx-icon-input text-sm" placeholder="-2.123456"
-                      value={plotGpsCoords.lat}
-                      onChange={e => {
-                        const lat = e.target.value
-                        setPlotGpsCoords(p => ({ ...p, lat }))
-                        if (lat && plotGpsCoords.lng) {
-                          setPlotGps(`${lat}, ${plotGpsCoords.lng}`)
-                          if (leafletMapRef.current) {
-                            leafletMapRef.current.setView([parseFloat(lat), parseFloat(plotGpsCoords.lng)], 14)
-                            const mkIcon = L.divIcon({ html:'<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.45)"></div>', iconSize:[20,20], iconAnchor:[10,10], className:'' })
-                            if (mapMarkerRef.current) mapMarkerRef.current.setLatLng([parseFloat(lat), parseFloat(plotGpsCoords.lng)])
-                            else mapMarkerRef.current = L.marker([parseFloat(lat), parseFloat(plotGpsCoords.lng)], { icon: mkIcon }).addTo(leafletMapRef.current)
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="block text-xs font-semibold text-slate-600 mb-1.5">Longitud</span>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10"><svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M2 12h20M9 5l-7 7 7 7M15 5l7 7-7 7" /></svg></span>
-                    <input
-                      type="number" step="any" className="context-input ctx-icon-input text-sm" placeholder="-79.123456"
-                      value={plotGpsCoords.lng}
-                      onChange={e => {
-                        const lng = e.target.value
-                        setPlotGpsCoords(p => ({ ...p, lng }))
-                        if (plotGpsCoords.lat && lng) {
-                          setPlotGps(`${plotGpsCoords.lat}, ${lng}`)
-                          if (leafletMapRef.current) {
-                            leafletMapRef.current.setView([parseFloat(plotGpsCoords.lat), parseFloat(lng)], 14)
-                            const mkIcon = L.divIcon({ html:'<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.45)"></div>', iconSize:[20,20], iconAnchor:[10,10], className:'' })
-                            if (mapMarkerRef.current) mapMarkerRef.current.setLatLng([parseFloat(plotGpsCoords.lat), parseFloat(lng)])
-                            else mapMarkerRef.current = L.marker([parseFloat(plotGpsCoords.lat), parseFloat(lng)], { icon: mkIcon }).addTo(leafletMapRef.current)
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                </label>
-              </div>
-
-              {/* Badge coordenadas */}
-              {plotGps
-                ? <div className="gps-badge mb-3">
-                    <svg className="w-3.5 h-3.5 text-brand-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" /><circle cx="12" cy="10" r="3" /></svg>
-                    <span className="truncate text-xs"><strong>{plotGps}</strong></span>
-                    <button onClick={() => { setPlotGps(''); setPlotGpsCoords({ lat:'', lng:'' }); if (mapMarkerRef.current && leafletMapRef.current) { mapMarkerRef.current.remove(); mapMarkerRef.current = null } }} className="ml-auto flex-shrink-0 text-slate-400 hover:text-red-400 transition" style={{ background:'none', border:'none', cursor:'pointer' }}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                    </button>
-                  </div>
-                : <div className="mb-3 text-xs text-gray-400 flex items-center gap-1.5" style={{ height: '2rem' }}>
-                    <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>
-                    Haz clic en el mapa para fijar la ubicación exacta
-                  </div>
-              }
-
-              {/* Mapa interactivo */}
-              <div className="plot-map-fill">
-                <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }}></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 sm:px-7 py-4 border-t border-gray-100 modal-footer-btns">
-            <button onClick={() => animateClose(addPlotModalRef, () => setShowAddPlotModal(false))} className="context-secondary-btn">Cancelar</button>
-            <button onClick={handleCreatePlot} className="context-save-btn flex items-center justify-center gap-2">
-              {editingPlot ? 'Guardar cambios' : 'Guardar parcela'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* CONFIRM DELETE MODAL */}
-      <div className={`delete-overlay ${confirmDelete ? 'open' : ''}`} onClick={() => setConfirmDelete(null)}>
-        <div className="delete-modal" onClick={e => e.stopPropagation()}>
-          <div className="px-6 pt-6 pb-4">
-            <h3 className="delete-modal-title">¿Eliminar corporación agrícola?</h3>
-            <p className="delete-modal-text mt-3">Se eliminaran todas las parcelas asociadas a esta corporación agrícola.</p>
-          </div>
-          <div className="px-6 pb-6">
-            <div className="delete-modal-actions">
-              <button onClick={() => setConfirmDelete(null)} className="delete-btn delete-btn-secondary">Cancelar</button>
-              <button onClick={() => handleDeleteFarm(confirmDelete)} className="delete-btn delete-btn-danger">Eliminar</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ConfirmDeleteModal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="¿Eliminar corporación agrícola?"
+        message="Se eliminaran todas las parcelas asociadas a esta corporación agrícola."
+        onConfirm={() => handleDeleteFarm(confirmDelete)}
+      />
     </>
   )
 }

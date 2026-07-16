@@ -2,14 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, deleteAccount } from '../services/authService'
-
-function animateCloseModal(modalRef, callback) {
-  if (window.innerWidth >= 640 || !modalRef.current) { callback(); return }
-  const m = modalRef.current
-  m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-  m.style.transform = 'translateY(110%)'
-  setTimeout(() => { m.style.transform = ''; m.style.transition = ''; callback() }, 340)
-}
+import { animateClose } from '../utils/modalUtils'
 
 export default function ProfileModal({ isOpen, onClose }) {
   const { user, logout } = useAuth()
@@ -84,7 +77,7 @@ export default function ProfileModal({ isOpen, onClose }) {
     }
   }, [isOpen, onClose])
 
-  const handleClose = () => animateCloseModal(modalRef, onClose)
+  const handleClose = () => animateClose(modalRef, onClose)
 
   const handleProfilePhotoSelect = (e) => {
     const file = e.target.files[0]

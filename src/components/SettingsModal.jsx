@@ -2,14 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 import { getProfilePreferences, updateProfilePreferences } from '../services/authService'
 import SuccessModal from './SuccessModal'
-
-function animateCloseModal(modalRef, callback) {
-  if (window.innerWidth >= 640 || !modalRef.current) { callback(); return }
-  const m = modalRef.current
-  m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-  m.style.transform = 'translateY(110%)'
-  setTimeout(() => { m.style.transform = ''; m.style.transition = ''; callback() }, 340)
-}
+import { animateClose } from '../utils/modalUtils'
 
 export default function SettingsModal({ isOpen, onClose }) {
   const modalRef = useRef(null)
@@ -70,7 +63,7 @@ export default function SettingsModal({ isOpen, onClose }) {
     } catch {}
   }
 
-  const handleClose = () => animateCloseModal(modalRef, onClose)
+  const handleClose = () => animateClose(modalRef, onClose)
 
   const handleSaveSettings = async () => {
     setSaving(true)

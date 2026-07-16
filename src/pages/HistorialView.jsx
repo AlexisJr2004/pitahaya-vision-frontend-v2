@@ -9,6 +9,7 @@ import TrazabilidadPDF from '../components/TrazabilidadPDF'
 import { toArray } from '../utils/arrayUtils'
 import { severityBucket, severityLevel, normalizeSeverity, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../utils/severity'
 import { formatDateMediumWithTime as fmtDate, formatDateLongWithTime as fmtDateShort } from '../utils/formatters'
+import ConfirmDeleteModal from '../components/modals/ConfirmDeleteModal'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function severityClass(val) {
@@ -1071,21 +1072,13 @@ export default function HistorialView({ onOpenSidebar }) {
         data={{ fichaPh, fichaAnalyses, fichaTotal, fichaDiseases, fichaTopDisease, fichaLastDate, avgSeverityLabel, severityTrend, sevDistEntries, maxSevCount, user }}
       />
 
-      {/* DELETE CONFIRMATION MODAL */}
-      <div className={`delete-overlay ${deleteConfirmId ? 'open' : ''}`} onClick={() => setDeleteConfirmId(null)}>
-        <div className="delete-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
-          <div className="px-6 pt-6 pb-4">
-            <h3 className="delete-modal-title">¿Eliminar este análisis?</h3>
-            <p className="delete-modal-text mt-3">Esta acción no se puede deshacer. Se eliminará el análisis y su información asociada.</p>
-          </div>
-          <div className="px-6 pb-6">
-            <div className="delete-modal-actions">
-              <button className="delete-btn delete-btn-secondary" onClick={() => setDeleteConfirmId(null)}>Cancelar</button>
-              <button className="delete-btn delete-btn-danger" onClick={() => handleDelete(deleteConfirmId)}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ConfirmDeleteModal
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        title="¿Eliminar este análisis?"
+        message="Esta acción no se puede deshacer. Se eliminará el análisis y su información asociada."
+        onConfirm={() => handleDelete(deleteConfirmId)}
+      />
     </>
   )
 }
