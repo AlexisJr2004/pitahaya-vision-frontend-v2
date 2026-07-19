@@ -620,7 +620,14 @@ export default function ChatbotPage() {
         if (comparisonText) {
           await sendMessage({ conversation: convId, role: 'assistant', content: comparisonText })
         }
-        generateSuggestions(comparisonText || treatmentReply || botReply)
+        const suggestionContext = [
+          `Diagnóstico del modelo de visión: ${disease} — severidad ${severity} — confianza ${confidence}%.`,
+          recs ? `Recomendación del modelo: ${recs}` : '',
+          botReply ? `Resultados del análisis (Gemma): ${botReply}` : '',
+          treatmentReply ? `Plan de tratamiento (Gemma): ${treatmentReply}` : '',
+          comparisonText ? `Comparación con análisis anterior: ${comparisonText}` : '',
+        ].filter(Boolean).join('\n\n')
+        generateSuggestions(suggestionContext)
       } else {
         const _sid = `stream-${Date.now()}`
         setMessages(prev => [...prev, { id: _sid, role: 'assistant', content: '' }])

@@ -122,7 +122,6 @@ export default function WeatherWidget({
             <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 border border-brand-100 flex-shrink-0">
               <i className={`fas ${ws.icon} text-3xl text-brand-600`}></i>
             </span>
-            <i className={`fas fa-chevron-${collapsed ? 'down' : 'up'} text-[0.6rem] text-slate-400 transition-transform`}></i>
           </div>
         </button>
 
