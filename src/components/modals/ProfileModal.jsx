@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { updateProfile, deleteAccount } from '../services/authService'
-import { animateClose } from '../utils/modalUtils'
+import { useAuth } from '../../contexts/AuthContext'
+import { updateProfile, deleteAccount } from '../../services/authService'
+import { animateClose, setupDragToDismiss } from '../../utils/modalUtils'
+import './modals.css'
 
 export default function ProfileModal({ isOpen, onClose }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const modalRef = useRef(null)
+  const animatedRef = useRef(new Set())
 
   const [profileForm, setProfileForm] = useState({ email: '', phone: '', first_name: '', last_name: '', dni: '' })
   const [profilePhotoFile, setProfilePhotoFile] = useState(null)
@@ -40,44 +42,11 @@ export default function ProfileModal({ isOpen, onClose }) {
   }, [isOpen, user])
 
   // drag-to-dismiss on mobile
-  useEffect(() => {
-    if (!isOpen || !modalRef.current || window.innerWidth >= 640) return
-    const modal = modalRef.current
-    const handle = modal.querySelector('.pm-drag-handle')
-    if (!handle) return
-    modal.style.transition = 'none'
-    modal.style.transform = 'translateY(100%)'
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
-      modal.style.transform = 'translateY(0)'
-    }))
-    let sy = 0, dy = 0
-    const onStart = e => { sy = e.touches[0].clientY; dy = 0; modal.style.transition = 'none' }
-    const onMove  = e => { dy = Math.max(0, e.touches[0].clientY - sy); modal.style.transform = `translateY(${dy}px)` }
-    const onEnd   = () => {
-      if (dy > 80) {
-        modal.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-        modal.style.transform = 'translateY(110%)'
-        setTimeout(() => { modal.style.transform = ''; modal.style.transition = ''; onClose() }, 340)
-      } else {
-        modal.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)'
-        modal.style.transform = 'translateY(0)'
-        setTimeout(() => { modal.style.transition = '' }, 320)
-      }
-    }
-    handle.addEventListener('touchstart', onStart, { passive: true })
-    handle.addEventListener('touchmove',  onMove,  { passive: true })
-    handle.addEventListener('touchend',   onEnd,   { passive: true })
-    return () => {
-      handle.removeEventListener('touchstart', onStart)
-      handle.removeEventListener('touchmove',  onMove)
-      handle.removeEventListener('touchend',   onEnd)
-      modal.style.transform = ''
-      modal.style.transition = ''
-    }
-  }, [isOpen, onClose])
+  useEffect(() => setupDragToDismiss({
+    modalRef, isOpen, onClose, handleClass: '.drag-handle', animatedRefs: animatedRef,
+  }), [isOpen, onClose])
 
-  const handleClose = () => animateClose(modalRef, onClose)
+  const handleClose = () => animateClose(modalRef, onClose, animatedRef)
 
   const handleProfilePhotoSelect = (e) => {
     const file = e.target.files[0]
@@ -133,41 +102,12 @@ export default function ProfileModal({ isOpen, onClose }) {
 
   return (
     <>
-      <style>{`
-        .pm-overlay{position:fixed;inset:0;z-index:230;display:none;align-items:flex-end;justify-content:center;padding:0;background:rgba(15,23,42,.45);backdrop-filter:blur(4px)}
-        .pm-overlay.open{display:flex}
-        .pm-modal{width:100%;max-height:92dvh;border-radius:28px 28px 0 0;background:#fff;border:1px solid #eef2f7;box-shadow:0 -8px 48px rgba(15,23,42,.18);overflow:hidden;display:flex;flex-direction:column}
-        @media(min-width:640px){.pm-overlay{align-items:center;padding:1rem}.pm-modal{width:min(100%,980px);max-height:min(92dvh,960px);border-radius:28px;box-shadow:0 24px 48px rgba(15,23,42,.18)}}
-        .pm-modal-header{background:#fff;color:#0f172a;border-bottom:1px solid #eef2f7;flex-shrink:0}
-        .pm-modal-body{overflow-y:auto;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);flex:1}
-        .pm-drag-handle{display:none}
-        @media(max-width:639px){.pm-drag-handle{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0}}
-        .pm-badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:9999px;border:1px solid #dcfce7;background:#f0fdf4;color:#15803d;padding:.3rem .7rem;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-        .pm-section{border:1px solid #e5e7eb;background:#fff;border-radius:22px;padding:1rem}
-        .pm-section-danger{border:1px solid #fecaca;background:#fff5f5;border-radius:22px;padding:1rem}
-        .pm-brand-avatar{background:linear-gradient(135deg,#16a34a,#22c55e,#4ade80)}
-        .pm-save-btn{min-width:130px;padding:.82rem 1.15rem;border-radius:16px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:.9rem;font-weight:700;transition:transform .14s ease,box-shadow .14s ease;box-shadow:0 14px 26px rgba(22,163,74,.18);border:none;cursor:pointer}
-        .pm-save-btn:hover:not(:disabled){transform:translateY(-1px)}
-        .pm-save-btn:disabled{opacity:.6;cursor:not-allowed}
-        .pm-cancel-btn{min-width:90px;padding:.82rem 1.1rem;border-radius:16px;border:1px solid #dbe4ee;background:#fff;color:#334155;font-size:.9rem;font-weight:600;cursor:pointer;transition:background .14s}
-        .pm-cancel-btn:hover{background:#f8fafc}
-        .pm-delete-btn{padding:.72rem 1.1rem;border-radius:14px;border:1px solid #fca5a5;background:#fff;color:#dc2626;font-size:.85rem;font-weight:600;cursor:pointer;transition:background .14s,border-color .14s}
-        .pm-delete-btn:hover{background:#fef2f2;border-color:#dc2626}
-        .pm-confirm-delete-btn{padding:.72rem 1.1rem;border-radius:14px;border:none;background:#dc2626;color:#fff;font-size:.85rem;font-weight:700;cursor:pointer;transition:background .14s,opacity .14s}
-        .pm-confirm-delete-btn:disabled{opacity:.5;cursor:not-allowed}
-        .pm-confirm-delete-btn:not(:disabled):hover{background:#b91c1c}
-        .pm-input-wrap{position:relative;border-radius:12px;border:1px solid #e2e8f0;background:#fff;transition:border-color .14s,box-shadow .14s}
-        .pm-input-wrap:focus-within{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-        .pm-input{width:100%;border:none;background:transparent;padding:.65rem .75rem .65rem 2.5rem;font-size:.875rem;color:#0f172a;outline:none}
-        .pm-input-icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);pointer-events:none;color:#94a3b8}
-      `}</style>
-
-      <div className={`pm-overlay ${isOpen ? 'open' : ''}`} onClick={handleClose}>
-        <div className="pm-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
-          <div className="pm-drag-handle" />
+      <div className={`context-overlay ${isOpen ? 'open' : ''}`} onClick={handleClose}>
+        <div className="context-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
 
           {/* Header */}
-          <header className="pm-modal-header px-5 py-5 sm:px-7 sm:py-6">
+          <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
@@ -177,7 +117,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                   </svg>
                 </div>
                 <div>
-                  <span className="pm-badge">Perfil de usuario</span>
+                  <span className="context-badge">Perfil de usuario</span>
                   <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Información personal</h3>
                   <p className="text-xs text-gray-400 mt-0.5">Mantén tus datos actualizados y gestiona tu cuenta.</p>
                 </div>
@@ -193,7 +133,7 @@ export default function ProfileModal({ isOpen, onClose }) {
           </header>
 
           {/* Body */}
-          <div className="pm-modal-body px-4 sm:px-6 py-5">
+          <div className="context-modal-body px-4 sm:px-6 py-5">
             <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
 
               {/* Sidebar: avatar + info */}
@@ -334,8 +274,8 @@ export default function ProfileModal({ isOpen, onClose }) {
                 )}
 
                 <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-                  <button type="button" onClick={handleClose} className="pm-cancel-btn">Cancelar</button>
-                  <button type="submit" disabled={saving} className="pm-save-btn inline-flex items-center gap-1.5">
+                  <button type="button" onClick={handleClose} className="modal-secondary-btn">Cancelar</button>
+                  <button type="submit" disabled={saving} className="modal-save-btn inline-flex items-center gap-1.5">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                       <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
@@ -392,7 +332,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                         />
                       </div>
                       <div className="flex gap-3">
-                        <button type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }} className="pm-cancel-btn text-sm py-2 px-4" style={{ minWidth: 0, padding: '.55rem .9rem' }}>
+                        <button type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteInput('') }} className="modal-secondary-btn text-sm py-2 px-4" style={{ minWidth: 0, padding: '.55rem .9rem' }}>
                           Cancelar
                         </button>
                         <button

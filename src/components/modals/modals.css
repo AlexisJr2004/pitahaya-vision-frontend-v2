@@ -1,0 +1,156 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Estilos compartidos de components/modals/
+   Un solo lugar para todo lo visual de los modales de la app: si hay que
+   cambiar un estilo de un modal, es aquí.
+   También lo importan algunos componentes que no viven en esta carpeta
+   pero reutilizan el mismo lenguaje visual (WeatherWidget, WelcomeScreen,
+   AnalysisCard, HistorialView) para no duplicar reglas.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Shell de modal (bottom-sheet en móvil, diálogo centrado en desktop) ── */
+.context-overlay { position: fixed; inset: 0; z-index: 230; display: none; align-items: flex-end; justify-content: center; padding: 0; background: rgba(15, 23, 42, .45); backdrop-filter: blur(4px); }
+.context-overlay.open { display: flex; }
+.context-modal { width: 100%; max-height: 92dvh; border-radius: 28px 28px 0 0; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 -8px 48px rgba(15, 23, 42, .18); overflow: hidden; display: flex; flex-direction: column; }
+@media (min-width: 640px) {
+  .context-overlay { align-items: center; padding: 1rem; }
+  .context-modal { width: min(100%, 980px); max-height: min(92dvh, 960px); border-radius: 28px; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); }
+}
+.context-modal-header { background: #fff; color: #0f172a; border-bottom: 1px solid #eef2f7; flex-shrink: 0; }
+.context-modal-header.modal-header-flat { border-bottom: none; }
+.context-modal-body { overflow-y: auto; background: linear-gradient(180deg, #fff 0%, #f8fafc 100%); flex: 1; }
+.drag-handle { display: none; }
+@media (max-width: 639px) {
+  .drag-handle { display: block; width: 36px; height: 4px; background: #cbd5e1; border-radius: 999px; margin: 10px auto 4px; flex-shrink: 0; touch-action: none; cursor: grab; }
+}
+/* Delta: SettingsModal usa un modal un poco más compacto que el resto */
+@media (min-width: 640px) {
+  .context-modal.modal-compact { width: min(100%, 940px); max-height: min(94dvh, 820px); }
+}
+.context-badge { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 9999px; border: 1px solid #dcfce7; background: #f0fdf4; color: #15803d; padding: 0.3rem 0.7rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ── Formularios de modal ── */
+.context-section { border: 1px solid #e5e7eb; background: #fff; border-radius: 22px; padding: 1rem; }
+.context-section-title { font-size: 0.78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #166534; }
+.context-input, .context-select, .context-textarea { width: 100%; border: 1px solid #dbe4ee; border-radius: 14px; background: #fff; color: #0f172a; padding: 0.78rem 0.9rem; font-size: 0.92rem; transition: border-color 0.14s ease, box-shadow 0.14s ease; }
+.context-input:focus, .context-select:focus, .context-textarea:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, .12); }
+.context-textarea { min-height: 104px; resize: vertical; }
+.context-summary { border: 1px dashed #dcfce7; background: #f8fafc; border-radius: 18px; padding: 0.9rem 1rem; }
+.ctx-icon-input { padding-left: 2.65rem !important; }
+
+/* ── Botones compartidos (Guardar / Cancelar) ── */
+.modal-save-btn { min-width: 130px; padding: 0.82rem 1.15rem; border-radius: 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; font-size: 0.9rem; font-weight: 700; transition: transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease; box-shadow: 0 14px 26px rgba(22, 163, 74, .18); border: none; cursor: pointer; }
+.modal-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.modal-save-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.modal-secondary-btn { min-width: 90px; padding: 0.82rem 1.1rem; border-radius: 16px; border: 1px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.14s; }
+.modal-secondary-btn:hover:not(:disabled) { background: #f8fafc; }
+.modal-secondary-btn:disabled { opacity: .5; cursor: not-allowed; }
+.modal-footer-btns { display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .modal-footer-btns { flex-direction: column-reverse; }
+  .modal-footer-btns .modal-save-btn,
+  .modal-footer-btns .modal-secondary-btn { width: 100%; min-width: 0; text-align: center; font-size: 0.88rem; }
+}
+@media (max-width: 400px) {
+  .modal-save-btn, .modal-secondary-btn { min-width: 0; flex: 1; font-size: 0.85rem; padding: 0.78rem 0.9rem; }
+}
+
+/* ── Parcelas (ParcelasModal) ── */
+.parcelas-farm-card { border: 1px solid #eef2f7; border-radius: 22px; background: #fff; overflow: hidden; }
+.parcelas-farm-header { border-bottom: 1px solid #eef2f7; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.parcelas-farm-body { padding: 0.75rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.parcelas-plots-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+.parcelas-plots-table thead { border-bottom: 1.5px solid #eef2f7; }
+.parcelas-plots-table th { padding: 9px 10px; text-align: left; font-size: 0.68rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+.parcelas-plots-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; color: #0f172a; white-space: nowrap; }
+.parcelas-plots-table tbody tr:last-child td { border-bottom: none; }
+.parcelas-plots-table tbody tr:hover { background: #f8fafc; }
+.parcelas-select-btn { padding: 4px 10px; border-radius: 999px; border: 1px solid #dbe4ee; background: #fff; color: #16a34a; font-size: 0.68rem; font-weight: 700; cursor: pointer; transition: all 0.12s; white-space: nowrap; }
+.parcelas-select-btn:hover { background: #f0fdf4; border-color: #22c55e; }
+.parcelas-empty-state { text-align: center; padding: 2.5rem 1rem; color: #94a3b8; display: flex; flex-direction: column; align-items: center; }
+
+/* ── Modal de confirmación de borrado (ConfirmDeleteModal + diálogos inline
+   de renombrar/eliminar en ChatbotPage e HistorialView) ── */
+.delete-overlay { position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .36); backdrop-filter: blur(1px); }
+.delete-overlay.open { display: flex; }
+.delete-modal { width: min(100%, 420px); border-radius: 24px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 24px 48px rgba(15, 23, 42, .18); overflow: hidden; }
+.delete-modal-title { font-size: 1rem; font-weight: 700; color: #0f172a; }
+.delete-modal-text { font-size: 0.9rem; color: #64748b; }
+.delete-modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+.delete-btn { min-width: 108px; padding: 0.78rem 1rem; border-radius: 14px; font-size: 0.9rem; font-weight: 600; transition: all 0.14s; border: none; cursor: pointer; }
+.delete-btn-secondary { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
+.delete-btn-secondary:hover { background: #f8fafc; }
+.delete-btn-danger { background: #ef4444; color: #fff; border: 1px solid #ef4444; }
+.delete-btn-danger:hover { background: #dc2626; }
+.delete-btn-green { background: #16a34a !important; border-color: #16a34a !important; }
+
+/* ── GPS / ubicación (AddPlotModal) ── */
+.gps-badge { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 0.55rem 0.9rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #15803d; font-weight: 500; }
+.geo-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; border-radius: 12px; border: 1.5px solid #dbe4ee; background: #fff; color: #334155; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.14s; white-space: nowrap; }
+.geo-btn:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
+.geo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Layout del modal de parcela (AddPlotModal) ── */
+.plot-modal-body { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr; gap: 1.25rem; padding: 1.25rem 1.5rem; align-items: start; }
+@media (min-width: 768px) { .plot-modal-body { grid-template-columns: 1fr 1fr; align-items: stretch; } }
+.plot-col { display: flex; flex-direction: column; gap: 1rem; }
+.plot-map-col { display: flex; flex-direction: column; gap: 0.75rem; }
+.plot-map-fill { border-radius: 16px; overflow: hidden; border: 1.5px solid #e2e8f0; height: 220px; }
+@media (min-width: 768px) { .plot-map-fill { height: 320px; } }
+
+/* ── Animación de aparición de modales flotantes (SuccessModal, CooldownModal) ── */
+@keyframes modalPopIn { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* ── SettingsModal: nav lateral (sidebar en desktop, barra superior en móvil) ── */
+.smod-shell{display:flex;flex-direction:column;flex:1;min-height:0}
+@media(min-width:640px){.smod-shell{flex-direction:row}}
+
+.smod-nav{display:flex;flex-direction:row;gap:.35rem;padding:.6rem 1rem;border-top:1px solid #eef2f7;border-bottom:1px solid #eef2f7;flex-shrink:0;background:#fff;overflow-x:auto}
+@media(min-width:640px){
+  .smod-nav{flex-direction:column;width:208px;border-top:none;border-bottom:none;border-right:1px solid #eef2f7;background:#f8fafc;padding:1.1rem .75rem;gap:.25rem;overflow-x:visible;flex-shrink:0}
+}
+.smod-nav-item{position:relative;display:flex;align-items:center;gap:.6rem;padding:.6rem .85rem;border-radius:999px;border:none;background:none;font-size:.85rem;font-weight:600;color:#94a3b8;cursor:pointer;transition:all .14s;white-space:nowrap;flex-shrink:0}
+.smod-nav-item:hover{color:#475569;background:#f1f5f9}
+.smod-nav-item.active{background:#16a34a;color:#fff}
+@media(min-width:640px){
+  .smod-nav-item{width:100%;text-align:left;border-radius:12px}
+  .smod-nav-item:hover{background:#eef2f7}
+  .smod-nav-item.active{background:#dcfce7;color:#15803d;box-shadow:inset 3px 0 0 #16a34a}
+}
+.smod-nav-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0;margin-left:auto}
+
+.smod-content{flex:1;min-width:0;overflow-y:auto;background:#f8fafc;padding:1.1rem 1rem}
+@media(min-width:640px){.smod-content{padding:1.5rem 1.75rem}}
+
+.smod-sev-opt{position:relative;display:flex;align-items:center;gap:.55rem;border-radius:12px;padding:.65rem .7rem;cursor:pointer;transition:all .14s;border:1.5px solid #e2e8f0;background:#fff;text-align:left;width:100%}
+.smod-sev-opt:hover{border-color:#cbd5e1;box-shadow:0 2px 6px rgba(0,0,0,.05)}
+.smod-sev-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+.smod-date-input{width:100%;font-size:.85rem;border:1px solid #e2e8f0;border-radius:.65rem;background:#fff;padding:.55rem .7rem;outline:none;color:#0f172a;transition:border-color .15s,box-shadow .15s}
+.smod-date-input:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
+
+.smod-chip{padding:.42rem .85rem;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:.78rem;font-weight:600;color:#475569;cursor:pointer;transition:all .14s;white-space:nowrap}
+.smod-chip:hover{border-color:#86efac;color:#15803d}
+.smod-chip.active{background:#16a34a;border-color:#16a34a;color:#fff}
+
+.smod-toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer}
+.smod-toggle input{position:absolute;opacity:0;width:0;height:0}
+.smod-toggle-track{position:relative;display:block;width:44px;height:24px;border-radius:999px;transition:background .2s;flex-shrink:0}
+.smod-toggle-track.on{background:#16a34a}
+.smod-toggle-track.off{background:#cbd5e1}
+.smod-toggle-thumb{position:absolute;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transition:left .2s}
+.smod-toggle-thumb.on{left:23px}
+.smod-toggle-thumb.off{left:3px}
+
+/* ── ProfileModal ── */
+.pm-section{border:1px solid #e5e7eb;background:#fff;border-radius:22px;padding:1rem}
+.pm-section-danger{border:1px solid #fecaca;background:#fff5f5;border-radius:22px;padding:1rem}
+.pm-brand-avatar{background:linear-gradient(135deg,#16a34a,#22c55e,#4ade80)}
+.pm-delete-btn{padding:.72rem 1.1rem;border-radius:14px;border:1px solid #fca5a5;background:#fff;color:#dc2626;font-size:.85rem;font-weight:600;cursor:pointer;transition:background .14s,border-color .14s}
+.pm-delete-btn:hover{background:#fef2f2;border-color:#dc2626}
+.pm-confirm-delete-btn{padding:.72rem 1.1rem;border-radius:14px;border:none;background:#dc2626;color:#fff;font-size:.85rem;font-weight:700;cursor:pointer;transition:background .14s,opacity .14s}
+.pm-confirm-delete-btn:disabled{opacity:.5;cursor:not-allowed}
+.pm-confirm-delete-btn:not(:disabled):hover{background:#b91c1c}
+.pm-input-wrap{position:relative;border-radius:12px;border:1px solid #e2e8f0;background:#fff;transition:border-color .14s,box-shadow .14s}
+.pm-input-wrap:focus-within{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+.pm-input{width:100%;border:none;background:transparent;padding:.65rem .75rem .65rem 2.5rem;font-size:.875rem;color:#0f172a;outline:none}
+.pm-input-icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);pointer-events:none;color:#94a3b8}

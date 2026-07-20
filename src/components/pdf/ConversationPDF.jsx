@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
-import { B, SL, R, SERIF, SANS, MONO, BrandLogo, PdfLoadingOverlay, sevColor, sevBg, sevBorder, sevText, normSev, createPageGeometry, avoidPageCuts } from './pdfCommon'
+import { B, SL, SERIF, SANS, MONO, BrandLogo, PdfLoadingOverlay, sevColor, sevBg, sevBorder, sevText, createPageGeometry, makeRefCode, renderTemplateToPdf, PdfTitleBlock, PdfLegalNotice } from './pdfCommon'
 
 const W     = 760
 const PAD   = 40
@@ -75,7 +73,7 @@ function AnalysisBlock({ card, imgSrc }) {
 
 // ─── PDF Template ─────────────────────────────────────────────────────────────
 function ConversationTemplate({ title, items, imgMap, generatedAt }) {
-  const refCode = `PV-CHAT-${new Date().toISOString().replace(/[-T:.Z]/g, '').slice(0, 12)}`
+  const refCode = makeRefCode('PV-CHAT')
   return (
     <div style={{ width: W, background: '#fff', fontFamily: SANS, color: SL[900] }}>
       <div style={{ background: '#fff', borderBottom: `1px solid ${SL[200]}` }}>
@@ -97,14 +95,9 @@ function ConversationTemplate({ title, items, imgMap, generatedAt }) {
         </div>
       </div>
 
-      <div style={{ padding: `20px ${PAD}px 0` }}>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontFamily: SANS, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: B[600], marginBottom: 5 }}>
-            Análisis exportados
-          </div>
-          <div style={{ fontFamily: SERIF, fontSize: 25, fontWeight: 600, color: SL[900], lineHeight: 1.15 }}>{title}</div>
-        </div>
+      <PdfTitleBlock eyebrow="Análisis exportados" title={title} size={25} pad={PAD} />
 
+      <div style={{ padding: `20px ${PAD}px 0` }}>
         <div>
           {items.map((it, i) => (
             <div key={i} data-section={`analysis-${it._i}`}>
@@ -113,12 +106,10 @@ function ConversationTemplate({ title, items, imgMap, generatedAt }) {
           ))}
         </div>
 
-        <div data-section="aviso" style={{ borderTop: `1px solid ${SL[100]}`, paddingTop: 12, paddingBottom: 12, marginBottom: 18 }}>
-          <p style={{ fontFamily: SANS, fontSize: 8.5, color: SL[400], lineHeight: 1.6, margin: 0 }}>
-            <strong style={{ color: SL[500] }}>Aviso:</strong> Documento generado automáticamente por Pitahaya Vision a partir de una conversación del chatbot.
-            Tiene carácter informativo; para decisiones agronómicas críticas valide con un técnico especializado en sanidad vegetal.
-          </p>
-        </div>
+        <PdfLegalNotice dataSection="aviso" size={8.5} style={{ paddingBottom: 12 }}>
+          Documento generado automáticamente por Pitahaya Vision a partir de una conversación del chatbot.
+          Tiene carácter informativo; para decisiones agronómicas críticas valide con un técnico especializado en sanidad vegetal.
+        </PdfLegalNotice>
       </div>
     </div>
   )
@@ -163,49 +154,11 @@ export default function ConversationPDF({ isOpen, onClose, data }) {
         const template = templateRef.current
         if (!template) throw new Error('Template not mounted')
 
-        avoidPageCuts(template, { pageEndFor, maxPagePx: PAGE_VIS_PX, spacerExtra: 6 })
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
-
-        const canvas = await html2canvas(template, {
-          scale: 2, useCORS: true, allowTaint: false,
-          logging: false, backgroundColor: '#ffffff', windowWidth: W,
-        })
-
-        const imgData  = canvas.toDataURL('image/jpeg', 0.96)
-        const pdf      = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-        const pageW    = pdf.internal.pageSize.getWidth()
-        const pageH    = pdf.internal.pageSize.getHeight()
-        const imgProps = pdf.getImageProperties(imgData)
-        const imgH     = (imgProps.height * pageW) / imgProps.width
-
-        const FOOTER_H = FOOTER_MM
-        const C1       = pageH - FOOTER_H
-        const pages    = 1 + Math.ceil(Math.max(0, imgH - C1) / pageH)
-
-        for (let i = 0; i < pages; i++) {
-          if (i > 0) pdf.addPage()
-          const imageY = (i === 0) ? 0 : -(C1 + (i - 1) * pageH)
-          pdf.addImage(imgData, 'JPEG', 0, imageY, pageW, imgH)
-
-          pdf.setFillColor(255, 255, 255)
-          pdf.rect(0, pageH - FOOTER_H, pageW, FOOTER_H, 'F')
-          pdf.setFillColor(22, 163, 74)
-          pdf.rect(0, pageH - FOOTER_H, pageW, 0.6, 'F')
-          pdf.setFontSize(6.5)
-          pdf.setTextColor(51, 65, 85)
-          pdf.setFont('helvetica', 'bold')
-          pdf.text('Pitahaya Vision', 10, pageH - FOOTER_H + 3.5)
-          pdf.setFont('helvetica', 'normal')
-          pdf.setTextColor(100, 116, 139)
-          pdf.text(`Pág. ${i + 1} / ${pages}`, pageW - 10, pageH - FOOTER_H + 3.5, { align: 'right' })
-          pdf.setFontSize(5.5)
-          pdf.setTextColor(148, 163, 184)
-          pdf.text(`© ${new Date().getFullYear()} Pitahaya Vision`, 10, pageH - FOOTER_H + 6.5)
-          pdf.text(generatedAt, pageW - 10, pageH - FOOTER_H + 6.5, { align: 'right' })
-        }
-
         const titlePart = (data?.title || 'conversacion').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40)
-        pdf.save(`pitahaya-vision-${titlePart}-${new Date().toISOString().slice(0, 10)}.pdf`)
+        await renderTemplateToPdf(template, {
+          W, FOOTER_MM, pageEndFor, maxPagePx: PAGE_VIS_PX, generatedAt,
+          filename: `pitahaya-vision-${titlePart}-${new Date().toISOString().slice(0, 10)}.pdf`,
+        })
         setStatus('done')
         setTimeout(onClose, 800)
       } catch (err) {

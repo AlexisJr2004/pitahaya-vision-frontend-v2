@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getWeather } from '../services/analysisService'
-import ProfileModal from '../components/ProfileModal'
-import SettingsModal from '../components/SettingsModal'
+import ProfileModal from '../components/modals/ProfileModal'
+import SettingsModal from '../components/modals/SettingsModal'
 import Sidebar from '../components/Sidebar'
 import DashboardView from './dashboard/DashboardView'
 import HistorialView from './historial/HistorialView'
 
-export default function UserPage() {
+export default function HomeUserPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()

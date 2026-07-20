@@ -2,41 +2,37 @@ export function escapeHtml(v) {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-export function formatDateShort(s) {
-  if (!s) return '—'
+// Motor único de formateo de fechas — las funciones de abajo son atajos
+// con nombre sobre las combinaciones de opciones realmente usadas en la app.
+function formatDate(s, options, fallback = '—') {
+  if (!s) return fallback
+  const d = new Date(s)
+  if (isNaN(d)) return fallback
   try {
-    return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short' })
-  } catch { return '—' }
+    return new Intl.DateTimeFormat('es-EC', options).format(d)
+  } catch {
+    return fallback
+  }
+}
+
+export function formatDateShort(s) {
+  return formatDate(s, { day: '2-digit', month: 'short' })
 }
 
 export function formatDateLong(s) {
-  if (!s) return '—'
-  try {
-    return new Date(s).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return '—' }
+  return formatDate(s, { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export function formatDateWithTime(s) {
-  if (!s) return '—'
-  try {
-    return new Date(s).toLocaleDateString('es-EC', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    })
-  } catch { return '—' }
+  return formatDate(s, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDateLongWithTime(s) {
-  if (!s) return 'Sin fecha'
-  const d = new Date(s)
-  if (isNaN(d)) return 'Sin fecha'
-  return new Intl.DateTimeFormat('es-EC', { dateStyle: 'long', timeStyle: 'short' }).format(d)
+  return formatDate(s, { dateStyle: 'long', timeStyle: 'short' }, 'Sin fecha')
 }
 
 export function formatDateMediumWithTime(s) {
-  if (!s) return 'Sin fecha'
-  const d = new Date(s)
-  if (isNaN(d)) return 'Sin fecha'
-  return new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short' }).format(d)
+  return formatDate(s, { dateStyle: 'medium', timeStyle: 'short' }, 'Sin fecha')
 }
 
 export function extractConfidence(a) {

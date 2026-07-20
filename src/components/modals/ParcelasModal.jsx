@@ -1,15 +1,17 @@
 import { animateClose } from '../../utils/modalUtils'
+import './modals.css'
 
 export default function ParcelasModal({
-  show, modalRef,
+  show, modalRef, animatedRefs,
   farms,
   onClose, openAddFarmModal, openAddPlotModal,
   openEditFarmModal, openEditPlotModal,
   handleDeleteFarm, handleDeletePlot,
   handleSelectPlot,
 }) {
+  const close = () => animateClose(modalRef, onClose, animatedRefs)
   return (
-    <div className={`context-overlay ${show ? 'open' : ''}`} onClick={() => animateClose(modalRef, onClose)}>
+    <div className={`context-overlay ${show ? 'open' : ''}`} onClick={close}>
       <div className="context-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
         <div className="drag-handle" />
         <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
@@ -26,7 +28,7 @@ export default function ParcelasModal({
                 <p className="text-xs text-gray-400 mt-0.5">Administra tus corporaciones agrícolas y asocia parcelas al análisis.</p>
               </div>
             </div>
-            <button onClick={() => animateClose(modalRef, onClose)} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+            <button onClick={close} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>

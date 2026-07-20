@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import '../../../components/modals/modals.css'
 
 const SUGGESTIONS = [
   {
@@ -75,7 +76,7 @@ export default function WelcomeScreen({ displayName, farms, openAddFarmModal, su
               <div><p className="text-sm font-semibold text-gray-700 leading-tight">Sube una foto y analiza</p><p className="text-xs text-gray-400 mt-0.5">Diagnóstico inteligente en segundos</p></div>
             </div>
           </div>
-          <button onClick={() => openAddFarmModal()} className="context-save-btn w-full">
+          <button onClick={() => openAddFarmModal()} className="modal-save-btn w-full">
             Registrar mi primera corporación agrícola
           </button>
         </div>

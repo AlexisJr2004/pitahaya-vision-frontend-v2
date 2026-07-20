@@ -7,22 +7,22 @@ import AIAnalysisPanel from '../../components/AIAnalysisPanel'
 import FichaTecnicaPDF from '../../components/pdf/FichaTecnicaPDF'
 import TrazabilidadPDF from '../../components/pdf/TrazabilidadPDF'
 import { toArray } from '../../utils/arrayUtils'
+import { animateClose as modalAnimateClose, setupDragToDismiss } from '../../utils/modalUtils'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
-import { severityBucket, severityLevel, normalizeSeverity, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../../utils/severity'
+import { severityBucket, severityLevel, sevPillClass, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../../utils/severity'
 import { formatDateMediumWithTime as fmtDate, formatDateLongWithTime as fmtDateShort } from '../../utils/formatters'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
+import '../../components/modals/modals.css'
+import './historial.css'
 import AppLogo from '../../components/AppLogo'
 import AnalysisImage from '../../components/AnalysisImage'
-import FloatingChatButton from '../../components/FloatingChatButton'
 import Footer from '../../components/Footer'
+import TopBar from '../../components/TopBar'
+import PageHeader from '../../components/PageHeader'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function severityClass(val) {
-  const s = normalizeSeverity(val)
-  if (s.includes('crit') || s.includes('extrem') || s.includes('muy alta') || s.includes('muy grav')) return 'severity-critical'
-  if (s.includes('alta') || s.includes('high') || s.includes('grav') || s.includes('sever') || s.includes('seria')) return 'severity-high'
-  if (s.includes('moder') || s.includes('media') || s.includes('inter') || s.includes('parcial')) return 'severity-medium'
-  return 'severity-low'
+  return sevPillClass(severityBucket(val))
 }
 
 function filterByTzPeriod(list, period, dateFrom, dateTo) {
@@ -270,59 +270,17 @@ export default function HistorialView({ onOpenSidebar }) {
     } catch {}
   }
 
-  const animateClose = useCallback((modalRef, closeFn) => {
-    if (window.innerWidth >= 640 || !modalRef.current) { closeFn(); return }
-    const m = modalRef.current
-    m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-    m.style.transform  = 'translateY(110%)'
-    setTimeout(() => { m.style.transform = ''; m.style.transition = ''; animatedModalRefs.current.delete(modalRef); closeFn() }, 340)
-  }, [])
+  const animateClose = useCallback(
+    (modalRef, closeFn) => modalAnimateClose(modalRef, closeFn, animatedModalRefs),
+    [],
+  )
 
   // drag-to-dismiss on mobile
   useEffect(() => {
-    if (window.innerWidth >= 640) return
-    const setups = [
-      { ref: trazModalRef,  open: showTrazabilidad, close: () => setShowTrazabilidad(false) },
-      { ref: fichaModalRef, open: showFicha,         close: () => setShowFicha(false) },
+    const cleanups = [
+      setupDragToDismiss({ modalRef: trazModalRef,  isOpen: showTrazabilidad, onClose: () => setShowTrazabilidad(false), handleClass: '.drag-handle-hist', animatedRefs: animatedModalRefs }),
+      setupDragToDismiss({ modalRef: fichaModalRef, isOpen: showFicha,        onClose: () => setShowFicha(false),        handleClass: '.drag-handle-hist', animatedRefs: animatedModalRefs }),
     ]
-    const cleanups = []
-    setups.forEach(({ ref, open, close }) => {
-      if (!open || !ref.current) return
-      const modal  = ref.current
-      const handle = modal.querySelector('.drag-handle-hist')
-      if (!handle) return
-      if (!animatedModalRefs.current.has(ref)) {
-        animatedModalRefs.current.add(ref)
-        modal.style.transition = 'none'
-        modal.style.transform  = 'translateY(100%)'
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
-          modal.style.transform  = 'translateY(0)'
-        }))
-      }
-      let sy = 0, dy = 0
-      const onStart = e => { sy = e.touches[0].clientY; dy = 0; modal.style.transition = 'none' }
-      const onMove  = e => { dy = Math.max(0, e.touches[0].clientY - sy); modal.style.transform = `translateY(${dy}px)` }
-      const onEnd   = () => {
-        if (dy > 80) {
-          modal.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-          modal.style.transform  = 'translateY(110%)'
-          setTimeout(() => { modal.style.transform = ''; modal.style.transition = ''; animatedModalRefs.current.delete(ref); close() }, 340)
-        } else {
-          modal.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)'
-          modal.style.transform  = 'translateY(0)'
-          setTimeout(() => { modal.style.transition = '' }, 320)
-        }
-      }
-      handle.addEventListener('touchstart', onStart, { passive: true })
-      handle.addEventListener('touchmove',  onMove,  { passive: true })
-      handle.addEventListener('touchend',   onEnd,   { passive: true })
-      cleanups.push(() => {
-        handle.removeEventListener('touchstart', onStart)
-        handle.removeEventListener('touchmove',  onMove)
-        handle.removeEventListener('touchend',   onEnd)
-      })
-    })
     return () => cleanups.forEach(fn => fn())
   }, [showTrazabilidad, showFicha])
 
@@ -348,7 +306,7 @@ export default function HistorialView({ onOpenSidebar }) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-2.5">
-              <span className={`severity-pill ${severityClass(sev)}`}>{sev}</span>
+              <span className={`sev-pill ${severityClass(sev)}`}>{sev}</span>
             </div>
             <h3 className="text-lg sm:text-xl font-semibold text-slate-900 leading-tight">{disease}</h3>
             <p className="text-sm text-slate-500 mt-1.5">{preview}</p>
@@ -356,15 +314,13 @@ export default function HistorialView({ onOpenSidebar }) {
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {hasTrazabilidad && (
               <button onClick={() => openTrazabilidad(a)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-brand-50 transition cursor-pointer"
-                style={{ border: 'none' }}>
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-brand-50 transition cursor-pointer border-none">
                 <i className="fas fa-code-branch text-[0.78rem]"></i>Ver trazabilidad
               </button>
             )}
             {hasFicha && (
               <button onClick={() => openFicha(a)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-brand-50 transition cursor-pointer"
-                style={{ border: 'none' }}>
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-brand-50 transition cursor-pointer border-none">
                 <i className="fas fa-file-medical text-[0.78rem]"></i>Ficha técnica
               </button>
             )}
@@ -380,20 +336,17 @@ export default function HistorialView({ onOpenSidebar }) {
                 } catch {}
               }
               navigate('/chatbot', { state: { conversationId: convId } })
-            }} className="inline-flex items-center justify-center gap-2 rounded-xl border-brand-100 bg-brand-50 px-3.5 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100 transition flex-shrink-0 cursor-pointer"
-               style={{ border: 'none' }}>
+            }} className="inline-flex items-center justify-center gap-2 rounded-xl border-brand-100 bg-brand-50 px-3.5 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100 transition flex-shrink-0 cursor-pointer border-none">
               Abrir en chat<i className="fas fa-arrow-up-right-from-square text-[0.78rem]"></i>
             </button>
             {ph?.id && (
               <button onClick={() => { setEditingId(a.id); setEditText(notes); setDeleteConfirmId(null) }}
-                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer"
-                style={{ background: 'none', border: 'none' }} title="Editar observación">
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition cursor-pointer bg-transparent border-none" title="Editar observación">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </button>
             )}
             <button onClick={() => { setDeleteConfirmId(a.id); setEditingId(null) }}
-              className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
-              style={{ background: 'none', border: 'none' }} title="Eliminar análisis">
+              className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition cursor-pointer bg-transparent border-none" title="Eliminar análisis">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>
           </div>
@@ -411,17 +364,14 @@ export default function HistorialView({ onOpenSidebar }) {
           {editingId === a.id ? (
             <>
               <textarea rows={4} value={editText} onChange={e => setEditText(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-brand-500 resize-none"
-                style={{ background: '#f8fafc' }} />
+                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none focus:border-brand-500 resize-none bg-slate-50" />
               <div className="flex gap-2 mt-2">
                 <button onClick={handleSaveEdit} disabled={editSaving}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer disabled:opacity-60"
-                  style={{ border: 'none' }}>
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer disabled:opacity-60 border-none">
                   {editSaving ? 'Guardando…' : 'Guardar'}
                 </button>
                 <button onClick={() => setEditingId(null)}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                  style={{ background: 'none' }}>
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer bg-transparent">
                   Cancelar
                 </button>
               </div>
@@ -496,96 +446,35 @@ export default function HistorialView({ onOpenSidebar }) {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <>
-      <style>{`
-        .glass-card{background:#fff;border:1px solid #eef2f7;border-radius:1rem}
-        .analysis-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;transition:border-color .16s ease,background .16s ease}
-        .analysis-card:hover{border-color:#bbf7d0;background:#f8fafc}
-        .severity-pill{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .55rem;border-radius:9999px;font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-        .severity-low{background:#ecfdf5;color:#166534}
-        .severity-medium{background:#fefce8;color:#a16207}
-        .severity-high{background:#fff7ed;color:#c2410c}
-        .severity-critical{background:#fef2f2;color:#b91c1c}
-        .chip{border:1px solid #e5e7eb;background:#fff;border-radius:9999px;padding:.4rem .75rem;font-size:.8rem;color:#334155;transition:background .14s ease,border-color .14s ease,color .14s ease;cursor:pointer}
-        .chip.active{background:#dcfce7;border-color:#bbf7d0;color:#166534}
-        .search-input{width:100%;border:1px solid #dbe4ee;border-radius:14px;padding:.78rem .9rem .78rem 2.5rem;background:#fff;outline:none;transition:border-color .14s ease,box-shadow .14s ease}
-        .search-input:focus{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
-        .detail-section{border:1px solid #e5e7eb;background:#fff;border-radius:22px;padding:1rem}
-        .detail-section-title{font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#166534}
-        .detail-field{display:flex;flex-direction:column;gap:.15rem}
-        .detail-field-label{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8}
-        .detail-field-value{font-size:.9rem;color:#0f172a;line-height:1.4}
-        .hist-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center;padding:0;background:rgba(15,23,42,.45);backdrop-filter:blur(4px)}
-        .hist-overlay.open{display:flex}
-        .hist-modal{width:100%;max-height:92dvh;border-radius:28px 28px 0 0;background:#fff;border:1px solid #eef2f7;box-shadow:0 -8px 48px rgba(15,23,42,.18);overflow:hidden;display:flex;flex-direction:column}
-        .hist-modal-body{overflow-y:auto;flex:1;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-        .drag-handle-hist{display:none}
-        @media(min-width:640px){
-          .hist-overlay{align-items:center;padding:1rem}
-          .hist-modal{border-radius:24px;box-shadow:0 24px 48px rgba(15,23,42,.18);max-height:min(92dvh,960px)}
-        }
-        @media(max-width:639px){
-          .drag-handle-hist{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0;touch-action:none;cursor:grab}
-        }
-        .delete-overlay{position:fixed;inset:0;z-index:400;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(15,23,42,.36);backdrop-filter:blur(1px)}
-        .delete-overlay.open{display:flex}
-        .delete-modal{width:min(100%,420px);border-radius:24px;background:#fff;border:1px solid #eef2f7;box-shadow:0 24px 48px rgba(15,23,42,.18);overflow:hidden}
-        .delete-modal-title{font-size:1rem;font-weight:700;color:#0f172a}
-        .delete-modal-text{font-size:.9rem;color:#64748b}
-        .delete-modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
-        .delete-btn{min-width:108px;padding:.78rem 1rem;border-radius:14px;font-size:.9rem;font-weight:600;transition:all .14s;border:none;cursor:pointer}
-        .delete-btn-secondary{background:#fff;color:#334155;border:1px solid #e2e8f0}
-        .delete-btn-secondary:hover{background:#f8fafc}
-        .delete-btn-danger{background:#ef4444;color:#fff;border:1px solid #ef4444}
-        .delete-btn-danger:hover{background:#dc2626}
-      `}</style>
-
       <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
+        <TopBar subtitle="Historial de análisis" onOpenSidebar={onOpenSidebar} />
 
-        <FloatingChatButton />
-
-        <div className="flex-1 overflow-y-auto p-4 md:p-7">
+        <div className="flex-1 overflow-y-auto thin-scroll p-4 md:p-6">
           <div className="space-y-6 pb-8">
 
-            <section className="glass-card rounded-2xl p-4 sm:p-5 mb-5">
-              <div className="grid gap-5 lg:grid-cols-[1.25fr_.85fr] lg:items-center">
-                <div>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 text-brand-700 border border-brand-100 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em]">
-                    <i className="fas fa-chart-line text-[0.7rem]"></i>Registro histórico
-                  </span>
-                  <h2 className="font-cormorant text-2xl sm:text-3xl font-semibold text-slate-900 mt-3 leading-tight">
-                    Revisa cada caso, el contexto de la planta y la decisión que se tomó.
-                  </h2>
-                  <p className="text-slate-500 mt-2 max-w-2xl leading-relaxed text-sm sm:text-base">
-                    Esta vista resume el análisis guardado desde el chatbot para consultar lotes, plantas, síntomas y estados sanitarios sin perder el hilo entre conversaciones.
-                  </p>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">Análisis</p>
-                    <p className="text-2xl font-semibold text-slate-900 mt-1.5">{stats.total}</p>
-                    <p className="text-xs text-slate-500 mt-1">guardados</p>
-                  </div>
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">Parcelas</p>
-                    <p className="text-2xl font-semibold text-slate-900 mt-1.5">{stats.lots}</p>
-                    <p className="text-xs text-slate-500 mt-1">con actividad</p>
-                  </div>
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">Casos críticos</p>
-                    <p className="text-2xl font-semibold text-slate-900 mt-1.5">{stats.critical}</p>
-                    <p className="text-xs text-slate-500 mt-1">requieren prioridad</p>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <PageHeader
+              eyebrow="Registro histórico"
+              title="Revisa cada caso, el contexto de la planta y la decisión que se tomó"
+              description="Esta vista resume el análisis guardado desde el chatbot para consultar lotes, plantas, síntomas y estados sanitarios sin perder el hilo entre conversaciones."
+              info={{
+                label: 'Filtro activo',
+                value: filters.find(f => f.key === activeFilter)?.label || 'Todos',
+                note: `${stats.total} análisis registrados`,
+              }}
+              kpis={[
+                { label: 'Análisis', value: stats.total, note: 'guardados', icon: 'fa-folder-tree', tone: 'brand' },
+                { label: 'Parcelas', value: stats.lots, note: 'con actividad', icon: 'fa-layer-group', tone: 'sky' },
+                { label: 'Casos críticos', value: stats.critical, note: 'requieren prioridad', icon: 'fa-triangle-exclamation', tone: 'red' },
+              ]}
+            />
 
             {/* ── Filtros temporales ── */}
             <section className="mb-4 stat-card p-4">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filtrar por período</p>
               <div className="flex flex-wrap gap-2 mb-3">
                 {[{key:'all',label:'Todos'},{key:'today',label:'Hoy'},{key:'last7',label:'Últimos 7 días'},{key:'month',label:'Mes actual'}].map(p => (
-                  <button key={p.key} className={`chip ${period === p.key ? 'active' : ''}`}
-                    onClick={() => setPeriod(p.key)} style={{ border: 'none', cursor: 'pointer' }}>
+                  <button key={p.key} className={`hist-chip border-none cursor-pointer ${period === p.key ? 'active' : ''}`}
+                    onClick={() => setPeriod(p.key)}>
                     {p.label}
                   </button>
                 ))}
@@ -598,14 +487,12 @@ export default function HistorialView({ onOpenSidebar }) {
                 <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                   className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
                 <button onClick={handleApplyFilters}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer"
-                  style={{ border: 'none' }}>
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer border-none">
                   <i className="fas fa-filter text-[0.72rem]"></i>Filtrar
                 </button>
                 {(applied.period !== 'all' || applied.dateFrom || applied.dateTo) && (
                   <button onClick={handleClearFilters}
-                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer"
-                    style={{ background: 'none', border: 'none' }}>
+                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer bg-transparent border-none">
                     Limpiar
                   </button>
                 )}
@@ -621,8 +508,8 @@ export default function HistorialView({ onOpenSidebar }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {filters.map(f => (
-                  <button key={f.key} className={`chip ${activeFilter === f.key ? 'active' : ''}`}
-                    onClick={() => setActiveFilter(f.key)} style={{ border: 'none', cursor: 'pointer' }}>
+                  <button key={f.key} className={`hist-chip border-none cursor-pointer ${activeFilter === f.key ? 'active' : ''}`}
+                    onClick={() => setActiveFilter(f.key)}>
                     {f.label}
                   </button>
                 ))}
@@ -645,8 +532,7 @@ export default function HistorialView({ onOpenSidebar }) {
                     <h4 className="font-cormorant text-xl font-semibold text-slate-900">Aún no hay análisis guardados</h4>
                     <p className="text-slate-500 mt-2 max-w-md mx-auto text-sm">Vuelve al chat, registra el contexto de la planta y envía una imagen para que el historial empiece a llenarse.</p>
                     <button onClick={() => navigate('/chatbot')}
-                      className="inline-flex items-center gap-2 mt-4 px-3.5 py-2 rounded-xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition text-sm cursor-pointer"
-                      style={{ border: 'none' }}>
+                      className="inline-flex items-center gap-2 mt-4 px-3.5 py-2 rounded-xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition text-sm cursor-pointer border-none">
                       <i className="fas fa-arrow-left text-[0.8rem]"></i>Ir al chat
                     </button>
                   </div>
@@ -722,8 +608,7 @@ export default function HistorialView({ onOpenSidebar }) {
                 </p>
               </div>
               <button onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}
-                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0"
-                style={{ border: 'none', cursor: 'pointer' }}>
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0 border-none cursor-pointer">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </header>
@@ -738,8 +623,8 @@ export default function HistorialView({ onOpenSidebar }) {
                   { key: '5d',  label: 'Últimos 5 días' },
                   { key: '7d',  label: 'Última semana' },
                 ].map(p => (
-                  <button key={p.key} className={`chip ${tzPeriod === p.key ? 'active' : ''}`}
-                    onClick={() => setTzPeriod(p.key)} style={{ border: 'none', cursor: 'pointer' }}>
+                  <button key={p.key} className={`hist-chip border-none cursor-pointer ${tzPeriod === p.key ? 'active' : ''}`}
+                    onClick={() => setTzPeriod(p.key)}>
                     {p.label}
                   </button>
                 ))}
@@ -752,14 +637,12 @@ export default function HistorialView({ onOpenSidebar }) {
                 <input type="date" value={tzDateTo} onChange={e => setTzDateTo(e.target.value)}
                   className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
                 <button onClick={handleTzApplyFilters}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer"
-                  style={{ border: 'none' }}>
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer border-none">
                   <i className="fas fa-filter text-[0.72rem]"></i>Filtrar
                 </button>
                 {(tzApplied.period !== 'all' || tzApplied.dateFrom || tzApplied.dateTo) && (
                   <button onClick={handleTzClearFilters}
-                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer"
-                    style={{ background: 'none', border: 'none' }}>
+                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer bg-transparent border-none">
                     Limpiar
                   </button>
                 )}
@@ -795,9 +678,9 @@ export default function HistorialView({ onOpenSidebar }) {
                       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                            <span className={`severity-pill ${severityClass(sev)}`}>{sev}</span>
+                            <span className={`sev-pill ${severityClass(sev)}`}>{sev}</span>
                             {conf != null && <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-semibold">{conf}%</span>}
-                            {isLatest && <span className="severity-pill severity-low"><i className="fas fa-clock text-[0.6rem]"></i> Último</span>}
+                            {isLatest && <span className="sev-pill sev-low"><i className="fas fa-clock text-[0.6rem]"></i> Último</span>}
                           </div>
                           <p className="text-base font-semibold text-slate-900">{disease}</p>
                           <p className="text-sm text-slate-500 mt-0.5">{fmtDateShort(entry.created_at)}</p>
@@ -849,13 +732,11 @@ export default function HistorialView({ onOpenSidebar }) {
             <footer className="p-5 border-t border-slate-200 flex flex-col items-center gap-2.5 flex-shrink-0">
               <button onClick={() => setShowTrazPDF(true)}
                 disabled={tzFilteredAsc.length === 0}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ border: 'none' }}>
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none">
                 <i className="fas fa-file-export"></i> Exportar trazabilidad + análisis IA (PDF)
               </button>
               <button onClick={() => animateClose(trazModalRef, () => setShowTrazabilidad(false))}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
-                style={{ border: 'none' }}>
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer border-none">
                 Cerrar
               </button>
             </footer>
@@ -892,8 +773,7 @@ export default function HistorialView({ onOpenSidebar }) {
                 </p>
               </div>
               <button onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}
-                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0"
-                style={{ border: 'none', cursor: 'pointer' }}>
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0 border-none cursor-pointer">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </header>
@@ -975,7 +855,7 @@ export default function HistorialView({ onOpenSidebar }) {
                           <div key={i} className="flex-shrink-0 w-48">
                             <AnalysisImage src={e.image_url} className="w-48 h-32" />
                             <div className="flex items-center gap-2 mt-1.5">
-                              <span className={`severity-pill ${severityClass(e.severity)}`}>{e.severity || '—'}</span>
+                              <span className={`sev-pill ${severityClass(e.severity)}`}>{e.severity || '—'}</span>
                               <span className="text-xs text-slate-500">{fmtDate(e.created_at)}</span>
                             </div>
                           </div>
@@ -1001,7 +881,7 @@ export default function HistorialView({ onOpenSidebar }) {
                             <p className="text-sm font-semibold text-slate-900">{disease}</p>
                             <p className="text-xs text-slate-500">{fmtDateShort(e.created_at)}</p>
                           </div>
-                          <span className={`severity-pill ${severityClass(e.severity)} flex-shrink-0`}>{e.severity || '—'}</span>
+                          <span className={`sev-pill ${severityClass(e.severity)} flex-shrink-0`}>{e.severity || '—'}</span>
                         </div>
                         {recs      && <div className="text-xs text-emerald-800 bg-emerald-50 rounded-lg p-2 mt-1.5 leading-relaxed"><span className="font-semibold">Rec.: </span>{recs}</div>}
                         {treatment && <div className="text-xs text-amber-800 bg-amber-50 rounded-lg p-2 mt-1 leading-relaxed"><span className="font-semibold">Tratamiento: </span>{treatment}</div>}
@@ -1029,13 +909,11 @@ export default function HistorialView({ onOpenSidebar }) {
             <footer className="p-5 border-t border-slate-200 flex items-center gap-3 justify-center flex-shrink-0">
               <button onClick={() => setShowFichaPDF(true)}
                 disabled={fichaTotal === 0}
-                className="px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ border: 'none' }}>
+                className="px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none">
                 <i className="fas fa-file-pdf mr-1.5"></i> Descargar PDF
               </button>
               <button onClick={() => animateClose(fichaModalRef, () => setShowFicha(false))}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer"
-                style={{ border: 'none' }}>
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition cursor-pointer border-none">
                 Cerrar
               </button>
             </footer>

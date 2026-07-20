@@ -11,3 +11,49 @@
   --color-brand-700: #15803d;
   --color-brand-800: #166534;
 }
+
+/* ─── Pill de severidad compartido (Historial, Dashboard, paneles admin) ─── */
+.sev-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .25rem .6rem;
+  border-radius: 9999px;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.sev-low      { background: #ecfdf5; color: #166534; }
+.sev-medium   { background: #fefce8; color: #a16207; }
+.sev-high     { background: #fff7ed; color: #c2410c; }
+.sev-critical { background: #fef2f2; color: #b91c1c; }
+
+/* ─── Chrome de Leaflet compartido (mapas de AddPlotModal, Dashboard usuario y admin) ─── */
+.leaflet-container { font-family: 'Inter', sans-serif !important; background: #e8f4ea !important; }
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;} .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;font-weight:700;font-size:0.72rem;}
+.leaflet-control-layers-selector { accent-color: #16a34a; }
+.leaflet-control-scale-line { border-color: #16a34a; border-top: none; background: rgba(255,255,255,.85); color: #166534; font-size: 0.7rem; font-family: 'Inter', sans-serif; }
+.leaflet-bar a { border-color: #e2e8f0 !important; color: #374151 !important; font-size: 0.95rem !important; }
+.leaflet-bar a:hover { background: #f0fdf4 !important; color: #16a34a !important; }
+
+/* ─── Tipografía de marca ─── */
+.font-cormorant { font-family: 'Cormorant Garamond', serif; }
+
+/* ─── Scrollbar delgado compartido (paneles con scroll de página completa:
+   Dashboard, Historial, Chatbot, vistas admin) ─── */
+.thin-scroll { scrollbar-width: thin; scrollbar-color: #d1fae5 transparent; }
+.thin-scroll::-webkit-scrollbar { width: 3px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 4px; }
+
+/* ─── Encabezado de sección tipo panel (Dashboard/Historial, admin y usuario) ───
+   panel-title: título grande de la sección.
+   info-card: tarjeta de contexto a la derecha del encabezado.
+   kpi-card / kpi-sparkline: tarjetas de métricas debajo del encabezado.
+   fade-in-up: entrada suave del bloque completo. */
+.panel-title { font-family: 'Cormorant Garamond', serif; letter-spacing: -0.02em; }
+.info-card { border: 1px solid rgba(226, 232, 240, .9); border-radius: 30px; background: #fff; }
+.kpi-card { position: relative; overflow: hidden; border-radius: 28px; border: 1px solid rgba(226, 232, 240, .9); background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); }
+.kpi-sparkline { height: .4rem; border-radius: 9999px; background: linear-gradient(90deg, rgba(34, 197, 94, .1), rgba(34, 197, 94, .4)); }
+.fade-in-up { animation: fadeInUp .3s ease-in-out; }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

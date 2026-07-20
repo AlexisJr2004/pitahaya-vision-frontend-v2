@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import { animateClose } from '../../utils/modalUtils'
+import './modals.css'
 
 export default function AddPlotModal({
-  show, modalRef,
+  show, modalRef, animatedRefs,
   selectedFarmForPlot, editingPlot,
   plotName, plotGps, plotGpsCoords, plotHectares, plotZone, plotRows, plotError,
   setShowAddPlotModal, setPlotName, setPlotGps, setPlotGpsCoords, setPlotHectares, setPlotZone, setPlotRows, setPlotError,
   handleCreatePlot,
 }) {
+  const close = () => animateClose(modalRef, () => setShowAddPlotModal(false), animatedRefs)
   const [geoLoading, setGeoLoading] = useState(false)
   const mapContainerRef = useRef(null)
   const leafletMapRef = useRef(null)
@@ -151,7 +153,7 @@ export default function AddPlotModal({
   }, [show, plotGps])
 
   return (
-    <div className={`context-overlay ${show ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(modalRef, () => setShowAddPlotModal(false))}>
+    <div className={`context-overlay ${show ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => close()}>
       <div className="context-modal" ref={modalRef} style={{ maxWidth: '960px' }} onClick={e => e.stopPropagation()}>
         <div className="drag-handle" />
         <header className="context-modal-header px-5 py-4 sm:px-7 sm:py-5">
@@ -170,7 +172,7 @@ export default function AddPlotModal({
                 </h3>
               </div>
             </div>
-            <button onClick={() => animateClose(modalRef, () => setShowAddPlotModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => close()} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>
@@ -312,8 +314,8 @@ export default function AddPlotModal({
         </div>
 
         <div className="px-5 sm:px-7 py-4 border-t border-gray-100 modal-footer-btns">
-          <button onClick={() => animateClose(modalRef, () => setShowAddPlotModal(false))} className="context-secondary-btn">Cancelar</button>
-          <button onClick={handleCreatePlot} className="context-save-btn flex items-center justify-center gap-2">
+          <button onClick={() => close()} className="modal-secondary-btn">Cancelar</button>
+          <button onClick={handleCreatePlot} className="modal-save-btn flex items-center justify-center gap-2">
             {editingPlot ? 'Guardar cambios' : 'Guardar parcela'}
           </button>
         </div>

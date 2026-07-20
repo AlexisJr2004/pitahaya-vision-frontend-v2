@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getRemainingSeconds, getCooldownType, clearCooldown } from '../utils/cooldown'
+import { getRemainingSeconds, getCooldownType, clearCooldown } from '../../utils/cooldown'
+import './modals.css'
 
 export default function CooldownModal({ onComplete, type: propType }) {
   const type = propType || getCooldownType()
@@ -46,7 +47,7 @@ export default function CooldownModal({ onComplete, type: propType }) {
         background: '#fff', borderRadius: 16, padding: '2rem',
         maxWidth: 400, width: '90%', textAlign: 'center',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        animation: 'fadeUp .4s cubic-bezier(.22,1,.36,1)',
+        animation: 'modalPopIn .4s cubic-bezier(.22,1,.36,1)',
       }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%',

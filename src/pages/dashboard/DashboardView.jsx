@@ -5,8 +5,9 @@ import { getAnalyses, getWeather } from '../../services/analysisService'
 import { getFarms, getPlantHistories } from '../../services/chatbotService'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
 import AnalysisImage from '../../components/AnalysisImage'
-import FloatingChatButton from '../../components/FloatingChatButton'
 import Footer from '../../components/Footer'
+import TopBar from '../../components/TopBar'
+import PageHeader from '../../components/PageHeader'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
@@ -19,7 +20,8 @@ import AppLogo from '../../components/AppLogo'
 import { toArray } from '../../utils/arrayUtils'
 import { TILE_LAYERS } from '../../constants/mapLayers'
 import { computeSeverityBucket, computeSeverityLabel, isRisk, sevLabel, sevColor, sevBg } from '../../utils/severity'
-import { escapeHtml, formatDateLong as formatDate, extractConfidence } from '../../utils/formatters'
+import { escapeHtml, formatDateLong as formatDate, formatDateWithTime as fmtFull, extractConfidence } from '../../utils/formatters'
+import './dashboard.css'
 
 // ── SeverityBars ───────────────────────────────────────────────────────────────
 function SeverityBars({ data }) {
@@ -271,7 +273,10 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
     const highRisk = histories.filter(h => isRisk(h)).length
     const farmSet = new Set(histories.map(h => h.context_detail?.farm_id).filter(Boolean))
     const healthy = Math.max(total - highRisk, 0)
-    return { total, highRisk, healthy, farms: farmSet.size || farms.length }
+    const latest = total > 0
+      ? analyses.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b)
+      : null
+    return { total, highRisk, healthy, farms: farmSet.size || farms.length, latest }
   }, [analyses, farms, histories])
 
   // ── top diseases ──────────────────────────────────────────────────────────────
@@ -513,71 +518,41 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <>
-      <style>{`
-        .panel-title{font-family:'Cormorant Garamond',serif;letter-spacing:-0.02em;}
-        .glass-card{background:#fff;border:1px solid rgba(226,232,240,.9);border-radius:30px;}
-        .dash-panel{border:1px solid rgba(226,232,240,.9);border-radius:30px;background:#fff;}
-        .dash-panel-hdr{border-bottom:1px solid #eef2f7;background:rgba(255,255,255,.82);}
-        .sev-pill{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .6rem;border-radius:9999px;font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
-        .sev-low{background:#ecfdf5;color:#166534;}
-        .sev-medium{background:#fefce8;color:#a16207;}
-        .sev-high{background:#fff7ed;color:#c2410c;}
-        .sev-critical{background:#fef2f2;color:#b91c1c;}
-        .map-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-        #dash-main::-webkit-scrollbar{width:3px;}
-        #dash-main::-webkit-scrollbar-thumb{background:#d1fae5;border-radius:4px;}
-        .export-btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.55rem 1rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;border:1px solid;}
-        .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(22,163,74,.18)!important;}
-        .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#16a34a!important;color:#fff!important;font-weight:700;font-size:0.72rem;}
-      `}</style>
-
       <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
+        <TopBar subtitle="Dashboard agrícola" onOpenSidebar={onOpenSidebar} />
 
-        <div id="dash-main" ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-7">
-          <div className="fade-in space-y-6 pb-8">
+        <div id="dash-main" ref={contentRef} className="flex-1 overflow-y-auto thin-scroll p-4 md:p-6">
+          <div className="fade-in-up space-y-6 pb-8">
 
-            <section className="glass-card rounded-2xl p-4 sm:p-5">
-              <div className="grid gap-5 lg:grid-cols-[1fr_1.13fr] lg:items-center">
-                <div>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 text-brand-700 border border-brand-100 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em]">
-                    <i className="fas fa-chart-line text-[0.7rem]"></i>
-                    Centro de control agrícola
-                  </span>
-                  <h2 className="font-cormorant text-2xl sm:text-3xl font-semibold text-slate-900 mt-3 leading-tight">
-                    Dashboard inteligente de parcelas y análisis
-                  </h2>
-                  <p className="text-slate-500 mt-2 max-w-2xl leading-relaxed text-sm sm:text-base">
-                    Consolidación de análisis del chatbot e historial de enfermedades para visualizar la salud del cultivo, zonas críticas y tendencias clínicas en tiempo real.
-                  </p>
-                </div>
-                <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">Total análisis</p>
-                    <p className="text-2xl font-semibold text-slate-900 mt-1.5">{kpis.total}</p>
-                    <p className="text-xs text-slate-500 mt-1">en la plataforma</p>
-                  </div>
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">En riesgo</p>
-                    <p className="text-2xl font-semibold text-red-700 mt-1.5">{kpis.highRisk}</p>
-                    <p className="text-xs text-slate-500 mt-1">severidad mod. o mayor</p>
-                  </div>
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">Sin alerta</p>
-                    <p className="text-2xl font-semibold text-emerald-700 mt-1.5">{kpis.healthy}</p>
-                    <p className="text-xs text-slate-500 mt-1">plantas en buen estado</p>
-                  </div>
-                  <div className="stat-card p-3.5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-semibold">Corporaciones</p>
-                    <p className="text-2xl font-semibold text-sky-700 mt-1.5">{kpis.farms}</p>
-                    <p className="text-xs text-slate-500 mt-1">con análisis registrados</p>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <PageHeader
+              eyebrow="Centro de control agrícola"
+              title="Dashboard inteligente de parcelas y análisis"
+              description="Consolidación de análisis del chatbot e historial de enfermedades para visualizar la salud del cultivo, zonas críticas y tendencias clínicas en tiempo real."
+              info={{
+                label: 'Actualización reciente',
+                value: kpis.latest ? fmtFull(kpis.latest.created_at) : 'Sin actividad reciente',
+                note: `${kpis.total} análisis · ${kpis.farms} corporaciones`,
+              }}
+              action={
+                <button
+                  onClick={exportPDF}
+                  disabled={loading || histories.length === 0}
+                  title="Exportar reporte ejecutivo PDF"
+                  className="dv-export-btn">
+                  Exportar PDF
+                </button>
+              }
+              kpis={[
+                { label: 'Total análisis', value: kpis.total, note: 'en la plataforma', icon: 'fa-chart-column', tone: 'brand' },
+                { label: 'En riesgo', value: kpis.highRisk, note: 'severidad mod. o mayor', icon: 'fa-triangle-exclamation', tone: 'red' },
+                { label: 'Sin alerta', value: kpis.healthy, note: 'plantas en buen estado', icon: 'fa-seedling', tone: 'emerald' },
+                { label: 'Corporaciones', value: kpis.farms, note: 'con análisis registrados', icon: 'fa-building', tone: 'sky' },
+              ]}
+            />
 
 
 
-            <article className="glass-card p-6">
+            <article className="info-card p-6">
               <header className="flex items-start justify-between gap-4 mb-5">
                 <hgroup>
                   <p className="text-xs uppercase tracking-[0.25em] text-brand-600 font-semibold">Geolocalización</p>
@@ -588,32 +563,23 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                 </span>
               </header>
               {/* Map toolbar */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.65rem', alignItems: 'center' }}>
+              <div className="dv-toolbar">
                 {/* Layer selector */}
-                <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
-                  {[['street', 'Mapa'], ['satellite', 'Satélite'], ['terrain', 'Terreno']].map(([key, label], idx, arr) => (
-                    <button key={key} onClick={() => setMapLayer(key)}
-                      style={{ padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600, border: 'none', cursor: 'pointer',
-                        background: mapLayer === key ? '#16a34a' : '#fff', color: mapLayer === key ? '#fff' : '#64748b',
-                        transition: 'all 0.15s', borderRight: idx < arr.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                <div className="dv-layer-group">
+                  {[['street', 'Mapa'], ['satellite', 'Satélite'], ['terrain', 'Terreno']].map(([key, label]) => (
+                    <button key={key} onClick={() => setMapLayer(key)} className={`dv-layer-btn${mapLayer === key ? ' active' : ''}`}>
                       {label}
                     </button>
                   ))}
                 </div>
                 {/* Heatmap toggle */}
-                <button onClick={() => setShowHeatmap(v => !v)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600,
-                    border: `1px solid ${showHeatmap ? '#fbbf24' : '#e2e8f0'}`, borderRadius: 10, cursor: 'pointer',
-                    background: showHeatmap ? '#fef9c3' : '#fff', color: showHeatmap ? '#92400e' : '#64748b', transition: 'all 0.15s' }}>
-                  <svg style={{ width: 11, height: 11 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                <button onClick={() => setShowHeatmap(v => !v)} className={`dv-toggle-btn dv-toggle-btn--amber${showHeatmap ? ' active' : ''}`}>
+                  <svg className="dv-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
                   Mapa de calor
                 </button>
                 {/* Cluster toggle */}
-                <button onClick={() => setShowClusters(v => !v)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.28rem 0.65rem', fontSize: '0.7rem', fontWeight: 600,
-                    border: `1px solid ${showClusters ? '#93c5fd' : '#e2e8f0'}`, borderRadius: 10, cursor: 'pointer',
-                    background: showClusters ? '#eff6ff' : '#fff', color: showClusters ? '#1d4ed8' : '#64748b', transition: 'all 0.15s' }}>
-                  <svg style={{ width: 11, height: 11 }} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="3"/><circle cx="12" cy="5" r="3"/><circle cx="19" cy="12" r="3"/><circle cx="12" cy="19" r="3"/></svg>
+                <button onClick={() => setShowClusters(v => !v)} className={`dv-toggle-btn dv-toggle-btn--blue${showClusters ? ' active' : ''}`}>
+                  <svg className="dv-toggle-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="3"/><circle cx="12" cy="5" r="3"/><circle cx="19" cy="12" r="3"/><circle cx="12" cy="19" r="3"/></svg>
                   Agrupación
                 </button>
               </div>
@@ -637,19 +603,14 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                           if (next.has(bucket)) next.delete(bucket); else next.add(bucket)
                           return next
                         })}
-                          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem',
-                            borderRadius: 9999, border: `1.5px solid ${active ? color : '#e2e8f0'}`,
-                            background: active ? `${color}18` : '#f8fafc', color: active ? color : '#94a3b8',
-                            cursor: 'pointer', transition: 'all 0.15s', fontWeight: active ? 700 : 500,
-                            fontSize: '0.68rem', opacity: active ? 1 : 0.65 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? color : '#cbd5e1', flexShrink: 0 }}></span>
+                          className={`dv-sev-chip${active ? ' active' : ''}`}
+                          style={active ? { borderColor: color, background: `${color}18`, color } : undefined}>
+                          <span className="dv-sev-dot" style={active ? { background: color } : undefined}></span>
                           {label}
                         </button>
                       )
                     })}
-                    <button onClick={() => setMapSevFilter(new Set([0, 1, 2, 3, 4]))}
-                      style={{ padding: '0.2rem 0.55rem', borderRadius: 9999, border: '1.5px solid #e2e8f0',
-                        background: '#f8fafc', color: '#94a3b8', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 500 }}>
+                    <button onClick={() => setMapSevFilter(new Set([0, 1, 2, 3, 4]))} className="dv-sev-chip-all">
                       Todos
                     </button>
                   </div>
@@ -664,57 +625,56 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                     const riskLbl = sevLabel(bucket)
                     const confPct = extractConfidence(selectedAnalysis)
                     return (
-                      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+                      <div className="dv-detail">
                         {/* Panel header */}
-                        <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#16a34a' }}>Detalle del análisis</span>
-                          <button onClick={() => setSelectedAnalysis(null)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', lineHeight: 1, padding: '0.1rem 0.3rem', borderRadius: 6, transition: 'color 0.1s' }}>✕</button>
+                        <div className="dv-detail-hdr">
+                          <span className="dv-detail-hdr-label">Detalle del análisis</span>
+                          <button onClick={() => setSelectedAnalysis(null)} className="dv-detail-close">✕</button>
                         </div>
-                        <div style={{ padding: '0.85rem 1rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div className="dv-detail-body">
                           {/* Image */}
                           <AnalysisImage src={selectedAnalysis.image_url}
                             style={{ width: '100%', height: 120, borderRadius: 12, border: '1px solid #e2e8f0' }} />
                           {/* Disease name */}
                           <div>
-                            <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '0.2rem' }}>Diagnóstico</p>
-                            <p style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{selectedAnalysis.disease_name_predicted || 'Sin diagnóstico'}</p>
+                            <p className="dv-detail-label">Diagnóstico</p>
+                            <p className="dv-detail-title">{selectedAnalysis.disease_name_predicted || 'Sin diagnóstico'}</p>
                           </div>
                           {/* Severity + confidence row */}
-                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                            <div style={{ flex: 1 }}>
-                              <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.3rem' }}>Severidad</p>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.6rem', borderRadius: 9999, background: bg, color, fontSize: '0.7rem', fontWeight: 700 }}>
-                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }}></span>
+                          <div className="dv-detail-row2">
+                            <div className="dv-detail-col">
+                              <p className="dv-detail-label dv-detail-label--wide">Severidad</p>
+                              <span className="dv-detail-sev-pill" style={{ background: bg, color }}>
+                                <span className="dv-detail-sev-dot" style={{ background: color }}></span>
                                 {riskLbl}
                               </span>
                             </div>
-                            <div style={{ flex: 1 }}>
-                              <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.3rem' }}>Confianza</p>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <div style={{ flex: 1, height: 5, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-                                  <div style={{ height: 5, background: 'linear-gradient(90deg,#16a34a,#22c55e)', borderRadius: 999, width: `${confPct}%`, transition: 'width .6s ease' }}></div>
+                            <div className="dv-detail-col">
+                              <p className="dv-detail-label dv-detail-label--wide">Confianza</p>
+                              <div className="dv-detail-conf-row">
+                                <div className="dv-detail-conf-track">
+                                  <div className="dv-detail-conf-fill" style={{ width: `${confPct}%` }}></div>
                                 </div>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>{confPct.toFixed(1)}%</span>
+                                <span className="dv-detail-conf-value">{confPct.toFixed(1)}%</span>
                               </div>
                             </div>
                           </div>
                           {/* Date + GPS */}
-                          <div style={{ borderTop: '1px solid #eef2f7', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                              <span style={{ color: '#94a3b8', fontWeight: 600 }}>Fecha</span>
-                              <span style={{ color: '#334155', fontWeight: 600 }}>{new Date(selectedAnalysis.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                          <div className="dv-detail-meta">
+                            <div className="dv-detail-meta-row">
+                              <span className="dv-detail-meta-key">Fecha</span>
+                              <span className="dv-detail-meta-val">{new Date(selectedAnalysis.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                              <span style={{ color: '#94a3b8', fontWeight: 600 }}>GPS</span>
-                              <span style={{ color: '#334155', fontFamily: 'monospace', fontSize: '0.66rem' }}>{selectedAnalysis.latitude?.toFixed(5)}, {selectedAnalysis.longitude?.toFixed(5)}</span>
+                            <div className="dv-detail-meta-row">
+                              <span className="dv-detail-meta-key">GPS</span>
+                              <span className="dv-detail-meta-mono">{selectedAnalysis.latitude?.toFixed(5)}, {selectedAnalysis.longitude?.toFixed(5)}</span>
                             </div>
                           </div>
                           {/* Analysis excerpt */}
                           {selectedAnalysis.analysis_text && (
-                            <div style={{ borderTop: '1px solid #eef2f7', paddingTop: '0.6rem' }}>
-                              <p style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.35rem' }}>Observaciones</p>
-                              <p style={{ fontSize: '0.72rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{selectedAnalysis.analysis_text}</p>
+                            <div className="dv-detail-excerpt">
+                              <p className="dv-detail-label dv-detail-label--wide">Observaciones</p>
+                              <p className="dv-detail-excerpt-text">{selectedAnalysis.analysis_text}</p>
                             </div>
                           )}
                         </div>
@@ -752,7 +712,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
             </article>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-4 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-red-600 font-semibold">Tendencia</p>
@@ -769,7 +729,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                 <p className="mt-3 text-xs text-slate-500">% de análisis con severidad moderada o mayor, agrupados por semana. Te ayuda a ver si el cultivo mejora o empeora en el tiempo, más allá del último análisis.</p>
               </article>
 
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-4 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-sky-600 font-semibold">Prevención</p>
@@ -795,7 +755,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-3 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-brand-600 font-semibold">Evolución</p>
@@ -859,7 +819,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                 }
               </article>
 
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-4 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-brand-600 font-semibold">Diagnóstico</p>
@@ -886,7 +846,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-4 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-red-600 font-semibold">Tendencia clínica</p>
@@ -908,7 +868,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
               </article>
 
               {farmZones.length > 0 ? (
-                <article className="glass-card p-6">
+                <article className="info-card p-6">
                   <header className="flex items-center justify-between mb-5 gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-brand-600 font-semibold">Territorio</p>
@@ -923,7 +883,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                   </div>
                 </article>
               ) : (
-                <article className="glass-card p-6 flex flex-col items-center justify-center text-slate-400 gap-3">
+                <article className="info-card p-6 flex flex-col items-center justify-center text-slate-400 gap-3">
                   <i className="fas fa-map text-3xl"></i>
                   <p className="text-sm text-center">El resumen por corporación aparecerá cuando tengas análisis vinculados a corporaciones</p>
                 </article>
@@ -931,7 +891,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-3 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-amber-600 font-semibold">Efectividad de manejo</p>
@@ -963,7 +923,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
                 <p className="mt-3 text-xs text-slate-500">La misma enfermedad reapareciendo en la misma planta sugiere que el tratamiento actual no está funcionando: considera cambiar de estrategia.</p>
               </article>
 
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-start justify-between gap-3 mb-5">
                   <hgroup>
                     <p className="text-xs uppercase tracking-[0.25em] text-slate-500 font-semibold">Monitoreo</p>
@@ -999,15 +959,14 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
-              <article className="glass-card p-6">
+              <article className="info-card p-6">
                 <header className="flex items-center justify-between mb-4 gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-slate-500 font-semibold">Alertas recientes</p>
                     <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">Lo que merece atención hoy</h3>
                   </div>
                   <button onClick={() => navigate('/historial')}
-                    className="text-sm text-brand-600 hover:text-brand-700 font-medium flex-shrink-0"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                    className="text-sm text-brand-600 hover:text-brand-700 font-medium flex-shrink-0 dv-plain-btn">
                     Ver historial →
                   </button>
                 </header>
@@ -1050,20 +1009,6 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
 
         <Footer />
       </main>
-
-      <button onClick={exportPDF} disabled={loading || histories.length === 0}
-        className="fixed bottom-24 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl text-sm font-bold text-white shadow-lg shadow-red-600/30 hover:shadow-xl hover:shadow-red-600/40 active:scale-95 transition-all duration-200"
-        style={{
-          background: loading || histories.length === 0 ? '#9ca3af' : '#dc2626',
-          border: 'none',
-          cursor: loading || histories.length === 0 ? 'not-allowed' : 'pointer',
-          opacity: loading || histories.length === 0 ? 0.6 : 1,
-        }}>
-        <i className="fas fa-file-pdf text-sm"></i>
-        <span>PDF</span>
-      </button>
-
-      <FloatingChatButton />
 
       <DashboardReportPDF
         isOpen={showPDF}

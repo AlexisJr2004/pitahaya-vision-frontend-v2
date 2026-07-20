@@ -1,4 +1,5 @@
 import AppLogo from '../../../components/AppLogo'
+import '../ChatbotPage.css'
 
 function esc(text) {
   const div = document.createElement('div')
@@ -10,7 +11,7 @@ export function UserBubble({ content, imagePath }) {
   return (
     <div className="flex justify-end animate-fade-up">
       <div className="text-right">
-        {imagePath && <img src={imagePath} alt="Preview" className="max-w-[75vw] sm:max-w-xs w-full rounded-2xl mb-2 block ml-auto shadow-sm" style={{ maxHeight: '200px', objectFit: 'cover' }} />}
+        {imagePath && <img src={imagePath} alt="Preview" className="max-w-[75vw] sm:max-w-xs w-full rounded-2xl mb-2 block ml-auto shadow-sm msg-img-preview" />}
         {content && <div className="user-bubble text-white text-sm px-4 py-3 rounded-3xl rounded-tr-md leading-relaxed shadow-sm max-w-[80vw] sm:max-w-sm">{esc(content)}</div>}
       </div>
     </div>
@@ -29,17 +30,17 @@ export function AssistantBubble({ content, msgId, streamDoneIds, copiedIndex, in
         <div className="bot-text text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: onFormatBotText(content) }}></div>
         {(!isStreaming || isDone) && (
           <div className="flex gap-1 mt-2">
-            <button onClick={() => onCopy(content, index)} className="action-btn p-1.5 rounded-lg transition text-gray-400" title="Copiar" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => onCopy(content, index)} className="action-btn p-1.5 rounded-lg transition text-gray-400 btn-reset" title="Copiar">
               {copiedIndex === index ? (
                 <svg className="w-3.5 h-3.5 text-brand-600" fill="none" stroke="#16a34a" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
               ) : (
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
               )}
             </button>
-            <button className="action-btn p-1.5 rounded-lg transition text-gray-400" title="Util" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button className="action-btn p-1.5 rounded-lg transition text-gray-400 btn-reset" title="Util">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
             </button>
-            <button className="action-btn p-1.5 rounded-lg transition text-gray-400" title="No util" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button className="action-btn p-1.5 rounded-lg transition text-gray-400 btn-reset" title="No util">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>
             </button>
           </div>

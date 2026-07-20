@@ -1,0 +1,63 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Estilos compartidos de pages/dashboard/ (DashboardView, DashboardAdminPage).
+   El mapa (toolbar + chips de severidad) y el panel de "detalle de análisis"
+   son prácticamente idénticos entre las dos vistas, así que viven aquí una
+   sola vez.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Badge del panel de salud (DashboardAdminPage) ── */
+.da-badge { display: inline-flex; align-items: center; gap: .35rem; border-radius: 9999px; border: 1px solid #dcfce7; background: #f0fdf4; color: #15803d; padding: .3rem .7rem; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+/* ── Botón "sin estilo" reutilizable (cerrar panel, links de texto) ── */
+.dv-plain-btn { background: none; border: none; cursor: pointer; }
+
+/* ── Botón exportar PDF (header de PageHeader) ── */
+.dv-export-btn { align-self: flex-end; background: transparent; border: 1.5px solid #f87171; border-radius: 9999px; color: #f87171; font-family: Inter, sans-serif; font-size: 0.82rem; font-weight: 600; padding: 0.45rem 1.2rem; cursor: pointer; letter-spacing: 0.04em; transition: background 0.15s, color 0.15s; }
+.dv-export-btn:hover:not(:disabled) { background: #f87171; color: #fff; }
+.dv-export-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* ── Toolbar del mapa (selector de capa + toggles de calor/agrupación) ── */
+.dv-toolbar { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 0.65rem; align-items: center; }
+.dv-layer-group { display: flex; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; flex-shrink: 0; }
+.dv-layer-btn { padding: 0.28rem 0.65rem; font-size: 0.7rem; font-weight: 600; border: none; cursor: pointer; background: #fff; color: #64748b; transition: all 0.15s; }
+.dv-layer-btn:not(:last-child) { border-right: 1px solid #e2e8f0; }
+.dv-layer-btn.active { background: #16a34a; color: #fff; }
+.dv-toggle-btn { display: flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.65rem; font-size: 0.7rem; font-weight: 600; border: 1px solid #e2e8f0; border-radius: 10px; cursor: pointer; background: #fff; color: #64748b; transition: all 0.15s; }
+.dv-toggle-btn--amber.active { border-color: #fbbf24; background: #fef9c3; color: #92400e; }
+.dv-toggle-btn--blue.active { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; }
+.dv-toggle-icon { width: 11px; height: 11px; }
+
+/* ── Chips de filtro por severidad (debajo del mapa) ── */
+.dv-sev-chip { display: flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.15s; font-size: 0.68rem; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #94a3b8; font-weight: 500; opacity: 0.65; }
+.dv-sev-chip.active { font-weight: 700; opacity: 1; }
+.dv-sev-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #cbd5e1; }
+.dv-sev-chip-all { padding: 0.2rem 0.55rem; border-radius: 9999px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #94a3b8; cursor: pointer; font-size: 0.68rem; font-weight: 500; }
+
+/* ── Panel de detalle del análisis seleccionado (mapa) ── */
+.dv-detail { height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+.dv-detail-hdr { padding: 0.75rem 1rem; border-bottom: 1px solid #eef2f7; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.dv-detail-hdr-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #16a34a; }
+.dv-detail-close { background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 1rem; line-height: 1; padding: 0.1rem 0.3rem; border-radius: 6px; transition: color 0.1s; }
+.dv-detail-close:hover { color: #475569; }
+.dv-detail-body { padding: 0.85rem 1rem; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
+.dv-detail-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 0.2rem; }
+.dv-detail-label--wide { letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+.dv-detail-title { font-size: 0.92rem; font-weight: 700; color: #0f172a; line-height: 1.3; }
+.dv-detail-sub { font-size: 0.8rem; font-weight: 600; color: #334155; }
+.dv-detail-sub-muted { font-size: 0.7rem; color: #94a3b8; }
+.dv-detail-row2 { display: flex; gap: 0.5rem; align-items: flex-start; }
+.dv-detail-col { flex: 1; }
+.dv-detail-sev-pill { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; }
+.dv-detail-sev-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dv-detail-conf-row { display: flex; align-items: center; gap: 0.4rem; }
+.dv-detail-conf-track { flex: 1; height: 5px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.dv-detail-conf-fill { height: 5px; background: linear-gradient(90deg,#16a34a,#22c55e); border-radius: 999px; transition: width .6s ease; }
+.dv-detail-conf-value { font-size: 0.72rem; font-weight: 700; color: #16a34a; flex-shrink: 0; }
+.dv-detail-meta { border-top: 1px solid #eef2f7; padding-top: 0.6rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.dv-detail-meta-row { display: flex; justify-content: space-between; font-size: 0.7rem; }
+.dv-detail-meta-key { color: #94a3b8; font-weight: 600; }
+.dv-detail-meta-val { color: #334155; font-weight: 600; }
+.dv-detail-meta-mono { color: #334155; font-family: monospace; font-size: 0.66rem; }
+.dv-detail-excerpt { border-top: 1px solid #eef2f7; padding-top: 0.6rem; }
+.dv-detail-excerpt-text { font-size: 0.72rem; color: #475569; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.dv-detail-excerpt-text--5 { -webkit-line-clamp: 5; }

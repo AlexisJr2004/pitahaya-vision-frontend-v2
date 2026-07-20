@@ -4,9 +4,9 @@ import RegisterPage from './pages/auth/RegisterPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import ResetPasswordConfirmPage from './pages/auth/ResetPasswordConfirmPage'
 import VerifyEmailPage from './pages/auth/VerifyEmailPage'
-import HomePage from './pages/HomePage'
+import HomeAdminPage from './pages/HomeAdminPage'
 import ChatbotPage from './pages/chatbot/ChatbotPage'
-import UserPage from './pages/UserPage'
+import HomeUserPage from './pages/HomeUserPage'
 import LoadingScreen from './components/LoadingScreen'
 import ThrottleBanner from './components/ThrottleBanner'
 import AuthTransitionLoader from './components/AuthTransitionLoader'
@@ -28,7 +28,7 @@ function PublicRoute({ children }) {
 function RoleHome() {
   const { user } = useAuth()
   const isAdmin = user?.is_admin || user?.role_label === 'Administrador'
-  if (isAdmin) return <HomePage />
+  if (isAdmin) return <HomeAdminPage />
   return <Navigate to="/chatbot" replace />
 }
 
@@ -45,8 +45,8 @@ export default function App() {
         <Route path="/verificar-correo" element={<VerifyEmailPage />} />
         <Route path="/" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
         <Route path="/chatbot" element={<ProtectedRoute><ChatbotPage /></ProtectedRoute>} />
-        <Route path="/historial" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
-        <Route path="/dashboard" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
+        <Route path="/historial" element={<ProtectedRoute><HomeUserPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><HomeUserPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>

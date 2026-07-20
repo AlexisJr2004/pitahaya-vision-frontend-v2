@@ -15,12 +15,8 @@ export function computeSeverityBucket(analysis) {
   return 2
 }
 
-export function computeSeverityStr(analysis) {
-  return BUCKET_STR_MAP[computeSeverityBucket(analysis)] ?? 'low'
-}
-
 export function computeSeverityLabel(analysis) {
-  return SEVERITY_LABELS[computeSeverityBucket(analysis)] ?? '—'
+  return sevLabel(computeSeverityBucket(analysis))
 }
 
 export function severityBucket(val) {
@@ -47,51 +43,47 @@ export function isRisk(analysisOrBucket) {
   return b >= 2
 }
 
-export function sevPillClass(bucket) {
-  const map = ['sev-low', 'sev-low', 'sev-medium', 'sev-high', 'sev-critical']
-  return map[bucket] ?? 'sev-low'
-}
-
+// ─── Paleta canónica única (fuente de verdad para colores/etiquetas) ───
+// Índice 0-4: Sin riesgo, Baja, Moderada, Alta, Crítica.
 export const SEVERITY_LABELS = ['Sin riesgo', 'Baja', 'Moderada', 'Alta', 'Crítica']
 export const SEVERITY_COLORS = ['#16a34a', '#84cc16', '#d97706', '#ea580c', '#dc2626']
-export const SEVERITY_BG = ['#f0fdf4', '#f7fee7', '#fff7ed', '#fff7ed', '#fef2f2']
-export const BUCKET_STR_MAP = ['low', 'low', 'medium', 'high', 'critical']
+export const SEVERITY_BG     = ['#f0fdf4', '#f7fee7', '#fff7ed', '#fff7ed', '#fef2f2']
 
-export function sevLabel(bucket) { return SEVERITY_LABELS[bucket] ?? '—' }
-export function sevColor(bucket) { return SEVERITY_COLORS[bucket] ?? '#94a3b8' }
-export function sevBg(bucket) { return SEVERITY_BG[bucket] ?? '#f8fafc' }
+// Puente para el mundo de bucket-string ('low'|'medium'|'high'|'critical'),
+// usado por las vistas de administración que trabajan con datos agregados.
+const STRING_BUCKET_TO_NUM = { low: 1, medium: 2, high: 3, critical: 4 }
 
+function toNumericBucket(bucket) {
+  return typeof bucket === 'number' ? bucket : (STRING_BUCKET_TO_NUM[bucket] ?? 1)
+}
+
+// Acepta bucket numérico (0-4) o string ('low'|'medium'|'high'|'critical').
+export function sevLabel(bucket) { return SEVERITY_LABELS[toNumericBucket(bucket)] ?? '—' }
+export function sevColor(bucket) { return SEVERITY_COLORS[toNumericBucket(bucket)] ?? '#94a3b8' }
+export function sevBg(bucket)    { return SEVERITY_BG[toNumericBucket(bucket)] ?? '#f8fafc' }
+
+// Nombre de clase CSS compartido ('sev-low' | 'sev-medium' | 'sev-high' | 'sev-critical').
+const NUM_BUCKET_TO_CLASS = ['sev-low', 'sev-low', 'sev-medium', 'sev-high', 'sev-critical']
+export function sevPillClass(bucket) {
+  if (typeof bucket === 'number') return NUM_BUCKET_TO_CLASS[bucket] ?? 'sev-low'
+  return `sev-${bucket === 'medium' || bucket === 'high' || bucket === 'critical' ? bucket : 'low'}`
+}
+
+// Resumen {bucket, label} en el mundo de bucket-string, usado por vistas
+// de administración que agregan analisis por severidad.
 export function computeSev(analysis) {
   const bucketNum = computeSeverityBucket(analysis)
-  const bucketStr = BUCKET_STR_MAP[bucketNum]
-  const legacyLabels = { low: 'Baja', medium: 'Media', high: 'Alta', critical: 'Crítica' }
-  return { bucket: bucketStr, label: legacyLabels[bucketStr] ?? '—' }
+  const bucketStr = bucketNum <= 1 ? 'low' : bucketNum === 2 ? 'medium' : bucketNum === 3 ? 'high' : 'critical'
+  return { bucket: bucketStr, label: sevLabel(bucketStr) }
 }
 
-export function sevPillClassDALegacy(bucket) {
-  if (bucket === 'critical') return 'da-sev-critical'
-  if (bucket === 'high') return 'da-sev-high'
-  if (bucket === 'medium') return 'da-sev-medium'
-  return 'da-sev-low'
+// ─── Clasificación por tasa de riesgo (0-1), p. ej. % de análisis en riesgo ───
+function rateToBucket(rate) {
+  if (rate >= 0.7) return 4
+  if (rate >= 0.4) return 3
+  if (rate >= 0.15) return 2
+  return 1
 }
-
-export function riskColor(rate) {
-  if (rate >= 0.7) return '#dc2626'
-  if (rate >= 0.4) return '#ea580c'
-  if (rate >= 0.15) return '#d97706'
-  return '#16a34a'
-}
-
-export function riskLabel(rate) {
-  if (rate >= 0.7) return 'Crítica'
-  if (rate >= 0.4) return 'Alta'
-  if (rate >= 0.15) return 'Media'
-  return 'Baja'
-}
-
-export function riskPillBg(rate) {
-  if (rate >= 0.7) return '#fef2f2'
-  if (rate >= 0.4) return '#fff7ed'
-  if (rate >= 0.15) return '#fefce8'
-  return '#ecfdf5'
-}
+export function riskColor(rate)  { return sevColor(rateToBucket(rate)) }
+export function riskLabel(rate)  { return sevLabel(rateToBucket(rate)) }
+export function riskPillBg(rate) { return sevBg(rateToBucket(rate)) }

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { getCustomers, toggleCustomerActive, setCustomerRole } from '../services/adminService'
+import { useAuth } from '../../contexts/AuthContext'
+import { getCustomers, toggleCustomerActive, setCustomerRole } from '../../services/adminService'
+import './clientes.css'
 
 const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
 
-export default function ClientesPage() {
+export default function ClientesAdminPage() {
   const { user } = useAuth()
 
   const [customers, setCustomers] = useState([])
@@ -80,92 +81,6 @@ export default function ClientesPage() {
 
   return (
     <>
-      {/* ── Exact wireframe CSS ───────────────────────────────────── */}
-      <style>{`
-        .cp-kpi {
-          position: relative;
-          overflow: hidden;
-          border-radius: 28px;
-          border: 1px solid rgba(226,232,240,0.9);
-          background: linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);
-        }
-        .cp-panel {
-          border: 1px solid rgba(226,232,240,0.9);
-          border-radius: 30px;
-        }
-        .cp-panel-header {
-          border-bottom: 1px solid #eef2f7;
-          background: rgba(255,255,255,0.82);
-        }
-        .cp-muted { color: #64748b; }
-        .cp-sparkline {
-          height: 0.4rem;
-          border-radius: 9999px;
-          background: linear-gradient(90deg,rgba(34,197,94,0.1),rgba(34,197,94,0.4));
-        }
-        .cp-panel-title {
-          font-family: 'Cormorant Garamond', serif;
-          letter-spacing: -0.02em;
-        }
-        .cp-fade {
-          animation: cpFadeIn 0.3s ease-in-out;
-        }
-        @keyframes cpFadeIn {
-          from { opacity:0; transform:translateY(5px); }
-          to   { opacity:1; transform:translateY(0);   }
-        }
-        .cp-tr:hover td { background: rgba(240,253,244,0.6); }
-        .cp-input {
-          width: 100%;
-          border-radius: 0.75rem;
-          border: 1px solid #e2e8f0;
-          background: #fff;
-          padding: 0.575rem 0.75rem 0.575rem 2.25rem;
-          font-size: 0.875rem;
-          outline: none;
-          color: #0f172a;
-          transition: box-shadow 0.15s, border-color 0.15s;
-        }
-        .cp-input:focus {
-          border-color: #22c55e;
-          box-shadow: 0 0 0 2px rgba(34,197,94,0.25);
-        }
-        .cp-select {
-          width: 100%;
-          border-radius: 0.75rem;
-          border: 1px solid #e2e8f0;
-          background: #fff;
-          padding: 0.575rem 0.75rem;
-          font-size: 0.875rem;
-          outline: none;
-          color: #0f172a;
-          transition: box-shadow 0.15s, border-color 0.15s;
-        }
-        .cp-select:focus {
-          border-color: #22c55e;
-          box-shadow: 0 0 0 2px rgba(34,197,94,0.25);
-        }
-        .cp-toast {
-          position: fixed;
-          bottom: 1.5rem;
-          right: 1.5rem;
-          z-index: 400;
-          padding: 0.75rem 1.25rem;
-          border-radius: 14px;
-          font-size: 0.83rem;
-          font-weight: 500;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.13);
-          animation: cpFadeIn 0.25s ease;
-          pointer-events: none;
-        }
-        .cp-toast-ok  { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
-        .cp-toast-err { background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; }
-        .cp-table-scroll { overflow-x: auto; }
-        .cp-table-scroll::-webkit-scrollbar { height: 3px; }
-        .cp-table-scroll::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 4px; }
-        .cp-table-scroll::-webkit-scrollbar-track { background: transparent; }
-      `}</style>
-
       {/* Toast */}
       {toast && (
         <div className={`cp-toast ${toast.err ? 'cp-toast-err' : 'cp-toast-ok'}`}>
@@ -175,7 +90,7 @@ export default function ClientesPage() {
       )}
 
       {/* ── Page ─────────────────────────────────────────────────── */}
-      <section className="mb-10 cp-fade space-y-6">
+      <section className="mb-10 fade-in-up space-y-6">
 
         {/* ── Header ─────────────────────────────────────────────── */}
         <header className="flex items-start justify-between flex-wrap gap-4">
@@ -183,7 +98,7 @@ export default function ClientesPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-600 mb-2">
               Gestión de usuarios
             </p>
-            <h2 className="cp-panel-title text-3xl md:text-4xl font-semibold text-slate-900 leading-tight">
+            <h2 className="panel-title text-3xl md:text-4xl font-semibold text-slate-900 leading-tight">
               Clientes Registrados
             </h2>
             <p className="mt-3 text-sm md:text-base text-slate-500 leading-7">
@@ -200,7 +115,7 @@ export default function ClientesPage() {
         {/* ── KPI cards ─────────────────────────────────────────── */}
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
 
-          <article className="cp-kpi p-5">
+          <article className="kpi-card p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Total clientes</p>
@@ -211,10 +126,10 @@ export default function ClientesPage() {
                 <i className="fas fa-users text-brand-600 text-xl"></i>
               </div>
             </div>
-            <div className="mt-5 cp-sparkline"></div>
+            <div className="mt-5 kpi-sparkline"></div>
           </article>
 
-          <article className="cp-kpi p-5">
+          <article className="kpi-card p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Activos</p>
@@ -225,10 +140,10 @@ export default function ClientesPage() {
                 <i className="fas fa-check-circle text-emerald-600 text-xl"></i>
               </div>
             </div>
-            <div className="mt-5 cp-sparkline" style={{ background: 'linear-gradient(90deg,rgba(16,185,129,.1),rgba(16,185,129,.45))' }}></div>
+            <div className="mt-5 kpi-sparkline kpi-sparkline--emerald"></div>
           </article>
 
-          <article className="cp-kpi p-5">
+          <article className="kpi-card p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Administradores</p>
@@ -239,10 +154,10 @@ export default function ClientesPage() {
                 <i className="fas fa-shield-halved text-sky-600 text-xl"></i>
               </div>
             </div>
-            <div className="mt-5 cp-sparkline" style={{ background: 'linear-gradient(90deg,rgba(14,165,233,.1),rgba(14,165,233,.45))' }}></div>
+            <div className="mt-5 kpi-sparkline kpi-sparkline--sky"></div>
           </article>
 
-          <article className="cp-kpi p-5">
+          <article className="kpi-card p-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Inactivos</p>
@@ -253,7 +168,7 @@ export default function ClientesPage() {
                 <i className="fas fa-user-slash text-slate-500 text-xl"></i>
               </div>
             </div>
-            <div className="mt-5 cp-sparkline" style={{ background: 'linear-gradient(90deg,rgba(100,116,139,.1),rgba(100,116,139,.45))' }}></div>
+            <div className="mt-5 kpi-sparkline kpi-sparkline--slate"></div>
           </article>
 
         </section>
@@ -266,7 +181,7 @@ export default function ClientesPage() {
             <header className="cp-panel-header px-5 py-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.25em] text-brand-600 font-semibold">Filtros</p>
-                <h3 className="mt-1 cp-panel-title text-2xl font-semibold text-slate-900">
+                <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">
                   Buscar y filtrar clientes
                 </h3>
               </div>
@@ -319,8 +234,7 @@ export default function ClientesPage() {
                           <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 flex-shrink-0 flex items-center justify-center">
                             {c.profile_photo_url
                               ? <img src={c.profile_photo_url} alt="" className="w-full h-full object-cover" />
-                              : <span className="w-full h-full flex items-center justify-center font-semibold text-white text-base"
-                                  style={{ background: '#16a34a' }}>{initLetter}</span>
+                              : <span className="w-full h-full flex items-center justify-center font-semibold text-white text-base bg-brand-600">{initLetter}</span>
                             }
                           </div>
                           <div className="min-w-0">
@@ -352,16 +266,14 @@ export default function ClientesPage() {
                             <button
                               onClick={() => handleToggle(c.id)}
                               disabled={actionId === `${c.id}_act`}
-                              className={`text-xs font-semibold px-2 py-1.5 rounded-lg transition w-full ${c.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'}`}
-                              style={{ border: 'none', cursor: 'pointer' }}
+                              className={`text-xs font-semibold px-2 py-1.5 rounded-lg transition w-full border-none cursor-pointer ${c.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'}`}
                             >
                               {actionId === `${c.id}_act` ? <i className="fas fa-spinner fa-spin"></i> : c.is_active ? 'Deshabilitar' : 'Habilitar'}
                             </button>
                             <button
                               onClick={() => handleRole(c.id, c.role)}
                               disabled={actionId === `${c.id}_role`}
-                              className="text-xs font-semibold bg-slate-50 text-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition w-full"
-                              style={{ border: 'none', cursor: 'pointer' }}
+                              className="text-xs font-semibold bg-slate-50 text-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition w-full border-none cursor-pointer"
                             >
                               {actionId === `${c.id}_role` ? <i className="fas fa-spinner fa-spin"></i> : 'Cambiar Rol'}
                             </button>
@@ -411,7 +323,7 @@ export default function ClientesPage() {
                             <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center border border-slate-200">
                               {c.profile_photo_url
                                 ? <img src={c.profile_photo_url} alt="" className="w-full h-full object-cover" />
-                                : <span className="w-full h-full flex items-center justify-center font-semibold text-white text-sm" style={{ background: '#16a34a' }}>{initLetter}</span>
+                                : <span className="w-full h-full flex items-center justify-center font-semibold text-white text-sm bg-brand-600">{initLetter}</span>
                               }
                             </div>
                           </td>
@@ -447,16 +359,14 @@ export default function ClientesPage() {
                                 <button
                                   onClick={() => handleToggle(c.id)}
                                   disabled={actionId === `${c.id}_act`}
-                                  className={`text-xs font-semibold px-2 py-1 rounded-lg transition ${c.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'}`}
-                                  style={{ border: 'none', cursor: 'pointer' }}
+                                  className={`text-xs font-semibold px-2 py-1 rounded-lg transition border-none cursor-pointer ${c.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'}`}
                                 >
                                   {actionId === `${c.id}_act` ? <i className="fas fa-spinner fa-spin"></i> : c.is_active ? 'Deshabilitar' : 'Habilitar'}
                                 </button>
                                 <button
                                   onClick={() => handleRole(c.id, c.role)}
                                   disabled={actionId === `${c.id}_role`}
-                                  className="text-xs font-semibold bg-slate-50 text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition"
-                                  style={{ border: 'none', cursor: 'pointer' }}
+                                  className="text-xs font-semibold bg-slate-50 text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition border-none cursor-pointer"
                                 >
                                   {actionId === `${c.id}_role` ? <i className="fas fa-spinner fa-spin"></i> : 'Cambiar Rol'}
                                 </button>
@@ -480,7 +390,7 @@ export default function ClientesPage() {
               <header className="cp-panel-header px-5 py-4 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.25em] text-brand-600 font-semibold">Resumen</p>
-                  <h3 className="mt-1 cp-panel-title text-2xl font-semibold text-slate-900">
+                  <h3 className="mt-1 panel-title text-2xl font-semibold text-slate-900">
                     Distribución de cuentas
                   </h3>
                 </div>
@@ -490,8 +400,7 @@ export default function ClientesPage() {
                 <div className="space-y-4">
 
                   {/* Activos */}
-                  <div className="rounded-2xl border border-brand-100 px-4 py-3 flex items-center justify-between"
-                    style={{ background: 'rgba(240,253,244,0.5)' }}>
+                  <div className="rounded-2xl border border-brand-100 px-4 py-3 flex items-center justify-between cp-dist-row--green">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Activos</p>
                       <p className="text-lg font-semibold text-emerald-700 mt-0.5">{kpis.active}</p>
@@ -509,8 +418,7 @@ export default function ClientesPage() {
                   </div>
 
                   {/* Administradores */}
-                  <div className="rounded-2xl border border-sky-100 px-4 py-3 flex items-center justify-between"
-                    style={{ background: 'rgba(240,249,255,0.5)' }}>
+                  <div className="rounded-2xl border border-sky-100 px-4 py-3 flex items-center justify-between cp-dist-row--sky">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Administradores</p>
                       <p className="text-lg font-semibold text-sky-700 mt-0.5">{kpis.admins}</p>

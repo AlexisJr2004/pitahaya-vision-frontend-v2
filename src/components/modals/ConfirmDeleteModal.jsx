@@ -1,3 +1,5 @@
+import './modals.css'
+
 export default function ConfirmDeleteModal({ isOpen, onClose, title, message, onConfirm, confirmLabel = 'Eliminar' }) {
   return (
     <div className={`delete-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}>

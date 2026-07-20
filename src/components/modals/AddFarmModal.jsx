@@ -1,13 +1,15 @@
 import { animateClose } from '../../utils/modalUtils'
+import './modals.css'
 
 export default function AddFarmModal({
-  show, modalRef,
+  show, modalRef, animatedRefs,
   editingFarm, farmName, farmLocation, farmError,
   setShowAddFarmModal, setFarmName, setFarmLocation, setFarmError,
   handleCreateFarm,
 }) {
+  const close = () => animateClose(modalRef, () => setShowAddFarmModal(false), animatedRefs)
   return (
-    <div className={`context-overlay ${show ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={() => animateClose(modalRef, () => setShowAddFarmModal(false))}>
+    <div className={`context-overlay ${show ? 'open' : ''}`} style={{ zIndex: 310 }} onClick={close}>
       <div className="context-modal" ref={modalRef} style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
         <div className="drag-handle" />
         <header className="context-modal-header px-5 py-5 sm:px-7 sm:py-6">
@@ -24,7 +26,7 @@ export default function AddFarmModal({
                 <p className="text-xs text-gray-400 mt-0.5">{editingFarm ? 'Actualiza el nombre o la ubicación.' : 'Después podrás agregar parcelas.'}</p>
               </div>
             </div>
-            <button onClick={() => animateClose(modalRef, () => setShowAddFarmModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+            <button onClick={close} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
             </button>
           </div>
@@ -67,8 +69,8 @@ export default function AddFarmModal({
           </div>
         </div>
         <div className="px-5 sm:px-7 py-5 border-t border-gray-100 modal-footer-btns">
-          <button onClick={() => animateClose(modalRef, () => setShowAddFarmModal(false))} className="context-secondary-btn">Cancelar</button>
-          <button onClick={handleCreateFarm} className="context-save-btn flex items-center justify-center gap-2">
+          <button onClick={close} className="modal-secondary-btn">Cancelar</button>
+          <button onClick={handleCreateFarm} className="modal-save-btn flex items-center justify-center gap-2">
             {editingFarm ? 'Guardar cambios' : 'Crear corporación agrícola y agregar parcela'}
           </button>
         </div>

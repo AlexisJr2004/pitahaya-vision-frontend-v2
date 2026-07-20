@@ -1,9 +1,17 @@
-export function animateClose(modalRef, closeFn) {
+// `animatedRefs` es opcional: si el modal usa setupDragToDismiss() para
+// prevenir que la animación de entrada se repita, hay que pasar aquí el
+// mismo Set para que también se libere al cerrar por el botón X / overlay.
+export function animateClose(modalRef, closeFn, animatedRefs) {
   if (window.innerWidth >= 640 || !modalRef.current) { closeFn(); return }
   const m = modalRef.current
   m.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
   m.style.transform = 'translateY(110%)'
-  setTimeout(() => { m.style.transform = ''; m.style.transition = ''; closeFn() }, 340)
+  setTimeout(() => {
+    m.style.transform = ''
+    m.style.transition = ''
+    animatedRefs?.current?.delete(modalRef)
+    closeFn()
+  }, 340)
 }
 
 export function setupDragToDismiss({ modalRef, isOpen, onClose, handleClass = '.drag-handle', animatedRefs }) {

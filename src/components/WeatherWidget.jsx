@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './modals/modals.css'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export function weatherStyle(condition) {

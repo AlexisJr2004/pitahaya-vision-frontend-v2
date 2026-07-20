@@ -1,14 +1,16 @@
 ﻿import './ChatbotPage.css'
+import '../../components/modals/modals.css'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import ProfileModal from '../../components/ProfileModal'
-import SettingsModal from '../../components/SettingsModal'
+import ProfileModal from '../../components/modals/ProfileModal'
+import SettingsModal from '../../components/modals/SettingsModal'
 import ContextModal from '../../components/modals/ContextModal'
 import ParcelasModal from '../../components/modals/ParcelasModal'
 import AddFarmModal from '../../components/modals/AddFarmModal'
 import AddPlotModal from '../../components/modals/AddPlotModal'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
+import { setupDragToDismiss } from '../../utils/modalUtils'
 import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../../services/analysisService'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
@@ -17,6 +19,7 @@ import WelcomeScreen from './components/WelcomeScreen'
 import SuggestedQuestions from './components/SuggestedQuestions'
 import AnalysisCard from './components/AnalysisCard'
 import Sidebar from '../../components/Sidebar'
+import TopBar from '../../components/TopBar'
 import { UserBubble, AssistantBubble, LoadingDots } from './components/MessageBubble'
 
 export default function ChatbotPage() {
@@ -661,63 +664,14 @@ export default function ChatbotPage() {
   const openParcelasModal = () => { setShowParcelasModal(true); closeSidebar() }
   const closeParcelasModal = () => { setShowParcelasModal(false) }
 
+  // drag-to-dismiss on mobile
   useEffect(() => {
-    if (window.innerWidth >= 640) return
-    const setups = [
-      { ref: parcelasModalRef, open: showParcelasModal, close: () => setShowParcelasModal(false) },
-      { ref: addFarmModalRef, open: showAddFarmModal, close: () => setShowAddFarmModal(false) },
-      { ref: addPlotModalRef, open: showAddPlotModal, close: () => setShowAddPlotModal(false) },
-      { ref: contextSelModalRef, open: showContextModal, close: () => setShowContextModal(false) },
+    const cleanups = [
+      setupDragToDismiss({ modalRef: parcelasModalRef,   isOpen: showParcelasModal, onClose: () => setShowParcelasModal(false), animatedRefs: animatedModalRefs }),
+      setupDragToDismiss({ modalRef: addFarmModalRef,    isOpen: showAddFarmModal,  onClose: () => setShowAddFarmModal(false),  animatedRefs: animatedModalRefs }),
+      setupDragToDismiss({ modalRef: addPlotModalRef,    isOpen: showAddPlotModal,  onClose: () => setShowAddPlotModal(false),  animatedRefs: animatedModalRefs }),
+      setupDragToDismiss({ modalRef: contextSelModalRef, isOpen: showContextModal,  onClose: () => setShowContextModal(false),  animatedRefs: animatedModalRefs }),
     ]
-    const cleanups = []
-    setups.forEach(({ ref, open, close }) => {
-      if (!open || !ref.current) return
-      const modal = ref.current
-      const handle = modal.querySelector('.drag-handle')
-      if (!handle) return
-
-      // Animación de entrada JS (slide-up) — solo la primera vez que abre
-      if (!animatedModalRefs.current.has(ref)) {
-        animatedModalRefs.current.add(ref)
-        modal.style.transition = 'none'
-        modal.style.transform = 'translateY(100%)'
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
-            modal.style.transform = 'translateY(0)'
-          })
-        })
-      }
-
-      let sy = 0, dy = 0
-      const onStart = e => {
-        sy = e.touches[0].clientY; dy = 0
-        modal.style.transition = 'none'
-      }
-      const onMove = e => {
-        dy = Math.max(0, e.touches[0].clientY - sy)
-        modal.style.transform = `translateY(${dy}px)`
-      }
-      const onEnd = () => {
-        if (dy > 80) {
-          modal.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-          modal.style.transform = 'translateY(110%)'
-          setTimeout(() => { modal.style.transform = ''; modal.style.transition = ''; animatedModalRefs.current.delete(ref); close() }, 340)
-        } else {
-          modal.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)'
-          modal.style.transform = 'translateY(0)'
-          setTimeout(() => { modal.style.transition = '' }, 320)
-        }
-      }
-      handle.addEventListener('touchstart', onStart, { passive: true })
-      handle.addEventListener('touchmove', onMove, { passive: true })
-      handle.addEventListener('touchend', onEnd, { passive: true })
-      cleanups.push(() => {
-        handle.removeEventListener('touchstart', onStart)
-        handle.removeEventListener('touchmove', onMove)
-        handle.removeEventListener('touchend', onEnd)
-      })
-    })
     return () => cleanups.forEach(fn => fn())
   }, [showParcelasModal, showAddFarmModal, showAddPlotModal, showContextModal])
   const openSidebar = () => { setSidebarOpen(true); document.body.style.overflow = 'hidden' }
@@ -1248,8 +1202,21 @@ export default function ChatbotPage() {
 
         {/* MAIN */}
         <main className="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
+          <TopBar
+            subtitle="Asistente inteligente"
+            onOpenSidebar={openSidebar}
+            rightAction={
+              <button onClick={newChat} title="Nueva conversación"
+                className="p-2 rounded-xl hover:bg-brand-50 transition text-gray-400 hover:text-brand-600 active:bg-brand-100 btn-reset">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                  <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+                </svg>
+              </button>
+            }
+          />
           {/* CHAT AREA */}
-          <div id="chatArea" ref={chatAreaRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-5 relative">
+          <div id="chatArea" ref={chatAreaRef} className="flex-1 overflow-y-auto thin-scroll px-3 sm:px-4 py-5 relative">
             {showWelcome && messages.length === 0 ? (
               <WelcomeScreen
                 displayName={displayName}
@@ -1376,7 +1343,7 @@ export default function ChatbotPage() {
                     <div className="wb animate-wave-5"></div>
                   </div>
                 </button>
-                <button onClick={handleSendMessage} disabled={!inputValue.trim() && !imageFile} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200 ${(inputValue.trim() || imageFile) && !sending ? 'send-active' : 'send-inactive'}`} style={{ border: 'none' }}>
+                <button onClick={handleSendMessage} disabled={!inputValue.trim() && !imageFile} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200 ${(inputValue.trim() || imageFile) && !sending ? 'send-active' : 'send-inactive'}`}>
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                 </button>
               </div>
@@ -1393,6 +1360,7 @@ export default function ChatbotPage() {
       <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
 
       <ContextModal
+        animatedRefs={animatedModalRefs}
         show={showContextModal}
         modalRef={contextSelModalRef}
         farms={farms}
@@ -1427,6 +1395,7 @@ export default function ChatbotPage() {
       />
 
       <ParcelasModal
+        animatedRefs={animatedModalRefs}
         show={showParcelasModal}
         modalRef={parcelasModalRef}
         farms={farms}
@@ -1441,6 +1410,7 @@ export default function ChatbotPage() {
       />
 
       <AddFarmModal
+        animatedRefs={animatedModalRefs}
         show={showAddFarmModal}
         modalRef={addFarmModalRef}
         editingFarm={editingFarm}
@@ -1455,6 +1425,7 @@ export default function ChatbotPage() {
       />
 
       <AddPlotModal
+        animatedRefs={animatedModalRefs}
         show={showAddPlotModal}
         modalRef={addPlotModalRef}
         selectedFarmForPlot={selectedFarmForPlot}

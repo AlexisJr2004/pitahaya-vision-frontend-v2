@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import ProfileModal from '../components/ProfileModal'
-import SettingsModal from '../components/SettingsModal'
-import ClientesPage from './ClientesPage'
+import ProfileModal from '../components/modals/ProfileModal'
+import SettingsModal from '../components/modals/SettingsModal'
+import ClientesAdminPage from './clientes/ClientesAdminPage'
 import HistorialAdminPage from './historial/HistorialAdminPage'
 import DashboardAdminPage from './dashboard/DashboardAdminPage'
 import { getWeather } from '../services/analysisService'
 import Sidebar from '../components/Sidebar'
+import TopBar from '../components/TopBar'
 import Footer from '../components/Footer'
 
-export default function HomePage() {
+export default function HomeAdminPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
@@ -54,11 +55,13 @@ export default function HomePage() {
   const renderContent = () => {
     switch (view) {
       case 'history': return <HistorialAdminPage />
-      case 'customers': return <ClientesPage />
+      case 'customers': return <ClientesAdminPage />
       case 'dashboard': return <DashboardAdminPage />
       default: return <DashboardAdminPage />
     }
   }
+
+  const VIEW_SUBTITLES = { dashboard: 'Panel administrativo', history: 'Centro documental', customers: 'Gestión de usuarios' }
 
   const navItems = [
     {
@@ -100,7 +103,8 @@ export default function HomePage() {
         />
 
         <main className="flex-1 flex flex-col overflow-hidden min-w-0" style={{ background: '#ffffff' }}>
-          <div id="main-content" className="flex-1 overflow-y-auto p-4 md:p-6">
+          <TopBar subtitle={VIEW_SUBTITLES[view] || 'Panel administrativo'} onOpenSidebar={() => setSidebarOpen(true)} />
+          <div id="main-content" className="flex-1 overflow-y-auto thin-scroll p-4 md:p-6">
             {renderContent()}
           </div>
           <Footer className="bg-white text-xs" />

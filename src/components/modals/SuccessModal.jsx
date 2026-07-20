@@ -1,3 +1,5 @@
+import './modals.css'
+
 export default function SuccessModal({ message, onReload }) {
   return (
     <div style={{
@@ -9,7 +11,7 @@ export default function SuccessModal({ message, onReload }) {
         background: '#fff', borderRadius: 16, padding: '2rem',
         maxWidth: 400, width: '90%', textAlign: 'center',
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        animation: 'fadeUp .4s cubic-bezier(.22,1,.36,1)',
+        animation: 'modalPopIn .4s cubic-bezier(.22,1,.36,1)',
       }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%',
@@ -38,7 +40,6 @@ export default function SuccessModal({ message, onReload }) {
           onMouseLeave={e => e.currentTarget.style.transform = ''}>
           Recargar página
         </button>
-        <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(24px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
       </div>
     </div>
   )

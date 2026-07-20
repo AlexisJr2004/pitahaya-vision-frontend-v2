@@ -8,7 +8,7 @@ export default function SuggestedQuestions({ questions, onSelect }) {
         <AppLogo className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="suggested-label" style={{ fontSize: '0.72rem', marginBottom: '6px', fontStyle: 'italic' }}>Preguntas sugeridas:</p>
+        <p className="suggested-label">Preguntas sugeridas:</p>
         <div className="flex flex-col gap-1.5">
           {questions.map((q, qi) => (
             <button key={qi} onClick={() => onSelect(q)} className="suggested-q">{q}</button>

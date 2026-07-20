@@ -1,8 +1,9 @@
 import { animateClose } from '../../utils/modalUtils'
 import WeatherWidget from '../WeatherWidget'
+import './modals.css'
 
 export default function ContextModal({
-  show, modalRef,
+  show, modalRef, animatedRefs,
   farms,
   contextSelectedFarmId, contextSelectedZone, contextSelectedPlotId,
   weatherData, weatherLoading, weatherCondition,
@@ -14,8 +15,9 @@ export default function ContextModal({
   setWeatherData, setWeatherCondition,
   openParcelasModal, handleSaveContext, fileInputRef,
 }) {
+  const close = () => animateClose(modalRef, () => setShowContextModal(false), animatedRefs)
   return (
-    <div className={`context-overlay ${show ? 'open' : ''}`} onClick={() => animateClose(modalRef, () => setShowContextModal(false))}>
+    <div className={`context-overlay ${show ? 'open' : ''}`} onClick={close}>
       <div className="context-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
         <div className="drag-handle" />
         <header className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
@@ -25,7 +27,7 @@ export default function ContextModal({
               <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Registrar datos de la planta antes del escaneo</h3>
               <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Guarda solo lo que ayuda a entender la planta enferma y a tomar decisiones futuras en el cultivo.</p>
             </div>
-            <button onClick={() => animateClose(modalRef, () => setShowContextModal(false))} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
+            <button onClick={close} className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0" style={{ border: 'none', cursor: 'pointer' }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -127,12 +129,12 @@ export default function ContextModal({
             </div>
             <div className="context-section">
               <div className="flex flex-wrap gap-3 justify-end">
-                <button type="button" className="context-secondary-btn" onClick={() => {
+                <button type="button" className="modal-secondary-btn" onClick={() => {
                   [contextDatetimeRef, contextLotRef, contextZoneRef, contextRowsRef, contextPlantRef, contextLocationRef, contextSymptomRef, contextPartRef, contextStageRef, contextSeverityRef, contextIrrigationRef, contextPhytoRef, contextNotesRef].forEach(ref => { if (ref.current) ref.current.value = '' })
                   setWeatherData(null); setWeatherCondition('')
                 }}>Limpiar</button>
-                <button type="button" className="context-secondary-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false) }}>Guardar</button>
-                <button type="button" className="context-save-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false); setTimeout(() => fileInputRef.current?.click(), 300) }}>Guardar y cargar imagen</button>
+                <button type="button" className="modal-secondary-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false) }}>Guardar</button>
+                <button type="button" className="modal-save-btn" onClick={async () => { await handleSaveContext(); setShowContextModal(false); setTimeout(() => fileInputRef.current?.click(), 300) }}>Guardar y cargar imagen</button>
               </div>
             </div>
           </form>

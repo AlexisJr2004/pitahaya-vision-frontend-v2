@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
-import { getProfilePreferences, updateProfilePreferences } from '../services/authService'
-import { useAuth } from '../contexts/AuthContext'
+import { getProfilePreferences, updateProfilePreferences } from '../../services/authService'
+import { useAuth } from '../../contexts/AuthContext'
 import SuccessModal from './SuccessModal'
-import { animateClose } from '../utils/modalUtils'
+import { animateClose, setupDragToDismiss } from '../../utils/modalUtils'
+import './modals.css'
 
 const SEVERITY_OPTIONS = [
   { id: 'ninguna',  label: 'Ninguna',  hint: 'No enviar avisos',      color: '#94a3b8' },
@@ -25,6 +26,7 @@ export default function SettingsModal({ isOpen, onClose }) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const modalRef = useRef(null)
+  const animatedRef = useRef(new Set())
 
   const [activeTab, setActiveTab] = useState('notifications')
 
@@ -49,42 +51,9 @@ export default function SettingsModal({ isOpen, onClose }) {
   }, [isOpen])
 
   // drag-to-dismiss on mobile
-  useEffect(() => {
-    if (!isOpen || !modalRef.current || window.innerWidth >= 640) return
-    const modal  = modalRef.current
-    const handle = modal.querySelector('.smod-drag-handle')
-    if (!handle) return
-    modal.style.transition = 'none'
-    modal.style.transform  = 'translateY(100%)'
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      modal.style.transition = 'transform 0.38s cubic-bezier(0.32,0.72,0,1)'
-      modal.style.transform  = 'translateY(0)'
-    }))
-    let sy = 0, dy = 0
-    const onStart = e => { sy = e.touches[0].clientY; dy = 0; modal.style.transition = 'none' }
-    const onMove  = e => { dy = Math.max(0, e.touches[0].clientY - sy); modal.style.transform = `translateY(${dy}px)` }
-    const onEnd   = () => {
-      if (dy > 80) {
-        modal.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)'
-        modal.style.transform  = 'translateY(110%)'
-        setTimeout(() => { modal.style.transform = ''; modal.style.transition = ''; onClose() }, 340)
-      } else {
-        modal.style.transition = 'transform 0.3s cubic-bezier(0.32,0.72,0,1)'
-        modal.style.transform  = 'translateY(0)'
-        setTimeout(() => { modal.style.transition = '' }, 320)
-      }
-    }
-    handle.addEventListener('touchstart', onStart, { passive: true })
-    handle.addEventListener('touchmove',  onMove,  { passive: true })
-    handle.addEventListener('touchend',   onEnd,   { passive: true })
-    return () => {
-      handle.removeEventListener('touchstart', onStart)
-      handle.removeEventListener('touchmove',  onMove)
-      handle.removeEventListener('touchend',   onEnd)
-      modal.style.transform = ''
-      modal.style.transition = ''
-    }
-  }, [isOpen, onClose])
+  useEffect(() => setupDragToDismiss({
+    modalRef, isOpen, onClose, handleClass: '.drag-handle', animatedRefs: animatedRef,
+  }), [isOpen, onClose])
 
   const loadSettings = async () => {
     try {
@@ -97,7 +66,7 @@ export default function SettingsModal({ isOpen, onClose }) {
     } catch {}
   }
 
-  const handleClose = () => animateClose(modalRef, onClose)
+  const handleClose = () => animateClose(modalRef, onClose, animatedRef)
 
   const handleSaveSettings = async () => {
     setSaving(true)
@@ -199,71 +168,12 @@ export default function SettingsModal({ isOpen, onClose }) {
 
   return (
     <>
-      <style>{`
-        .smod-overlay{position:fixed;inset:0;z-index:230;display:none;align-items:flex-end;justify-content:center;padding:0;background:rgba(15,23,42,.45);backdrop-filter:blur(4px)}
-        .smod-overlay.open{display:flex}
-        .smod-modal{width:100%;max-height:92dvh;border-radius:28px 28px 0 0;background:#fff;border:1px solid #eef2f7;box-shadow:0 -8px 48px rgba(15,23,42,.18);overflow:hidden;display:flex;flex-direction:column}
-        @media(min-width:640px){.smod-overlay{align-items:center;padding:1rem}.smod-modal{width:min(100%,940px);max-height:min(94dvh,820px);border-radius:28px;box-shadow:0 24px 48px rgba(15,23,42,.18)}}
-        .smod-modal-header{background:#fff;color:#0f172a;flex-shrink:0}
-        .smod-drag-handle{display:none}
-        @media(max-width:639px){.smod-drag-handle{display:block;width:36px;height:4px;background:#cbd5e1;border-radius:999px;margin:10px auto 4px;flex-shrink:0}}
-        .smod-badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:9999px;border:1px solid #dcfce7;background:#f0fdf4;color:#15803d;padding:.3rem .7rem;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-
-        /* Shell: nav + content. Row (sidebar) on desktop, column (top nav) on mobile. */
-        .smod-shell{display:flex;flex-direction:column;flex:1;min-height:0}
-        @media(min-width:640px){.smod-shell{flex-direction:row}}
-
-        .smod-nav{display:flex;flex-direction:row;gap:.35rem;padding:.6rem 1rem;border-top:1px solid #eef2f7;border-bottom:1px solid #eef2f7;flex-shrink:0;background:#fff;overflow-x:auto}
-        @media(min-width:640px){
-          .smod-nav{flex-direction:column;width:208px;border-top:none;border-bottom:none;border-right:1px solid #eef2f7;background:#f8fafc;padding:1.1rem .75rem;gap:.25rem;overflow-x:visible;flex-shrink:0}
-        }
-        .smod-nav-item{position:relative;display:flex;align-items:center;gap:.6rem;padding:.6rem .85rem;border-radius:999px;border:none;background:none;font-size:.85rem;font-weight:600;color:#94a3b8;cursor:pointer;transition:all .14s;white-space:nowrap;flex-shrink:0}
-        .smod-nav-item:hover{color:#475569;background:#f1f5f9}
-        .smod-nav-item.active{background:#16a34a;color:#fff}
-        @media(min-width:640px){
-          .smod-nav-item{width:100%;text-align:left;border-radius:12px}
-          .smod-nav-item:hover{background:#eef2f7}
-          .smod-nav-item.active{background:#dcfce7;color:#15803d;box-shadow:inset 3px 0 0 #16a34a}
-        }
-        .smod-nav-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0;margin-left:auto}
-
-        .smod-content{flex:1;min-width:0;overflow-y:auto;background:#f8fafc;padding:1.1rem 1rem}
-        @media(min-width:640px){.smod-content{padding:1.5rem 1.75rem}}
-
-        .smod-save-btn{min-width:130px;padding:.82rem 1.15rem;border-radius:16px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:.9rem;font-weight:700;transition:transform .14s ease,box-shadow .14s ease,opacity .14s ease;box-shadow:0 14px 26px rgba(22,163,74,.18);border:none;cursor:pointer}
-        .smod-save-btn:hover:not(:disabled){transform:translateY(-1px)}
-        .smod-save-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
-        .smod-secondary-btn{min-width:90px;padding:.82rem 1.1rem;border-radius:16px;border:1px solid #dbe4ee;background:#fff;color:#334155;font-size:.9rem;font-weight:600;cursor:pointer;transition:background .14s}
-        .smod-secondary-btn:hover{background:#f8fafc}
-        .smod-secondary-btn:disabled{opacity:.5;cursor:not-allowed}
-
-        .smod-sev-opt{position:relative;display:flex;align-items:center;gap:.55rem;border-radius:12px;padding:.65rem .7rem;cursor:pointer;transition:all .14s;border:1.5px solid #e2e8f0;background:#fff;text-align:left;width:100%}
-        .smod-sev-opt:hover{border-color:#cbd5e1;box-shadow:0 2px 6px rgba(0,0,0,.05)}
-        .smod-sev-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-
-        .smod-date-input{width:100%;font-size:.85rem;border:1px solid #e2e8f0;border-radius:.65rem;background:#fff;padding:.55rem .7rem;outline:none;color:#0f172a;transition:border-color .15s,box-shadow .15s}
-        .smod-date-input:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
-
-        .smod-chip{padding:.42rem .85rem;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:.78rem;font-weight:600;color:#475569;cursor:pointer;transition:all .14s;white-space:nowrap}
-        .smod-chip:hover{border-color:#86efac;color:#15803d}
-        .smod-chip.active{background:#16a34a;border-color:#16a34a;color:#fff}
-
-        .smod-toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer}
-        .smod-toggle input{position:absolute;opacity:0;width:0;height:0}
-        .smod-toggle-track{position:relative;display:block;width:44px;height:24px;border-radius:999px;transition:background .2s;flex-shrink:0}
-        .smod-toggle-track.on{background:#16a34a}
-        .smod-toggle-track.off{background:#cbd5e1}
-        .smod-toggle-thumb{position:absolute;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transition:left .2s}
-        .smod-toggle-thumb.on{left:23px}
-        .smod-toggle-thumb.off{left:3px}
-      `}</style>
-
-      <div className={`smod-overlay ${isOpen ? 'open' : ''}`} onClick={handleClose}>
-        <div className="smod-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
-          <div className="smod-drag-handle" />
+      <div className={`context-overlay ${isOpen ? 'open' : ''}`} onClick={handleClose}>
+        <div className="context-modal modal-compact" ref={modalRef} onClick={e => e.stopPropagation()}>
+          <div className="drag-handle" />
 
           {/* Header */}
-          <header className="smod-modal-header px-5 pt-5 sm:px-7 sm:pt-6">
+          <header className="context-modal-header modal-header-flat px-5 pt-5 sm:px-7 sm:pt-6">
             <div className="flex items-start justify-between gap-4 pb-5">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
@@ -274,7 +184,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                   </svg>
                 </div>
                 <div>
-                  <span className="smod-badge">Preferencias</span>
+                  <span className="context-badge">Preferencias</span>
                   <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Configuraciones</h3>
                   <p className="text-xs text-gray-400 mt-0.5">Notificaciones y respaldo de tu información.</p>
                 </div>
@@ -447,15 +357,15 @@ export default function SettingsModal({ isOpen, onClose }) {
           {activeTab === 'notifications' ? (
             <footer className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-100 bg-white flex-shrink-0">
               {isDirty && <span className="text-xs font-medium text-amber-600 mr-auto">Tienes cambios sin guardar</span>}
-              <button onClick={resetSettings} className="smod-secondary-btn">Restaurar predeterminados</button>
-              <button onClick={handleClose}   className="smod-secondary-btn">Cancelar</button>
-              <button onClick={handleSaveSettings} disabled={saving || !isDirty} className="smod-save-btn">
+              <button onClick={resetSettings} className="modal-secondary-btn">Restaurar predeterminados</button>
+              <button onClick={handleClose}   className="modal-secondary-btn">Cancelar</button>
+              <button onClick={handleSaveSettings} disabled={saving || !isDirty} className="modal-save-btn">
                 {saving ? 'Guardando…' : 'Guardar configuraciones'}
               </button>
             </footer>
           ) : (
             <footer className="flex items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-100 bg-white flex-shrink-0">
-              <button onClick={handleClose} className="smod-secondary-btn">Cerrar</button>
+              <button onClick={handleClose} className="modal-secondary-btn">Cerrar</button>
             </footer>
           )}
 

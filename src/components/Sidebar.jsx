@@ -79,7 +79,7 @@ export default function Sidebar({
       <style>{`
         #drawerOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40}
         #drawerOverlay.open{display:block}
-        #${sidebarId}{position:fixed;top:0;left:0;bottom:0;width:272px;background:#fff;border-right:1px solid #f3f4f6;display:flex;flex-direction:column;padding:1rem;gap:0.75rem;z-index:50;overflow:hidden;transform:translateX(0);transition:transform 0.28s cubic-bezier(0.22,1,0.36,1)}
+        #${sidebarId}{position:fixed;top:0;left:0;bottom:0;width:272px;background:#fff;border-right:1px solid #f3f4f6;border-top-right-radius:24px;border-bottom-right-radius:24px;display:flex;flex-direction:column;padding:1rem;gap:0.75rem;z-index:50;overflow:hidden;transform:translateX(0);transition:transform 0.28s cubic-bezier(0.22,1,0.36,1)}
         @media(max-width:767px){#${sidebarId}{transform:translateX(-100%)}#${sidebarId}.open{transform:translateX(0)}}
         @media(min-width:768px){#${sidebarId}{position:relative;flex-shrink:0}#drawerOverlay{display:none!important}#${sidebarId}MenuBtn{display:none!important}}
         .z-sidebar{position:relative;z-index:1}

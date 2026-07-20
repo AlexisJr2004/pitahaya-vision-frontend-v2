@@ -1,0 +1,81 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Estilos compartidos de pages/historial/ (HistorialView, HistorialAdminPage).
+   El bloque "detail-*" (ficha de un análisis: sección/etiqueta/valor) era
+   idéntico en ambos archivos con prefijos distintos (detail-* / ha-detail-*)
+   — aquí queda unificado en un solo nombre que usan los dos.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Ficha de detalle (HistorialView: modal de ficha técnica; HistorialAdminPage: modal de detalle) ── */
+.detail-section { border: 1px solid #e5e7eb; background: #fff; border-radius: 22px; padding: 1rem; }
+.detail-section-title { font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #166534; }
+.detail-field { display: flex; flex-direction: column; gap: .15rem; }
+.detail-field-label { font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #94a3b8; }
+.detail-field-value { font-size: .9rem; color: #0f172a; line-height: 1.4; }
+
+/* ── Tarjeta de análisis (HistorialView: listado + timeline de trazabilidad) ── */
+.analysis-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; transition: border-color .16s ease, background .16s ease; }
+.analysis-card:hover { border-color: #bbf7d0; background: #f8fafc; }
+
+/* ── Chip de filtro (periodo / severidad). Nombre "hist-" para no chocar con
+   el .chip de ChatbotPage.css (mismo nombre, diseño de tarjeta totalmente
+   distinto) — ambos terminan en el mismo bundle al no haber code-splitting. ── */
+.hist-chip { border: 1px solid #e5e7eb; background: #fff; border-radius: 9999px; padding: .4rem .75rem; font-size: .8rem; color: #334155; transition: background .14s ease, border-color .14s ease, color .14s ease; cursor: pointer; }
+.hist-chip.active { background: #dcfce7; border-color: #bbf7d0; color: #166534; }
+
+/* ── Buscador (HistorialView) ── */
+.search-input { width: 100%; border: 1px solid #dbe4ee; border-radius: 14px; padding: .78rem .9rem .78rem 2.5rem; background: #fff; outline: none; transition: border-color .14s ease, box-shadow .14s ease; }
+.search-input:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+
+/* ── Shell del modal de HistorialView (trazabilidad + ficha técnica) ── */
+.hist-overlay { position: fixed; inset: 0; z-index: 50; display: none; align-items: flex-end; justify-content: center; padding: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(4px); }
+.hist-overlay.open { display: flex; }
+.hist-modal { width: 100%; max-height: 92dvh; border-radius: 28px 28px 0 0; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 -8px 48px rgba(15,23,42,.18); overflow: hidden; display: flex; flex-direction: column; }
+.hist-modal-body { overflow-y: auto; flex: 1; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.drag-handle-hist { display: none; }
+@media (min-width: 640px) {
+  .hist-overlay { align-items: center; padding: 1rem; }
+  .hist-modal { border-radius: 24px; box-shadow: 0 24px 48px rgba(15,23,42,.18); max-height: min(92dvh,960px); }
+}
+@media (max-width: 639px) {
+  .drag-handle-hist { display: block; width: 36px; height: 4px; background: #cbd5e1; border-radius: 999px; margin: 10px auto 4px; flex-shrink: 0; touch-action: none; cursor: grab; }
+}
+
+/* ── Header de panel (HistorialAdminPage) ── */
+.ha-panel-header { border-bottom: 1px solid #eef2f7; background: rgba(255,255,255,.82); }
+
+/* ── Timeline "Últimos eventos" (HistorialAdminPage) ── */
+.ha-timeline-list { display: grid; gap: .75rem; list-style: none; padding: 0; margin: 0; }
+.ha-timeline-item { display: grid; grid-template-columns: auto 1fr auto; gap: .8rem; align-items: start; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; padding: .85rem .95rem; cursor: pointer; }
+.ha-dot { width: .8rem; height: .8rem; border-radius: 9999px; margin-top: .35rem; background: #22c55e; box-shadow: 0 0 0 5px rgba(34,197,94,.16); flex-shrink: 0; }
+.ha-dot.high { background: #ef4444; box-shadow: 0 0 0 5px rgba(239,68,68,.16); }
+.ha-dot.medium { background: #f59e0b; box-shadow: 0 0 0 5px rgba(245,158,11,.16); }
+
+/* ── Tabla de análisis (HistorialAdminPage) ── */
+.ha-table-scroll { overflow-x: auto; }
+.ha-table-scroll::-webkit-scrollbar { height: 3px; }
+.ha-table-scroll::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 4px; }
+.ha-table-scroll::-webkit-scrollbar-track { background: transparent; }
+.ha-tr:hover td { background: rgba(240,253,244,.6); cursor: pointer; }
+
+/* ── Inputs de filtro (HistorialAdminPage) ── */
+.ha-input { width: 100%; font-size: .875rem; border: 1px solid #e2e8f0; border-radius: .75rem; background: #fff; padding: .6rem .75rem; outline: none; color: #0f172a; transition: border-color .15s, box-shadow .15s; }
+.ha-input:focus { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,.2); }
+
+/* ── Shell del modal de detalle (HistorialAdminPage) ── */
+.ha-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(4px); z-index: 200; align-items: flex-end; justify-content: center; padding: 0; }
+.ha-overlay.open { display: flex; }
+.ha-modal { width: 100%; max-height: 92dvh; border-radius: 28px 28px 0 0; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 -8px 48px rgba(15,23,42,.18); overflow: hidden; display: flex; flex-direction: column; }
+.ha-modal-header { background: #fff; border-bottom: 1px solid #eef2f7; flex-shrink: 0; }
+.ha-modal-body { overflow-y: auto; background: linear-gradient(180deg,#fff 0%,#f8fafc 100%); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.ha-drag-handle { display: none; }
+@media (min-width: 640px) {
+  .ha-overlay { align-items: center; padding: 1rem; }
+  .ha-modal { width: min(100%,720px); max-height: min(92dvh,900px); border-radius: 24px; box-shadow: 0 24px 48px rgba(15,23,42,.18); }
+}
+@media (max-width: 639px) {
+  .ha-drag-handle { display: block; width: 36px; height: 4px; background: #cbd5e1; border-radius: 999px; margin: 10px auto 4px; flex-shrink: 0; touch-action: none; cursor: grab; }
+}
+
+/* ── Barra de confianza del modelo (HistorialAdminPage) ── */
+.ha-conf-bar { height: .5rem; border-radius: 9999px; background: #f1f5f9; overflow: hidden; }
+.ha-conf-fill { height: 100%; border-radius: 9999px; background: linear-gradient(90deg,#22c55e,#16a34a); transition: width .6s ease; }

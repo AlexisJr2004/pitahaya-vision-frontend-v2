@@ -1,0 +1,40 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Estilos de pages/clientes/ (ClientesAdminPage).
+   .cp-kpi / .cp-sparkline / .cp-panel-title / .cp-fade eran duplicados
+   exactos de .kpi-card / .kpi-sparkline / .panel-title / .fade-in-up
+   (ya en index.css) — se eliminaron aquí y el JSX usa las globales.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Panel/tarjeta de contenido ── */
+.cp-panel { border: 1px solid rgba(226,232,240,0.9); border-radius: 30px; }
+.cp-panel-header { border-bottom: 1px solid #eef2f7; background: rgba(255,255,255,0.82); }
+.cp-muted { color: #64748b; }
+
+/* ── Variantes de color del sparkline compartido (.kpi-sparkline) ── */
+.kpi-sparkline--emerald { background: linear-gradient(90deg,rgba(16,185,129,.1),rgba(16,185,129,.45)); }
+.kpi-sparkline--sky { background: linear-gradient(90deg,rgba(14,165,233,.1),rgba(14,165,233,.45)); }
+.kpi-sparkline--slate { background: linear-gradient(90deg,rgba(100,116,139,.1),rgba(100,116,139,.45)); }
+
+/* ── Fila de distribución (panel "Distribución de cuentas") ── */
+.cp-dist-row--green { background: rgba(240,253,244,0.5); }
+.cp-dist-row--sky { background: rgba(240,249,255,0.5); }
+
+/* ── Fila de tabla ── */
+.cp-tr:hover td { background: rgba(240,253,244,0.6); }
+
+/* ── Inputs de filtro ── */
+.cp-input { width: 100%; border-radius: 0.75rem; border: 1px solid #e2e8f0; background: #fff; padding: 0.575rem 0.75rem 0.575rem 2.25rem; font-size: 0.875rem; outline: none; color: #0f172a; transition: box-shadow 0.15s, border-color 0.15s; }
+.cp-input:focus { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.25); }
+.cp-select { width: 100%; border-radius: 0.75rem; border: 1px solid #e2e8f0; background: #fff; padding: 0.575rem 0.75rem; font-size: 0.875rem; outline: none; color: #0f172a; transition: box-shadow 0.15s, border-color 0.15s; }
+.cp-select:focus { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.25); }
+
+/* ── Toast de confirmación ── */
+.cp-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 400; padding: 0.75rem 1.25rem; border-radius: 14px; font-size: 0.83rem; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.13); animation: fadeInUp 0.25s ease; pointer-events: none; }
+.cp-toast-ok { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
+.cp-toast-err { background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; }
+
+/* ── Tabla desktop ── */
+.cp-table-scroll { overflow-x: auto; }
+.cp-table-scroll::-webkit-scrollbar { height: 3px; }
+.cp-table-scroll::-webkit-scrollbar-thumb { background: #d1fae5; border-radius: 4px; }
+.cp-table-scroll::-webkit-scrollbar-track { background: transparent; }
