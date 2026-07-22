@@ -3,6 +3,7 @@ import axios from 'axios'
 import { getProfilePreferences, updateProfilePreferences } from '../../services/authService'
 import { useAuth } from '../../contexts/AuthContext'
 import SuccessModal from './SuccessModal'
+import HistoryFilterBar from '../HistoryFilterBar'
 import { animateClose, setupDragToDismiss } from '../../utils/modalUtils'
 import './modals.css'
 
@@ -16,10 +17,9 @@ const SEVERITY_OPTIONS = [
 ]
 
 const QUICK_RANGES = [
-  { id: 'all',    label: 'Todo el historial' },
-  { id: '7',      label: 'Últimos 7 días' },
-  { id: '30',     label: 'Últimos 30 días' },
-  { id: 'custom', label: 'Rango personalizado' },
+  { key: 'all', label: 'Todo el historial' },
+  { key: '7',   label: 'Últimos 7 días' },
+  { key: '30',  label: 'Últimos 30 días' },
 ]
 
 export default function SettingsModal({ isOpen, onClose }) {
@@ -92,8 +92,7 @@ export default function SettingsModal({ isOpen, onClose }) {
 
   const applyQuickRange = (key) => {
     setQuickRange(key)
-    if (key === 'all')    { setBackupDateFrom(''); setBackupDateTo(''); return }
-    if (key === 'custom') return
+    if (key === 'all') { setBackupDateFrom(''); setBackupDateTo(''); return }
     const days = Number(key)
     const to = new Date()
     const from = new Date()
@@ -103,10 +102,10 @@ export default function SettingsModal({ isOpen, onClose }) {
     setBackupDateTo(fmt(to))
   }
 
-  const rangeSummary = quickRange === 'all'
-    ? 'Se exportará todo el historial disponible.'
-    : quickRange === 'custom'
-      ? (backupDateFrom || backupDateTo ? `Rango seleccionado: ${backupDateFrom || '…'} → ${backupDateTo || '…'}` : 'Selecciona un rango de fechas.')
+  const rangeSummary = (backupDateFrom || backupDateTo)
+    ? `Rango seleccionado: ${backupDateFrom || '…'} → ${backupDateTo || '…'}`
+    : quickRange === 'all'
+      ? 'Se exportará todo el historial disponible.'
       : `Se exportará ${quickRange === '7' ? 'lo registrado en los últimos 7 días' : 'lo registrado en los últimos 30 días'}.`
 
   const exportBackup = async () => {
@@ -257,27 +256,18 @@ export default function SettingsModal({ isOpen, onClose }) {
                 <p className="context-section-title">Exportar respaldo</p>
                 <p className="text-sm text-slate-500 mt-1 mb-3 max-w-md">Descarga tus sesiones, análisis y parcelas en un archivo JSON.</p>
 
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {QUICK_RANGES.map(r => (
-                    <button key={r.id} type="button" onClick={() => applyQuickRange(r.id)}
-                      className={`smod-chip ${quickRange === r.id ? 'active' : ''}`}>
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
+                <HistoryFilterBar
+                  rangeOptions={QUICK_RANGES}
+                  range={quickRange}
+                  onRangeChange={applyQuickRange}
+                  dateFrom={backupDateFrom}
+                  onDateFromChange={setBackupDateFrom}
+                  dateTo={backupDateTo}
+                  onDateToChange={setBackupDateTo}
+                  onClear={() => applyQuickRange('all')}
+                />
 
-                {quickRange === 'custom' && (
-                  <div className="mb-3 grid grid-cols-2 gap-3 max-w-md">
-                    <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Desde</span>
-                      <input type="date" value={backupDateFrom} onChange={e => setBackupDateFrom(e.target.value)} className="context-input" />
-                    </label>
-                    <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Hasta</span>
-                      <input type="date" value={backupDateTo} onChange={e => setBackupDateTo(e.target.value)} className="context-input" />
-                    </label>
-                  </div>
-                )}
-
-                <p className="text-xs text-slate-400 mb-4">{rangeSummary}</p>
+                <p className="text-xs text-slate-400 mt-3 mb-4">{rangeSummary}</p>
 
                 <button onClick={exportBackup} disabled={exporting}
                   className={`rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition inline-flex items-center gap-2 ${exporting ? 'cursor-wait opacity-70' : 'hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer'}`}>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import './HistoryFilterBar.css'
 
 const SEARCH_DEBOUNCE_MS = 400
 

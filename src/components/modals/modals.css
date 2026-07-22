@@ -105,10 +105,6 @@
 .smod-sev-opt:hover{border-color:#cbd5e1;box-shadow:0 2px 6px rgba(0,0,0,.05)}
 .smod-sev-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
-.smod-chip{padding:.42rem .85rem;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:.78rem;font-weight:600;color:#475569;cursor:pointer;transition:all .14s;white-space:nowrap}
-.smod-chip:hover{border-color:#86efac;color:#15803d}
-.smod-chip.active{background:#16a34a;border-color:#16a34a;color:#fff}
-
 .smod-toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer}
 .smod-toggle input{position:absolute;opacity:0;width:0;height:0}
 .smod-toggle-track{position:relative;display:block;width:44px;height:24px;border-radius:999px;transition:background .2s;flex-shrink:0}
