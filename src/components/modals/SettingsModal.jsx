@@ -28,8 +28,6 @@ export default function SettingsModal({ isOpen, onClose }) {
   const modalRef = useRef(null)
   const animatedRef = useRef(new Set())
 
-  const [activeTab, setActiveTab] = useState('notifications')
-
   const [sNotifications, setSNotifications] = useState(true)
   const [sSeverityLevel, setSSeverityLevel] = useState('todas')
   const [initialPrefs, setInitialPrefs] = useState({ notifications_enabled: true, notify_severity_threshold: 'todas' })
@@ -47,7 +45,7 @@ export default function SettingsModal({ isOpen, onClose }) {
     || sSeverityLevel !== initialPrefs.notify_severity_threshold
 
   useEffect(() => {
-    if (isOpen) { loadSettings(); setSaveError(''); setActiveTab('notifications') }
+    if (isOpen) { loadSettings(); setSaveError('') }
   }, [isOpen])
 
   // drag-to-dismiss on mobile
@@ -173,21 +171,12 @@ export default function SettingsModal({ isOpen, onClose }) {
           <div className="drag-handle" />
 
           {/* Header */}
-          <header className="context-modal-header modal-header-flat px-5 pt-5 sm:px-7 sm:pt-6">
-            <div className="flex items-start justify-between gap-4 pb-5">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
-                  style={{ background: 'linear-gradient(135deg,#16a34a 0%,#15803d 100%)' }}>
-                  <svg className="w-5 h-5" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                  </svg>
-                </div>
-                <div>
-                  <span className="context-badge">Preferencias</span>
-                  <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-1 leading-tight">Configuraciones</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Notificaciones y respaldo de tu información.</p>
-                </div>
+          <header className="context-modal-header px-5 py-5 sm:px-8 sm:py-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="context-badge">Preferencias</span>
+                <h3 className="font-cormorant text-2xl sm:text-3xl font-semibold text-gray-900 mt-3 leading-tight">Configuraciones</h3>
+                <p className="text-sm text-gray-500 mt-2 max-w-2xl leading-relaxed">Notificaciones por correo y respaldo de tu información.</p>
               </div>
               <button onClick={handleClose}
                 className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center text-gray-500 flex-shrink-0"
@@ -197,37 +186,20 @@ export default function SettingsModal({ isOpen, onClose }) {
                 </svg>
               </button>
             </div>
+            <div className="context-summary mt-5 grid gap-2 sm:grid-cols-2">
+              <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Correo</p><p className="text-sm text-gray-700 mt-1">{sNotifications ? 'Notificaciones activas' : 'Notificaciones desactivadas'}</p></div>
+              <div><p className="text-[0.65rem] uppercase tracking-[0.18em] text-gray-400">Respaldo</p><p className="text-sm text-gray-700 mt-1">Exporta o restaura tus datos en formato JSON.</p></div>
+            </div>
           </header>
 
-          <div className="smod-shell">
+          <div className="context-modal-body px-4 sm:px-6 py-5">
+            <div className="space-y-4">
 
-            {/* Left nav (sidebar on desktop, top bar on mobile) */}
-            <nav className="smod-nav">
-              <button type="button" onClick={() => setActiveTab('notifications')} className={`smod-nav-item ${activeTab === 'notifications' ? 'active' : ''}`}>
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-                </svg>
-                Notificaciones
-                {isDirty && <span className="smod-nav-dot" title="Cambios sin guardar" />}
-              </button>
-              <button type="button" onClick={() => setActiveTab('backup')} className={`smod-nav-item ${activeTab === 'backup' ? 'active' : ''}`}>
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24">
-                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                </svg>
-                Respaldo de datos
-              </button>
-            </nav>
-
-            {/* Right content */}
-            <div className="smod-content">
-
-            {activeTab === 'notifications' && (
-              <div className="rounded-2xl border border-slate-100 bg-white p-5 sm:p-6">
-                <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="context-section">
+                <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="font-cormorant text-xl font-semibold text-slate-900">Notificaciones por correo</p>
-                    <p className="text-sm text-slate-500 mt-0.5 max-w-md">
+                    <p className="context-section-title">Notificaciones por correo</p>
+                    <p className="text-sm text-slate-500 mt-1 max-w-md">
                       {sNotifications
                         ? 'Recibirás un correo electrónico sobre análisis, diagnósticos y cambios en tu cuenta.'
                         : 'Desactivadas: solo recibirás lo estrictamente necesario (ej. verificación de cuenta).'}
@@ -246,47 +218,44 @@ export default function SettingsModal({ isOpen, onClose }) {
                   {sNotifications ? 'Notificaciones activadas' : 'Notificaciones desactivadas'}
                 </div>
 
-                {sNotifications && (
-                  <div className="mt-5 pt-5 border-t border-slate-100">
-                    <p className="font-cormorant text-lg font-semibold text-slate-900">Severidad mínima para notificar</p>
-                    <p className="mb-3 text-sm text-slate-500 mt-0.5 max-w-md">
-                      Elige a partir de qué nivel de severidad quieres que te avisemos por correo cuando termine un análisis.
-                    </p>
-                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-                      {SEVERITY_OPTIONS.map(opt => {
-                        const active = sSeverityLevel === opt.id
-                        return (
-                          <button key={opt.id} type="button" onClick={() => setSSeverityLevel(opt.id)}
-                            className="smod-sev-opt"
-                            style={{ borderColor: active ? opt.color : undefined, background: active ? `${opt.color}14` : undefined }}>
-                            <span className="smod-sev-dot" style={{ background: opt.color }} />
-                            <span className="flex-1 min-w-0">
-                              <b className="block text-sm text-slate-900 leading-tight">{opt.label}</b>
-                              <span className="block text-[11px] text-slate-400 leading-tight mt-0.5">{opt.hint}</span>
-                            </span>
-                            {active && (
-                              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke={opt.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                                <polyline points="20 6 9 17 4 12"/>
-                              </svg>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 {saveError && (
-                  <p className="mt-5 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveError}</p>
+                  <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveError}</p>
                 )}
               </div>
-            )}
 
-            {activeTab === 'backup' && (
-              <div className="rounded-2xl border border-slate-100 bg-white p-5 sm:p-6">
+              {sNotifications && (
+                <div className="context-section">
+                  <p className="context-section-title">Severidad mínima para notificar</p>
+                  <p className="mb-3 text-sm text-slate-500 mt-1 max-w-md">
+                    Elige a partir de qué nivel de severidad quieres que te avisemos por correo cuando termine un análisis.
+                  </p>
+                  <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+                    {SEVERITY_OPTIONS.map(opt => {
+                      const active = sSeverityLevel === opt.id
+                      return (
+                        <button key={opt.id} type="button" onClick={() => setSSeverityLevel(opt.id)}
+                          className="smod-sev-opt"
+                          style={{ borderColor: active ? opt.color : undefined, background: active ? `${opt.color}14` : undefined }}>
+                          <span className="smod-sev-dot" style={{ background: opt.color }} />
+                          <span className="flex-1 min-w-0">
+                            <b className="block text-sm text-slate-900 leading-tight">{opt.label}</b>
+                            <span className="block text-[11px] text-slate-400 leading-tight mt-0.5">{opt.hint}</span>
+                          </span>
+                          {active && (
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke={opt.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
-                <p className="font-cormorant text-xl font-semibold text-slate-900">Exportar respaldo</p>
-                <p className="text-sm text-slate-500 mt-0.5 mb-3 max-w-md">Descarga tus sesiones, análisis y parcelas en un archivo JSON.</p>
+              <div className="context-section">
+                <p className="context-section-title">Exportar respaldo</p>
+                <p className="text-sm text-slate-500 mt-1 mb-3 max-w-md">Descarga tus sesiones, análisis y parcelas en un archivo JSON.</p>
 
                 <div className="flex flex-wrap gap-2 mb-3">
                   {QUICK_RANGES.map(r => (
@@ -299,14 +268,12 @@ export default function SettingsModal({ isOpen, onClose }) {
 
                 {quickRange === 'custom' && (
                   <div className="mb-3 grid grid-cols-2 gap-3 max-w-md">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Desde</label>
-                      <input type="date" value={backupDateFrom} onChange={e => setBackupDateFrom(e.target.value)} className="smod-date-input" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Hasta</label>
-                      <input type="date" value={backupDateTo} onChange={e => setBackupDateTo(e.target.value)} className="smod-date-input" />
-                    </div>
+                    <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Desde</span>
+                      <input type="date" value={backupDateFrom} onChange={e => setBackupDateFrom(e.target.value)} className="context-input" />
+                    </label>
+                    <label className="block"><span className="block text-sm font-medium text-slate-700 mb-2">Hasta</span>
+                      <input type="date" value={backupDateTo} onChange={e => setBackupDateTo(e.target.value)} className="context-input" />
+                    </label>
                   </div>
                 )}
 
@@ -320,11 +287,11 @@ export default function SettingsModal({ isOpen, onClose }) {
                   </svg>
                   {exporting ? 'Generando…' : 'Exportar respaldo'}
                 </button>
+              </div>
 
-                <div className="my-5 h-px bg-slate-100" />
-
-                <p className="font-cormorant text-xl font-semibold text-slate-900">Importar respaldo</p>
-                <p className="text-sm text-slate-500 mt-0.5 mb-3 max-w-md">Restaura datos desde un archivo JSON generado previamente por Pitahaya Visión.</p>
+              <div className="context-section">
+                <p className="context-section-title">Importar respaldo</p>
+                <p className="text-sm text-slate-500 mt-1 mb-3 max-w-md">Restaura datos desde un archivo JSON generado previamente por Pitahaya Visión.</p>
 
                 <label className={`rounded-lg border ${importing ? 'border-green-300 bg-green-50 text-green-600 cursor-wait' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 cursor-pointer'} px-4 py-2.5 text-sm font-semibold transition inline-flex items-center gap-2`}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -348,26 +315,19 @@ export default function SettingsModal({ isOpen, onClose }) {
                   </p>
                 </div>
               </div>
-            )}
 
             </div>
           </div>
 
           {/* Footer */}
-          {activeTab === 'notifications' ? (
-            <footer className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-100 bg-white flex-shrink-0">
-              {isDirty && <span className="text-xs font-medium text-amber-600 mr-auto">Tienes cambios sin guardar</span>}
-              <button onClick={resetSettings} className="modal-secondary-btn">Restaurar predeterminados</button>
-              <button onClick={handleClose}   className="modal-secondary-btn">Cancelar</button>
-              <button onClick={handleSaveSettings} disabled={saving || !isDirty} className="modal-save-btn">
-                {saving ? 'Guardando…' : 'Guardar configuraciones'}
-              </button>
-            </footer>
-          ) : (
-            <footer className="flex items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-100 bg-white flex-shrink-0">
-              <button onClick={handleClose} className="modal-secondary-btn">Cerrar</button>
-            </footer>
-          )}
+          <footer className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-100 bg-white flex-shrink-0">
+            {isDirty && <span className="text-xs font-medium text-amber-600 mr-auto">Tienes cambios sin guardar</span>}
+            <button onClick={resetSettings} className="modal-secondary-btn">Restaurar predeterminados</button>
+            <button onClick={handleClose}   className="modal-secondary-btn">Cancelar</button>
+            <button onClick={handleSaveSettings} disabled={saving || !isDirty} className="modal-save-btn">
+              {saving ? 'Guardando…' : 'Guardar configuraciones'}
+            </button>
+          </footer>
 
         </div>
       </div>

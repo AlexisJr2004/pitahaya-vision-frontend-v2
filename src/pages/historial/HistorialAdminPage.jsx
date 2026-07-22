@@ -6,10 +6,14 @@ import { animateClose, setupDragToDismiss } from '../../utils/modalUtils'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
 import AnalysisImage from '../../components/AnalysisImage'
 import PageHeader from '../../components/PageHeader'
+import Pagination from '../../components/Pagination'
+import HistoryFilterBar from '../../components/HistoryFilterBar'
 import { computeSev, sevPillClass } from '../../utils/severity'
 import { formatDateWithTime as fmtDate, formatDateLong as fmtDateShort } from '../../utils/formatters'
 import '../../components/modals/modals.css'
 import './historial.css'
+
+const PAGE_SIZE = 5
 
 const RANGE_OPTIONS = [
   { key: 'all',    label: 'Todos los registros', param: null    },
@@ -67,9 +71,9 @@ export default function HistorialAdminPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
   const [userQuery, setUserQuery] = useState('')
-  const [applied, setApplied]   = useState({ range: 'all', dateFrom: '', dateTo: '', userQuery: '' })
   const [detail, setDetail]     = useState(null)
   const [notesByAnId, setNotesByAnId] = useState({})
+  const [page, setPage]         = useState(1)
   const detailModalRef = useRef(null)
   const detailAnimatedRef = useRef(new Set())
 
@@ -94,13 +98,14 @@ export default function HistorialAdminPage() {
 
   useEffect(() => {
     const p = {}
-    const opt = RANGE_OPTIONS.find(o => o.key === applied.range)
+    const opt = RANGE_OPTIONS.find(o => o.key === range)
     if (opt?.param) p.range = opt.param
-    if (applied.dateFrom) p.date_from = applied.dateFrom
-    if (applied.dateTo)   p.date_to   = applied.dateTo
-    if (applied.userQuery) p.user_name = applied.userQuery
+    if (dateFrom) p.date_from = dateFrom
+    if (dateTo)   p.date_to   = dateTo
+    if (userQuery) p.user_name = userQuery
     load(p)
-  }, [applied, load])
+    setPage(1)
+  }, [range, dateFrom, dateTo, userQuery, load])
 
   const closeDetail = useCallback(() => {
     animateClose(detailModalRef, () => setDetail(null), detailAnimatedRef)
@@ -112,14 +117,8 @@ export default function HistorialAdminPage() {
     handleClass: '.ha-drag-handle', animatedRefs: detailAnimatedRef,
   }), [detail])
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setApplied({ range, dateFrom, dateTo, userQuery })
-  }
-
   const clearFilters = () => {
     setRange('all'); setDateFrom(''); setDateTo(''); setUserQuery('')
-    setApplied({ range: 'all', dateFrom: '', dateTo: '', userQuery: '' })
   }
 
   const openDetail = (a) => {
@@ -158,7 +157,10 @@ export default function HistorialAdminPage() {
 
   const totalSev = sevDist.reduce((s, g) => s + g.count, 0) || 1
   const recent = useMemo(() => analyses.slice(0, 4), [analyses])
-  const rangeLabel = RANGE_OPTIONS.find(o => o.key === applied.range)?.label || 'Todos los registros'
+  const totalPages = Math.max(1, Math.ceil(analyses.length / PAGE_SIZE))
+  useEffect(() => { if (page > totalPages) setPage(totalPages) }, [totalPages, page])
+  const paginated = useMemo(() => analyses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [analyses, page])
+  const rangeLabel = RANGE_OPTIONS.find(o => o.key === range)?.label || 'Todos los registros'
 
   return (
     <>
@@ -309,36 +311,19 @@ export default function HistorialAdminPage() {
             </header>
 
             <div className="px-5 py-5">
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 items-end">
-                <div className="xl:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Periodo</label>
-                  <select value={range} onChange={e => setRange(e.target.value)} className="ha-input">
-                    {RANGE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Desde</label>
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="ha-input" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Hasta</label>
-                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="ha-input" />
-                </div>
-                <div className="xl:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Nombre del cliente</label>
-                  <input type="text" value={userQuery} onChange={e => setUserQuery(e.target.value)} placeholder="Ej: Juan Pérez" className="ha-input" />
-                </div>
-                <div className="flex gap-2 xl:col-span-6">
-                  <button type="submit"
-                    className="bg-brand-600 text-white font-medium rounded-xl px-4 py-2.5 text-sm hover:bg-brand-700 transition border-none cursor-pointer">
-                    Aplicar
-                  </button>
-                  <button type="button" onClick={clearFilters}
-                    className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm hover:bg-brand-50 font-medium transition cursor-pointer">
-                    Limpiar
-                  </button>
-                </div>
-              </form>
+              <HistoryFilterBar
+                rangeOptions={RANGE_OPTIONS}
+                range={range}
+                onRangeChange={setRange}
+                dateFrom={dateFrom}
+                onDateFromChange={setDateFrom}
+                dateTo={dateTo}
+                onDateToChange={setDateTo}
+                showUserSearch
+                userQuery={userQuery}
+                onUserQueryChange={setUserQuery}
+                onClear={clearFilters}
+              />
             </div>
 
             <div className="ha-table-scroll border-t border-slate-100">
@@ -366,7 +351,7 @@ export default function HistorialAdminPage() {
                           No hay registros para el filtro seleccionado.
                         </td>
                       </tr>
-                    ) : analyses.map(a => (
+                    ) : paginated.map(a => (
                       <tr key={a.id} className="ha-tr transition" onClick={() => openDetail(a)}>
                         <td className="px-4 py-3">
                           <AnalysisImage src={a.image_url} className="w-14 h-14" />
@@ -386,6 +371,7 @@ export default function HistorialAdminPage() {
                   </tbody>
                 </table>
               )}
+              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
           </article>
 

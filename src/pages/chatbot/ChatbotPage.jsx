@@ -22,6 +22,45 @@ import Sidebar from '../../components/Sidebar'
 import TopBar from '../../components/TopBar'
 import { UserBubble, AssistantBubble, LoadingDots } from './components/MessageBubble'
 
+const PINNED_STORAGE_KEY = 'pv_pinned_conversations'
+
+const getPinnedMap = () => {
+  try { return JSON.parse(localStorage.getItem(PINNED_STORAGE_KEY) || '{}') } catch { return {} }
+}
+const setPinnedMap = (map) => {
+  try { localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(map)) } catch {}
+}
+const withPinned = (list) => {
+  const pinnedMap = getPinnedMap()
+  return list.map(c => pinnedMap[c.id] ? { ...c, pinnedAt: pinnedMap[c.id] } : c)
+}
+
+const isRealMsg = (m) => m.content && !m.content.startsWith('{"__type"')
+const cleanText = (t) => t.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim()
+
+const getConvTitle = (conv) => {
+  if (conv.title && conv.title !== 'Nueva conversacion') return conv.title
+  const msgs = conv.messages || []
+  const firstUser = msgs.find(m => m.role === 'user' && isRealMsg(m))
+  if (firstUser) return cleanText(firstUser.content).slice(0, 60)
+  const card = msgs.find(m => m.content?.startsWith('{"__type":"analysis_card"'))
+  if (card) {
+    try { const d = JSON.parse(card.content); if (d.disease) return `Diagnóstico: ${d.disease}` } catch {}
+  }
+  const firstAssistant = msgs.find(m => m.role === 'assistant' && isRealMsg(m))
+  return firstAssistant ? cleanText(firstAssistant.content).slice(0, 60) : (conv.title || 'Nueva conversacion')
+}
+
+const ANALYSIS_HEADER = '**Resultados del análisis**'
+
+const getConvPreview = (conv) => {
+  const msgs = conv.messages || []
+  const analysisMsg = msgs.find(m => m.content?.startsWith(ANALYSIS_HEADER))
+  if (analysisMsg) return cleanText(analysisMsg.content.slice(ANALYSIS_HEADER.length)).slice(0, 80)
+  const last = [...msgs].reverse().find(isRealMsg)
+  return last ? cleanText(last.content).slice(0, 80) : 'Sesion en blanco'
+}
+
 export default function ChatbotPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -131,7 +170,7 @@ export default function ChatbotPage() {
     if (!force && conversationsCacheRef.current) { setConversations(conversationsCacheRef.current); return }
     if (pendingConversationsRef.current) return pendingConversationsRef.current
     const p = (async () => {
-      try { const d = await getConversations({ page_size: API_PAGE_SIZE }); conversationsCacheRef.current = Array.isArray(d) ? d : d.results || []; setConversations(conversationsCacheRef.current) } catch { setConversations([]) }
+      try { const d = await getConversations({ page_size: API_PAGE_SIZE }); conversationsCacheRef.current = withPinned(Array.isArray(d) ? d : d.results || []); setConversations(conversationsCacheRef.current) } catch { setConversations([]) }
     })()
     pendingConversationsRef.current = p
     await p
@@ -179,7 +218,7 @@ export default function ChatbotPage() {
           setActiveConvId(full.id)
           setMessages((full.messages || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0)))
           setShowWelcome(false)
-          setConversations(prev => prev.some(c => c.id === full.id) ? prev : [...prev, full])
+          setConversations(prev => prev.some(c => c.id === full.id) ? prev : [...prev, ...withPinned([full])])
         }
       } catch {}
     }
@@ -790,7 +829,12 @@ export default function ChatbotPage() {
   const closeSessionMenu = () => setSessionMenuState({ sessionId: null, left: 0, top: 0, open: false })
 
   const togglePinConversation = (convId) => {
-    setConversations(prev => prev.map(c => c.id === convId ? { ...c, pinnedAt: c.pinnedAt ? null : Date.now() } : c))
+    const pinnedMap = getPinnedMap()
+    const wasPinned = !!pinnedMap[convId]
+    if (wasPinned) delete pinnedMap[convId]
+    else pinnedMap[convId] = Date.now()
+    setPinnedMap(pinnedMap)
+    setConversations(prev => prev.map(c => c.id === convId ? { ...c, pinnedAt: wasPinned ? null : pinnedMap[convId] } : c))
     closeSessionMenu()
   }
   const getConvPinState = (convId) => {
@@ -802,6 +846,8 @@ export default function ChatbotPage() {
     if (!confirmDeleteConv) return
     try {
       await deleteConversation(confirmDeleteConv)
+      const pinnedMap = getPinnedMap()
+      if (pinnedMap[confirmDeleteConv]) { delete pinnedMap[confirmDeleteConv]; setPinnedMap(pinnedMap) }
       if (activeConvId === confirmDeleteConv) newChat()
       setConfirmDeleteConv(null); closeSessionMenu(); debouncedLoadConversations()
     } catch { alert('Error al eliminar la conversacion') }
@@ -1092,6 +1138,119 @@ export default function ChatbotPage() {
     if (micWaveRef.current) { micWaveRef.current.classList.add('hidden'); micWaveRef.current.classList.remove('flex') }
   }
 
+  const isWelcomeState = showWelcome && messages.length === 0
+
+  const pinnedConversations = sortedConversations.filter(c => c.pinnedAt)
+  const recentConversations = sortedConversations.filter(c => !c.pinnedAt)
+
+  const renderConvItem = (conv) => (
+    <li key={conv.id} className={`session-card rounded-xl border transition w-full cursor-pointer ${activeConvId === conv.id ? 'bg-brand-50 border-brand-200 text-brand-800' : 'bg-white border-transparent text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`} onClick={() => selectConversation(conv)}>
+      <div className="flex items-start justify-between gap-2 px-3 py-2.5 pr-12">
+        <div className="min-w-0 flex-1">
+          <p className={`text-xs font-semibold truncate ${activeConvId === conv.id ? 'text-brand-800' : 'text-gray-700'}`}>{esc(getConvTitle(conv))}</p>
+          <p className={`text-[0.68rem] mt-0.5 truncate ${activeConvId === conv.id ? 'text-brand-700/80' : 'text-gray-400'}`}>{esc(getConvPreview(conv))}</p>
+        </div>
+        <span className={`text-[0.62rem] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${activeConvId === conv.id ? 'text-brand-700 bg-brand-100' : 'text-gray-400 bg-gray-100'}`}>{conv.messages?.length || 0} msg</span>
+      </div>
+      <div className="session-actions">
+        <button className="session-dot-btn" onClick={(e) => { e.stopPropagation(); openSessionMenu(conv.id, e.currentTarget) }} aria-label="Mas opciones">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-gray-500"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+      </div>
+    </li>
+  )
+
+  const composer = (
+    <>
+      {/* Hint: usuario sin corporaciones agrícolas intenta interactuar */}
+      {showNoFarmHint && farms.length === 0 && (
+        <div className="farm-hint mb-3 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+          <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu corporación agrícola</p>
+            <p className="text-xs text-amber-700 mt-0.5">Necesitas al menos una parcela para empezar el análisis.</p>
+          </div>
+          <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="flex-shrink-0 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100 transition btn-reset">
+            Crear corporación agrícola
+          </button>
+          <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition icon-btn">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      )}
+
+      {/* Hint: tiene corporación agrícola pero no ha seleccionado contexto (parcela) en esta sesión */}
+      {showNoContextHint && !savedContextIdRef.current && (
+        <div className="farm-hint mb-3 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
+          <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-blue-900 leading-tight">Selecciona una parcela primero</p>
+            <p className="text-xs text-blue-700 mt-0.5">Para analizar una imagen necesitas vincularla a una parcela de tu cultivo.</p>
+          </div>
+          <button
+            onClick={() => { setShowNoContextHint(false); setShowContextModal(true) }}
+            className="flex-shrink-0 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-200 transition btn-reset"
+          >
+            Seleccionar parcela
+          </button>
+          <button onClick={() => setShowNoContextHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-500 hover:bg-blue-200 flex items-center justify-center transition icon-btn">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      )}
+      <div id="imgPreview" className={`${imagePreview ? 'flex' : 'hidden'} items-center gap-3 mb-3 px-1`}>
+        <div className="relative">
+          <img id="previewImg" src={imagePreview || ''} alt="preview" className="h-14 w-14 sm:h-16 sm:w-16 object-cover rounded-2xl border border-brand-200 shadow-sm" />
+          <button onClick={removeImage} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-700 hover:bg-gray-900 rounded-full flex items-center justify-center transition icon-btn">
+            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-gray-600" id="imgName">{imageFile?.name || 'imagen.jpg'}</p>
+          <p className="text-xs text-gray-400">Imagen lista para enviar</p>
+        </div>
+      </div>
+      <div className="input-box flex items-end gap-1.5 sm:gap-2 bg-gray-50 border border-gray-200 rounded-3xl px-2.5 sm:px-3 py-2.5 sm:py-3 transition-all duration-200">
+        <button
+          onClick={() => {
+            if (farms.length === 0) { setShowNoFarmHint(true); return }
+            if (!savedContextIdRef.current) { setShowNoContextHint(true); return }
+            fileInputRef.current?.click()
+          }}
+          title="Adjuntar imagen"
+          className="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600 btn-reset"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+        </button>
+        <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
+        <textarea
+          ref={inpRef}
+          value={inputValue}
+          onChange={e => { setInputValue(e.target.value); if (e.target.value) setSuggestedQuestions([]) }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => { if (farms.length === 0) setShowNoFarmHint(true) }}
+          rows="1"
+          placeholder={farms.length === 0 ? 'Registra una corporación agrícola para comenzar...' : 'Escribe sobre tu cultivo...'}
+          className="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"
+        />
+        <button ref={micRef} onClick={toggleMic} title="Usar microfono" className="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200 icon-btn">
+          <svg ref={micIconRef} className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+          <div ref={micWaveRef} className="hidden items-center gap-0.5">
+            <div className="wb animate-wave-1"></div>
+            <div className="wb animate-wave-2"></div>
+            <div className="wb animate-wave-3"></div>
+            <div className="wb animate-wave-4"></div>
+            <div className="wb animate-wave-5"></div>
+          </div>
+        </button>
+        <button onClick={handleSendMessage} disabled={!inputValue.trim() && !imageFile} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200 ${(inputValue.trim() || imageFile) && !sending ? 'send-active' : 'send-inactive'}`}>
+          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+        </button>
+      </div>
+      <p className="text-center text-[0.65rem] text-gray-400 mt-2 mb-1 font-light">El asistente puede cometer errores. Verifica con un agronomo.</p>
+    </>
+  )
+
   return (
     <>
 
@@ -1103,13 +1262,13 @@ export default function ChatbotPage() {
             <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-arrow-up-from-bracket text-[0.72rem]"></i></span>
             <span className="text-sm text-gray-700 font-medium">Compartir conversacion</span>
           </button>
-          <button className="session-menu-item" onClick={() => togglePinConversation(sessionMenuState.sessionId)}>
-            <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-thumbtack text-[0.72rem]"></i></span>
-            <span className="text-sm text-gray-700 font-medium">{getConvPinState(sessionMenuState.sessionId) ? 'Desfijar' : 'Fijar'} conversacion</span>
-          </button>
           <button className="session-menu-item" onClick={() => openRenameConvModal(sessionMenuState.sessionId)}>
             <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-pen text-[0.72rem]"></i></span>
             <span className="text-sm text-gray-700 font-medium">Cambiar nombre</span>
+          </button>
+          <button className="session-menu-item" onClick={() => togglePinConversation(sessionMenuState.sessionId)}>
+            <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-thumbtack text-[0.72rem]"></i></span>
+            <span className="text-sm text-gray-700 font-medium">{getConvPinState(sessionMenuState.sessionId) ? 'Desfijar' : 'Fijar'} conversacion</span>
           </button>
           <button className="session-menu-item" onClick={() => openDeleteConvModal(sessionMenuState.sessionId)}>
             <span className="w-4 h-4 flex items-center justify-center text-gray-500"><i className="fas fa-trash text-[0.72rem]"></i></span>
@@ -1172,30 +1331,20 @@ export default function ChatbotPage() {
           onToggleSidebar={setSidebarOpen}
           sidebarId="chatbot-sidebar"
         >
+          {pinnedConversations.length > 0 && (
+            <>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1">Anclado</p>
+              <ul className="flex flex-col gap-1 flex-shrink-0 mb-4">
+                {pinnedConversations.map(renderConvItem)}
+              </ul>
+            </>
+          )}
           <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1">Recientes</p>
           <ul id="historyList" className="flex flex-col gap-1 overflow-y-auto flex-1">
-            {sortedConversations.length === 0 ? (
+            {recentConversations.length === 0 ? (
               <p className="text-xs text-gray-300 px-2">Sin conversaciones aun</p>
             ) : (
-              sortedConversations.map(conv => (
-                <li key={conv.id} className={`session-card rounded-xl border transition w-full cursor-pointer ${activeConvId === conv.id ? 'bg-brand-50 border-brand-200 text-brand-800' : 'bg-white border-transparent text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`} onClick={() => selectConversation(conv)}>
-                  <div className="flex items-start justify-between gap-2 px-3 py-2.5 pr-12">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <p className={`text-xs font-semibold truncate ${activeConvId === conv.id ? 'text-brand-800' : 'text-gray-700'}`}>{esc(conv.title || 'Nueva conversacion')}</p>
-                        {conv.pinnedAt ? <span className="session-pin"><i className="fas fa-thumbtack text-[0.55rem]"></i> Fijada</span> : null}
-                      </div>
-                      <p className={`text-[0.68rem] mt-0.5 truncate ${activeConvId === conv.id ? 'text-brand-700/80' : 'text-gray-400'}`}>{conv.preview || 'Sesion en blanco'}</p>
-                    </div>
-                    <span className={`text-[0.62rem] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${activeConvId === conv.id ? 'text-brand-700 bg-brand-100' : 'text-gray-400 bg-gray-100'}`}>{conv.messages?.length || 0} msg</span>
-                  </div>
-                  <div className="session-actions">
-                    <button className="session-dot-btn" onClick={(e) => { e.stopPropagation(); openSessionMenu(conv.id, e.currentTarget) }} aria-label="Mas opciones">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-gray-500"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-                    </button>
-                  </div>
-                </li>
-              ))
+              recentConversations.map(renderConvItem)
             )}
           </ul>
         </Sidebar>
@@ -1217,7 +1366,7 @@ export default function ChatbotPage() {
           />
           {/* CHAT AREA */}
           <div id="chatArea" ref={chatAreaRef} className="flex-1 overflow-y-auto thin-scroll px-3 sm:px-4 py-5 relative">
-            {showWelcome && messages.length === 0 ? (
+            {isWelcomeState ? (
               <WelcomeScreen
                 displayName={displayName}
                 farms={farms}
@@ -1261,94 +1410,7 @@ export default function ChatbotPage() {
 
           {/* INPUT ZONE */}
           <div className="input-zone px-3 sm:px-4 pt-2 bg-white border-t border-gray-100 flex-shrink-0">
-            <div className="max-w-2xl mx-auto">
-              {/* Hint: usuario sin corporaciones agrícolas intenta interactuar */}
-              {showNoFarmHint && farms.length === 0 && (
-                <div className="farm-hint mb-3 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
-                  <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-900 leading-tight">Primero registra tu corporación agrícola</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Necesitas al menos una parcela para empezar el análisis.</p>
-                  </div>
-                  <button onClick={() => { setShowNoFarmHint(false); openAddFarmModal() }} className="flex-shrink-0 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100 transition btn-reset">
-                    Crear corporación agrícola
-                  </button>
-                  <button onClick={() => setShowNoFarmHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 text-amber-500 hover:bg-amber-200 flex items-center justify-center transition icon-btn">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                  </button>
-                </div>
-              )}
-
-              {/* Hint: tiene corporación agrícola pero no ha seleccionado contexto (parcela) en esta sesión */}
-              {showNoContextHint && !savedContextIdRef.current && (
-                <div className="farm-hint mb-3 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
-                  <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-blue-900 leading-tight">Selecciona una parcela primero</p>
-                    <p className="text-xs text-blue-700 mt-0.5">Para analizar una imagen necesitas vincularla a una parcela de tu cultivo.</p>
-                  </div>
-                  <button
-                    onClick={() => { setShowNoContextHint(false); setShowContextModal(true) }}
-                    className="flex-shrink-0 text-xs font-bold text-blue-700 bg-blue-100 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-200 transition btn-reset"
-                  >
-                    Seleccionar parcela
-                  </button>
-                  <button onClick={() => setShowNoContextHint(false)} className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-500 hover:bg-blue-200 flex items-center justify-center transition icon-btn">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                  </button>
-                </div>
-              )}
-              <div id="imgPreview" className={`${imagePreview ? 'flex' : 'hidden'} items-center gap-3 mb-3 px-1`}>
-                <div className="relative">
-                  <img id="previewImg" src={imagePreview || ''} alt="preview" className="h-14 w-14 sm:h-16 sm:w-16 object-cover rounded-2xl border border-brand-200 shadow-sm" />
-                  <button onClick={removeImage} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-700 hover:bg-gray-900 rounded-full flex items-center justify-center transition icon-btn">
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                  </button>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-600" id="imgName">{imageFile?.name || 'imagen.jpg'}</p>
-                  <p className="text-xs text-gray-400">Imagen lista para enviar</p>
-                </div>
-              </div>
-              <div className="input-box flex items-end gap-1.5 sm:gap-2 bg-gray-50 border border-gray-200 rounded-3xl px-2.5 sm:px-3 py-2.5 sm:py-3 transition-all duration-200">
-                <button
-                  onClick={() => {
-                    if (farms.length === 0) { setShowNoFarmHint(true); return }
-                    if (!savedContextIdRef.current) { setShowNoContextHint(true); return }
-                    fileInputRef.current?.click()
-                  }}
-                  title="Adjuntar imagen"
-                  className="flex-shrink-0 mb-0.5 p-1.5 rounded-full hover:bg-brand-50 active:bg-brand-100 transition text-gray-400 hover:text-brand-600 btn-reset"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-                </button>
-                <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
-                <textarea
-                  ref={inpRef}
-                  value={inputValue}
-                  onChange={e => { setInputValue(e.target.value); if (e.target.value) setSuggestedQuestions([]) }}
-                  onKeyDown={handleKeyDown}
-                  onFocus={() => { if (farms.length === 0) setShowNoFarmHint(true) }}
-                  rows="1"
-                  placeholder={farms.length === 0 ? 'Registra una corporación agrícola para comenzar...' : 'Escribe sobre tu cultivo...'}
-                  className="flex-1 text-sm text-gray-800 placeholder-gray-400 leading-relaxed max-h-32 overflow-y-auto py-0.5"
-                />
-                <button ref={micRef} onClick={toggleMic} title="Usar microfono" className="flex-shrink-0 mb-0.5 w-8 h-8 rounded-full bg-gray-100 hover:bg-brand-50 active:bg-brand-100 flex items-center justify-center transition-all duration-200 icon-btn">
-                  <svg ref={micIconRef} className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
-                  <div ref={micWaveRef} className="hidden items-center gap-0.5">
-                    <div className="wb animate-wave-1"></div>
-                    <div className="wb animate-wave-2"></div>
-                    <div className="wb animate-wave-3"></div>
-                    <div className="wb animate-wave-4"></div>
-                    <div className="wb animate-wave-5"></div>
-                  </div>
-                </button>
-                <button onClick={handleSendMessage} disabled={!inputValue.trim() && !imageFile} className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200 ${(inputValue.trim() || imageFile) && !sending ? 'send-active' : 'send-inactive'}`}>
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-                </button>
-              </div>
-              <p className="text-center text-[0.65rem] text-gray-400 mt-2 mb-1 font-light">El asistente puede cometer errores. Verifica con un agronomo.</p>
-            </div>
+            <div className="max-w-2xl mx-auto">{composer}</div>
           </div>
         </main>
       </div>

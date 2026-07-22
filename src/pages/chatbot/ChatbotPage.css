@@ -13,8 +13,8 @@ textarea { resize: none; outline: none; background: transparent; }
 .brand-avatar { background: linear-gradient(135deg, #16a34a, #22c55e, #4ade80); }
 
 /* ── Scrollbars ── */
-#historyList::-webkit-scrollbar { width: 2px; }
-#historyList::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+#historyList { scrollbar-width: none; -ms-overflow-style: none; }
+#historyList::-webkit-scrollbar { display: none; }
 
 /* ── User menu ── */
 .user-menu-fixed {
@@ -201,7 +201,6 @@ textarea { resize: none; outline: none; background: transparent; }
 .session-menu { position: fixed; z-index: 190; min-width: 196px; border-radius: 18px; background: #fff; border: 1px solid #eef2f7; box-shadow: 0 2px 8px rgba(15,23,42,.05); padding: 0.35rem; }
 .session-menu-item { width: 100%; display: flex; align-items: center; gap: 0.7rem; padding: 0.72rem 0.8rem; border-radius: 14px; text-align: left; transition: background 0.14s ease, color 0.14s ease; background: transparent; border: none; cursor: pointer; }
 .session-menu-item:hover { background: #f8fafc; }
-.session-pin { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #15803d; background: #dcfce7; border-radius: 9999px; padding: 0.18rem 0.45rem; }
 
 /* ── Onboarding ── */
 .onboard-step { display: flex; align-items: center; gap: 0.85rem; text-align: left; border-radius: 18px; padding: 0.85rem 1rem; border: 1px solid; transition: all 0.18s; }

@@ -12,6 +12,7 @@ import { API_PAGE_SIZE } from '../../services/apiConfig'
 import { severityBucket, severityLevel, sevPillClass, SEVERITY_LABELS as sevLabels, SEVERITY_COLORS as sevColors } from '../../utils/severity'
 import { formatDateMediumWithTime as fmtDate, formatDateLongWithTime as fmtDateShort } from '../../utils/formatters'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
+import HistoryFilterBar from '../../components/HistoryFilterBar'
 import '../../components/modals/modals.css'
 import './historial.css'
 import AppLogo from '../../components/AppLogo'
@@ -72,6 +73,20 @@ const filters = [
   { key: 'low',      label: 'Leves' },
 ]
 
+const RANGE_OPTIONS = [
+  { key: 'all',   label: 'Todos los registros' },
+  { key: 'today', label: 'Hoy' },
+  { key: 'last7', label: 'Últimos 7 días' },
+  { key: 'month', label: 'Mes actual' },
+]
+
+const TZ_RANGE_OPTIONS = [
+  { key: 'all', label: 'Todos' },
+  { key: '3d',  label: 'Últimos 3 días' },
+  { key: '5d',  label: 'Últimos 5 días' },
+  { key: '7d',  label: 'Última semana' },
+]
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function HistorialView({ onOpenSidebar }) {
   const { user } = useAuth()
@@ -95,7 +110,6 @@ export default function HistorialView({ onOpenSidebar }) {
   const [tzPeriod,        setTzPeriod]        = useState('all')
   const [tzDateFrom,      setTzDateFrom]      = useState('')
   const [tzDateTo,        setTzDateTo]        = useState('')
-  const [tzApplied,       setTzApplied]       = useState({ period: 'all', dateFrom: '', dateTo: '' })
   const [tzAiText,        setTzAiText]        = useState('')
   const [showTrazPDF,     setShowTrazPDF]     = useState(false)
 
@@ -103,7 +117,6 @@ export default function HistorialView({ onOpenSidebar }) {
   const [period,          setPeriod]          = useState('all')
   const [dateFrom,        setDateFrom]        = useState('')
   const [dateTo,          setDateTo]          = useState('')
-  const [applied,         setApplied]         = useState({ period: 'all', dateFrom: '', dateTo: '' })
 
   // ── edit / delete ─────────────────────────────────────────────────────────────
   const [editingId,       setEditingId]       = useState(null)
@@ -114,9 +127,9 @@ export default function HistorialView({ onOpenSidebar }) {
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const params = { page_size: API_PAGE_SIZE }
-    if (applied.period !== 'all') params.range = applied.period
-    if (applied.dateFrom) params.date_from = applied.dateFrom
-    if (applied.dateTo)   params.date_to   = applied.dateTo
+    if (period !== 'all') params.range = period
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo)   params.date_to   = dateTo
     setLoading(true)
     Promise.all([
       getAnalyses(params),
@@ -206,7 +219,7 @@ export default function HistorialView({ onOpenSidebar }) {
       setGroupCount(gc)
     }).catch(err => console.error('Error cargando historial:', err))
       .finally(() => setLoading(false))
-  }, [applied])
+  }, [period, dateFrom, dateTo])
 
   // ── derived ───────────────────────────────────────────────────────────────────
   function getGroupAnalyses(groupKey) {
@@ -232,22 +245,17 @@ export default function HistorialView({ onOpenSidebar }) {
   function openTrazabilidad(a) {
     setActiveGroupKey(a._ph?._groupKey || '')
     setTzPeriod('all'); setTzDateFrom(''); setTzDateTo('')
-    setTzApplied({ period: 'all', dateFrom: '', dateTo: '' })
     setTzAiText('')
     setShowTrazabilidad(true)
   }
   function openFicha(a)        { setActiveGroupKey(a._ph?._groupKey || ''); setShowFicha(true) }
 
-  const handleApplyFilters = () => setApplied({ period, dateFrom, dateTo })
   const handleClearFilters = () => {
     setPeriod('all'); setDateFrom(''); setDateTo('')
-    setApplied({ period: 'all', dateFrom: '', dateTo: '' })
   }
 
-  const handleTzApplyFilters = () => setTzApplied({ period: tzPeriod, dateFrom: tzDateFrom, dateTo: tzDateTo })
   const handleTzClearFilters = () => {
     setTzPeriod('all'); setTzDateFrom(''); setTzDateTo('')
-    setTzApplied({ period: 'all', dateFrom: '', dateTo: '' })
   }
 
   const handleSaveEdit = async () => {
@@ -398,14 +406,14 @@ export default function HistorialView({ onOpenSidebar }) {
   // ── trazabilidad ──────────────────────────────────────────────────────────────
   const tzAllAnalyses = showTrazabilidad ? getGroupAnalyses(activeGroupKey) : [] // ascendente (antiguo → reciente)
   const tzPh           = tzAllAnalyses[tzAllAnalyses.length - 1]?._ph
-  const tzFilteredAsc   = filterByTzPeriod(tzAllAnalyses, tzApplied.period, tzApplied.dateFrom, tzApplied.dateTo)
+  const tzFilteredAsc   = filterByTzPeriod(tzAllAnalyses, tzPeriod, tzDateFrom, tzDateTo)
   const tzAnalyses      = [...tzFilteredAsc].reverse() // descendente para la línea de tiempo (más reciente primero)
 
-  const tzPeriodLabel = (tzApplied.dateFrom || tzApplied.dateTo)
-    ? `${tzApplied.dateFrom ? new Date(`${tzApplied.dateFrom}T00:00:00`).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} – ${tzApplied.dateTo ? new Date(`${tzApplied.dateTo}T00:00:00`).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`
-    : tzApplied.period === '3d' ? 'Últimos 3 días'
-    : tzApplied.period === '5d' ? 'Últimos 5 días'
-    : tzApplied.period === '7d' ? 'Última semana'
+  const tzPeriodLabel = (tzDateFrom || tzDateTo)
+    ? `${tzDateFrom ? new Date(`${tzDateFrom}T00:00:00`).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} – ${tzDateTo ? new Date(`${tzDateTo}T00:00:00`).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`
+    : tzPeriod === '3d' ? 'Últimos 3 días'
+    : tzPeriod === '5d' ? 'Últimos 5 días'
+    : tzPeriod === '7d' ? 'Última semana'
     : 'Todo el historial'
 
   const tzSevLevels        = tzFilteredAsc.map(e => severityLevel(e.severity)).filter(l => l >= 0)
@@ -471,32 +479,16 @@ export default function HistorialView({ onOpenSidebar }) {
             {/* ── Filtros temporales ── */}
             <section className="mb-4 stat-card p-4">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filtrar por período</p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {[{key:'all',label:'Todos'},{key:'today',label:'Hoy'},{key:'last7',label:'Últimos 7 días'},{key:'month',label:'Mes actual'}].map(p => (
-                  <button key={p.key} className={`hist-chip border-none cursor-pointer ${period === p.key ? 'active' : ''}`}
-                    onClick={() => setPeriod(p.key)}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="text-xs text-slate-500 font-medium">Desde</label>
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                  className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
-                <label className="text-xs text-slate-500 font-medium">Hasta</label>
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                  className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
-                <button onClick={handleApplyFilters}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer border-none">
-                  <i className="fas fa-filter text-[0.72rem]"></i>Filtrar
-                </button>
-                {(applied.period !== 'all' || applied.dateFrom || applied.dateTo) && (
-                  <button onClick={handleClearFilters}
-                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer bg-transparent border-none">
-                    Limpiar
-                  </button>
-                )}
-              </div>
+              <HistoryFilterBar
+                rangeOptions={RANGE_OPTIONS}
+                range={period}
+                onRangeChange={setPeriod}
+                dateFrom={dateFrom}
+                onDateFromChange={setDateFrom}
+                dateTo={dateTo}
+                onDateToChange={setDateTo}
+                onClear={handleClearFilters}
+              />
             </section>
 
             <section className="mb-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -613,40 +605,19 @@ export default function HistorialView({ onOpenSidebar }) {
               </button>
             </header>
 
-            {/* ── Filtro temporal scoped a esta planta (idéntico al filtro de Historial) ── */}
+            {/* ── Filtro temporal scoped a esta planta (mismo componente que Historial) ── */}
             <div className="stat-card p-4 m-5 sm:m-6 mb-0">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filtrar por período</p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {[
-                  { key: 'all', label: 'Todos' },
-                  { key: '3d',  label: 'Últimos 3 días' },
-                  { key: '5d',  label: 'Últimos 5 días' },
-                  { key: '7d',  label: 'Última semana' },
-                ].map(p => (
-                  <button key={p.key} className={`hist-chip border-none cursor-pointer ${tzPeriod === p.key ? 'active' : ''}`}
-                    onClick={() => setTzPeriod(p.key)}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="text-xs text-slate-500 font-medium">Desde</label>
-                <input type="date" value={tzDateFrom} onChange={e => setTzDateFrom(e.target.value)}
-                  className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
-                <label className="text-xs text-slate-500 font-medium">Hasta</label>
-                <input type="date" value={tzDateTo} onChange={e => setTzDateTo(e.target.value)}
-                  className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 outline-none focus:border-brand-500" />
-                <button onClick={handleTzApplyFilters}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition cursor-pointer border-none">
-                  <i className="fas fa-filter text-[0.72rem]"></i>Filtrar
-                </button>
-                {(tzApplied.period !== 'all' || tzApplied.dateFrom || tzApplied.dateTo) && (
-                  <button onClick={handleTzClearFilters}
-                    className="text-xs text-slate-500 hover:text-red-500 underline cursor-pointer bg-transparent border-none">
-                    Limpiar
-                  </button>
-                )}
-              </div>
+              <HistoryFilterBar
+                rangeOptions={TZ_RANGE_OPTIONS}
+                range={tzPeriod}
+                onRangeChange={setTzPeriod}
+                dateFrom={tzDateFrom}
+                onDateFromChange={setTzDateFrom}
+                dateTo={tzDateTo}
+                onDateToChange={setTzDateTo}
+                onClear={handleTzClearFilters}
+              />
               <p className="text-xs text-slate-500 mt-3">
                 <i className="fas fa-filter text-[0.65rem] mr-1"></i>
                 {tzFilteredAsc.length} registro{tzFilteredAsc.length !== 1 ? 's' : ''} en &ldquo;{tzPeriodLabel}&rdquo;
@@ -716,7 +687,7 @@ export default function HistorialView({ onOpenSidebar }) {
                       buttonLabel="Analizar evolución con IA"
                       emptyText="Gemma 3 explicará a detalle cómo evolucionó esta planta durante el período seleccionado."
                       onAnalysis={setTzAiText}
-                      resetKey={`${activeGroupKey}|${tzApplied.period}|${tzApplied.dateFrom}|${tzApplied.dateTo}`}
+                      resetKey={`${activeGroupKey}|${tzPeriod}|${tzDateFrom}|${tzDateTo}`}
                       resultMaxHeight={320}
                     />
                   </div>

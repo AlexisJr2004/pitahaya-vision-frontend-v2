@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getCustomers, toggleCustomerActive, setCustomerRole } from '../../services/adminService'
+import Pagination from '../../components/Pagination'
 import './clientes.css'
 
 const toArr = (d) => Array.isArray(d) ? d : (d?.results ?? [])
+const PAGE_SIZE = 5
 
 export default function ClientesAdminPage() {
   const { user } = useAuth()
@@ -14,6 +16,7 @@ export default function ClientesAdminPage() {
   const [roleFilter, setRoleFilter] = useState('all')
   const [actionId, setActionId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [page, setPage] = useState(1)
 
   const showToast = useCallback((msg, err = false) => {
     setToast({ msg, err })
@@ -41,6 +44,12 @@ export default function ClientesAdminPage() {
       )
     })
   }, [customers, search, roleFilter])
+
+  useEffect(() => { setPage(1) }, [search, roleFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  useEffect(() => { if (page > totalPages) setPage(totalPages) }, [totalPages, page])
+  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
 
   const kpis = useMemo(() => {
     const total = filtered.length
@@ -225,7 +234,7 @@ export default function ClientesAdminPage() {
                 <p className="text-center py-8 text-slate-400 text-sm">Sin registros</p>
               ) : (
                 <ul className="space-y-3 p-4 list-none m-0">
-                  {filtered.map(c => {
+                  {paginated.map(c => {
                     const isMe = c.id === user?.id
                     const initLetter = (c.full_name || c.username || 'U').charAt(0).toUpperCase()
                     return (
@@ -286,6 +295,7 @@ export default function ClientesAdminPage() {
                   })}
                 </ul>
               )}
+              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
 
             {/* ── Tabla — solo desktop ── */}
@@ -314,7 +324,7 @@ export default function ClientesAdminPage() {
                       <tr>
                         <td colSpan={7} className="text-center py-6 text-slate-400 text-sm">Sin registros</td>
                       </tr>
-                    ) : filtered.map(c => {
+                    ) : paginated.map(c => {
                       const isMe = c.id === user?.id
                       const initLetter = (c.full_name || c.username || 'U').charAt(0).toUpperCase()
                       return (
@@ -379,6 +389,7 @@ export default function ClientesAdminPage() {
                   </tbody>
                 </table>
               )}
+              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
           </article>
 

@@ -99,6 +99,8 @@ export default function Sidebar({
         .um-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.78rem;transition:background 0.15s,color 0.15s}
         #userMenuS{animation:popUp 0.22s cubic-bezier(0.34,1.18,0.64,1) both}
         @keyframes popUp{from{opacity:0;transform:scale(0.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+        #${sidebarId} .overflow-y-auto{scrollbar-width:none;-ms-overflow-style:none}
+        #${sidebarId} .overflow-y-auto::-webkit-scrollbar{display:none}
       `}</style>
 
       <div id="drawerOverlay" className={sidebarOpen ? 'open' : ''} onClick={() => onToggleSidebar?.(false)}></div>
@@ -166,7 +168,7 @@ export default function Sidebar({
           <p className="text-[0.68rem] font-semibold uppercase tracking-widest text-gray-400 mt-1 px-1 z-sidebar">{brandLabel}</p>
         )}
 
-        <nav className="sidebar-nav-inner flex-1 overflow-y-auto">
+        <nav className="sidebar-nav-inner flex-shrink-0">
           {navItems.map((item, i) => (
             <button key={item.key || i} onClick={item.onClick}
               className={`${sidebarBtnClass} ${item.active ? 'active' : ''}`}>
@@ -176,11 +178,9 @@ export default function Sidebar({
           ))}
         </nav>
 
-        {children && (
-          <div className="z-sidebar overflow-y-auto flex-1">
-            {children}
-          </div>
-        )}
+        <div className="z-sidebar overflow-y-auto flex-1 min-h-0">
+          {children}
+        </div>
 
         {!hideWeather && (
           <section className="flex-shrink-0 w-full mt-2 mb-1 z-sidebar"
@@ -208,7 +208,6 @@ export default function Sidebar({
               <p className="text-[0.82rem] font-semibold text-gray-800 truncate leading-tight">{user?.displayName || 'Usuario'}</p>
               <p className="text-[0.68rem] text-gray-400 truncate leading-tight">{user?.email || ''}</p>
             </div>
-            <i className={`fas fa-chevron-up text-[0.62rem] text-gray-400 flex-shrink-0 transition-transform duration-200 ${menuOpen ? '' : 'rotate-180'}`}></i>
           </button>
         </div>
       </aside>

@@ -100,33 +100,10 @@
 /* ── Animación de aparición de modales flotantes (SuccessModal, CooldownModal) ── */
 @keyframes modalPopIn { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
-/* ── SettingsModal: nav lateral (sidebar en desktop, barra superior en móvil) ── */
-.smod-shell{display:flex;flex-direction:column;flex:1;min-height:0}
-@media(min-width:640px){.smod-shell{flex-direction:row}}
-
-.smod-nav{display:flex;flex-direction:row;gap:.35rem;padding:.6rem 1rem;border-top:1px solid #eef2f7;border-bottom:1px solid #eef2f7;flex-shrink:0;background:#fff;overflow-x:auto}
-@media(min-width:640px){
-  .smod-nav{flex-direction:column;width:208px;border-top:none;border-bottom:none;border-right:1px solid #eef2f7;background:#f8fafc;padding:1.1rem .75rem;gap:.25rem;overflow-x:visible;flex-shrink:0}
-}
-.smod-nav-item{position:relative;display:flex;align-items:center;gap:.6rem;padding:.6rem .85rem;border-radius:999px;border:none;background:none;font-size:.85rem;font-weight:600;color:#94a3b8;cursor:pointer;transition:all .14s;white-space:nowrap;flex-shrink:0}
-.smod-nav-item:hover{color:#475569;background:#f1f5f9}
-.smod-nav-item.active{background:#16a34a;color:#fff}
-@media(min-width:640px){
-  .smod-nav-item{width:100%;text-align:left;border-radius:12px}
-  .smod-nav-item:hover{background:#eef2f7}
-  .smod-nav-item.active{background:#dcfce7;color:#15803d;box-shadow:inset 3px 0 0 #16a34a}
-}
-.smod-nav-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0;margin-left:auto}
-
-.smod-content{flex:1;min-width:0;overflow-y:auto;background:#f8fafc;padding:1.1rem 1rem}
-@media(min-width:640px){.smod-content{padding:1.5rem 1.75rem}}
-
+/* ── SettingsModal ── */
 .smod-sev-opt{position:relative;display:flex;align-items:center;gap:.55rem;border-radius:12px;padding:.65rem .7rem;cursor:pointer;transition:all .14s;border:1.5px solid #e2e8f0;background:#fff;text-align:left;width:100%}
 .smod-sev-opt:hover{border-color:#cbd5e1;box-shadow:0 2px 6px rgba(0,0,0,.05)}
 .smod-sev-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-
-.smod-date-input{width:100%;font-size:.85rem;border:1px solid #e2e8f0;border-radius:.65rem;background:#fff;padding:.55rem .7rem;outline:none;color:#0f172a;transition:border-color .15s,box-shadow .15s}
-.smod-date-input:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
 
 .smod-chip{padding:.42rem .85rem;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:.78rem;font-weight:600;color:#475569;cursor:pointer;transition:all .14s;white-space:nowrap}
 .smod-chip:hover{border-color:#86efac;color:#15803d}
