@@ -8,6 +8,7 @@ import AnalysisImage from '../../components/AnalysisImage'
 import Footer from '../../components/Footer'
 import TopBar from '../../components/TopBar'
 import PageHeader from '../../components/PageHeader'
+import HistoryFilterBar from '../../components/HistoryFilterBar'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
@@ -22,6 +23,13 @@ import { TILE_LAYERS } from '../../constants/mapLayers'
 import { computeSeverityBucket, computeSeverityLabel, isRisk, sevLabel, sevColor, sevBg } from '../../utils/severity'
 import { escapeHtml, formatDateLong as formatDate, formatDateWithTime as fmtFull, extractConfidence } from '../../utils/formatters'
 import './dashboard.css'
+
+const RANGE_OPTIONS = [
+  { key: 'all',   label: 'Todos los registros' },
+  { key: 'today', label: 'Hoy' },
+  { key: 'last7', label: 'Últimos 7 días' },
+  { key: 'month', label: 'Este mes' },
+]
 
 // ── SeverityBars ───────────────────────────────────────────────────────────────
 function SeverityBars({ data }) {
@@ -215,8 +223,13 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
   const [analyses, setAnalyses] = useState([])
   const [farms, setFarms] = useState([])
   const [histories, setHistories] = useState([])
+  const [allHistories, setAllHistories] = useState([])
   const [loading, setLoading] = useState(true)
   const [showPDF, setShowPDF] = useState(false)
+
+  const [period,   setPeriod]   = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo,   setDateTo]   = useState('')
 
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -238,10 +251,15 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
 
   // ── load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    const params = { page_size: API_PAGE_SIZE }
+    if (period !== 'all') params.range = period
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo)   params.date_to   = dateTo
+    setLoading(true)
     Promise.allSettled([
-      getAnalyses({ page_size: API_PAGE_SIZE }),
+      getAnalyses(params),
       getFarms({ page_size: API_PAGE_SIZE }),
-      getPlantHistories({ page_size: API_PAGE_SIZE }),
+      getPlantHistories(params),
     ])
       .then(([ra, rf, rh]) => {
         setAnalyses(toArray(ra.value))
@@ -249,6 +267,13 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
         setHistories(toArray(rh.value))
       })
       .finally(() => setLoading(false))
+  }, [period, dateFrom, dateTo])
+
+  // Historial completo, sin el filtro de período — "parcelas descuidadas" y la
+  // "comparación mensual" necesitan ver todo el historial real, no solo lo
+  // que quede dentro del rango que se esté visualizando ahora mismo.
+  useEffect(() => {
+    getPlantHistories({ page_size: API_PAGE_SIZE }).then(r => setAllHistories(toArray(r))).catch(() => {})
   }, [])
 
   // ── weather history (30 días, para correlación clima-enfermedad) ────────────
@@ -331,6 +356,10 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
   }, [histories])
 
   // ── monthly comparison ────────────────────────────────────────────────────────
+  // Usa allHistories (sin el filtro de período): esta tarjeta ya compara por
+  // definición "mes actual" vs "mes anterior" — si se le pasara el historial
+  // ya filtrado por un período corto, ambos meses saldrían casi vacíos y la
+  // comparación dejaría de tener sentido.
   const monthComparison = useMemo(() => {
     const now = new Date()
     const thisM = now.getMonth(), thisY = now.getFullYear()
@@ -339,8 +368,8 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
     const inMonth = (h, m, y) => { const d = new Date(h.created_at); return d.getMonth() === m && d.getFullYear() === y }
     const topDis = arr => { const mp = new Map(); arr.forEach(h => { const k = h.disease_name_predicted || 'Sin diagnóstico'; mp.set(k, (mp.get(k) || 0) + 1) }); return [...mp.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '—' }
     const monthLbl = (m) => new Date(2024, m, 1).toLocaleDateString('es-EC', { month: 'long' })
-    const cur = histories.filter(h => inMonth(h, thisM, thisY))
-    const prev = histories.filter(h => inMonth(h, prevM, prevY))
+    const cur = allHistories.filter(h => inMonth(h, thisM, thisY))
+    const prev = allHistories.filter(h => inMonth(h, prevM, prevY))
     const delta = (a, b) => b === 0 ? null : Math.round(((a - b) / b) * 100)
     return {
       currentLabel: monthLbl(thisM),
@@ -349,7 +378,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
       risk:       { cur: cur.filter(isRisk).length,   prev: prev.filter(isRisk).length,   delta: delta(cur.filter(isRisk).length, prev.filter(isRisk).length) },
       topDisease: { cur: topDis(cur),                     prev: topDis(prev) },
     }
-  }, [histories])
+  }, [allHistories])
 
   // ── tendencia de severidad (últimas 10 semanas) ──────────────────────────────
   const severityTrend = useMemo(() => {
@@ -426,9 +455,12 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
   }, [histories])
 
   // ── parcelas descuidadas (más tiempo sin análisis) ───────────────────────────
+  // Usa allHistories (sin el filtro de período): si se filtrara, cualquier
+  // rango corto marcaría casi todas las parcelas como "descuidadas" solo por
+  // quedar su último análisis real fuera de la ventana seleccionada.
   const neglectedPlots = useMemo(() => {
     const lastByPlot = new Map()
-    histories.forEach(h => {
+    allHistories.forEach(h => {
       const plotId = h.context_detail?.plot_id
       if (!plotId) return
       const cur = lastByPlot.get(plotId)
@@ -447,7 +479,7 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
       if (b.daysSince == null) return 1
       return b.daysSince - a.daysSince
     }).slice(0, 6)
-  }, [farms, histories])
+  }, [farms, allHistories])
 
   // ── Leaflet map: init (runs once) ────────────────────────────────────────────
   useEffect(() => {
@@ -550,7 +582,20 @@ export default function DashboardView({ onOpenSidebar, climateWeather: propClima
               ]}
             />
 
-
+            {/* ── Filtro de período: afecta todas las gráficas de este dashboard ── */}
+            <section className="mb-4 info-card p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filtrar por período</p>
+              <HistoryFilterBar
+                rangeOptions={RANGE_OPTIONS}
+                range={period}
+                onRangeChange={setPeriod}
+                dateFrom={dateFrom}
+                onDateFromChange={setDateFrom}
+                dateTo={dateTo}
+                onDateToChange={setDateTo}
+                onClear={() => { setPeriod('all'); setDateFrom(''); setDateTo('') }}
+              />
+            </section>
 
             <article className="info-card p-6">
               <header className="flex items-start justify-between gap-4 mb-5">

@@ -53,6 +53,9 @@
    fade-in-up: entrada suave del bloque completo. */
 .panel-title { font-family: 'Cormorant Garamond', serif; letter-spacing: -0.02em; }
 .info-card { border: 1px solid rgba(226, 232, 240, .9); border-radius: 30px; background: #fff; }
+/* stat-card: variante con esquinas más cerradas de info-card, usada por
+   Historial y AIAnalysisPanel (paneles de filtro, estados vacíos, panel de IA). */
+.stat-card { border: 1px solid #e5e7eb; border-radius: 18px; background: #fff; }
 .kpi-card { position: relative; overflow: hidden; border-radius: 28px; border: 1px solid rgba(226, 232, 240, .9); background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); }
 .kpi-sparkline { height: .4rem; border-radius: 9999px; background: linear-gradient(90deg, rgba(34, 197, 94, .1), rgba(34, 197, 94, .4)); }
 .fade-in-up { animation: fadeInUp .3s ease-in-out; }

@@ -14,11 +14,19 @@ import DashboardReportPDF from '../../components/pdf/DashboardReportPDF'
 import { toArray } from '../../utils/arrayUtils'
 import AnalysisImage from '../../components/AnalysisImage'
 import PageHeader from '../../components/PageHeader'
+import HistoryFilterBar from '../../components/HistoryFilterBar'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
 import { TILE_LAYERS } from '../../constants/mapLayers'
 import { computeSev, isRisk, sevPillClass, sevColor, sevBg, sevLabel, riskColor, riskLabel, riskPillBg } from '../../utils/severity'
 import { escapeHtml, formatDateShort as fmtShort, formatDateWithTime as fmtFull, extractConfidence } from '../../utils/formatters'
 import './dashboard.css'
+
+const RANGE_OPTIONS = [
+  { key: 'all',   label: 'Todos los registros' },
+  { key: 'today', label: 'Hoy' },
+  { key: 'last7', label: 'Últimos 7 días' },
+  { key: 'month', label: 'Este mes' },
+]
 
 /* ── SVG Donut (sanas vs en riesgo) ── */
 function HealthDonut({ sanas, sick, size = 200, thickness = 36 }) {
@@ -271,14 +279,24 @@ function HBarChart({ data }) {
 
 export default function DashboardAdminPage() {
   const [analyses, setAnalyses]           = useState([])
+  const [allAnalyses, setAllAnalyses]     = useState([])
   const [customers, setCustomers]         = useState([])
   const [loading, setLoading]             = useState(true)
   const [showPDF, setShowPDF]             = useState(false)
   const [selectedAnalysis, setSelectedAnalysis] = useState(null)
 
+  const [period,   setPeriod]   = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo,   setDateTo]   = useState('')
+
   useEffect(() => {
+    const params = { page_size: API_PAGE_SIZE }
+    if (period !== 'all') params.range = period
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo)   params.date_to   = dateTo
+    setLoading(true)
     Promise.allSettled([
-      getAnalyses({ page_size: API_PAGE_SIZE }),
+      getAnalyses(params),
       getCustomers({ page_size: API_PAGE_SIZE }),
     ])
       .then(([ra, rc]) => {
@@ -286,6 +304,13 @@ export default function DashboardAdminPage() {
         setCustomers(toArray(rc.value))
       })
       .finally(() => setLoading(false))
+  }, [period, dateFrom, dateTo])
+
+  // Historial completo, sin el filtro de período — "usuarios en riesgo de
+  // abandono" necesita saber cuándo fue el ÚLTIMO análisis real de cada
+  // usuario, no solo dentro del rango que se esté visualizando ahora mismo.
+  useEffect(() => {
+    getAnalyses({ page_size: API_PAGE_SIZE }).then(r => setAllAnalyses(toArray(r))).catch(() => {})
   }, [])
 
   /* ── KPIs ── */
@@ -405,11 +430,14 @@ export default function DashboardAdminPage() {
     })
   }, [customers, lastWeeks])
 
-  /* ── 2. Usuarios inactivos / en riesgo de abandono (30+ días sin análisis) ── */
+  /* ── 2. Usuarios inactivos / en riesgo de abandono (30+ días sin análisis) ──
+     Usa allAnalyses (sin el filtro de período): si se filtrara por período,
+     cualquier rango corto marcaría a casi todos como "inactivos" solo por
+     quedar sus análisis reales fuera de la ventana seleccionada. ── */
   const inactiveUsers = useMemo(() => {
     if (!customers.length) return []
     const lastByEmail = new Map()
-    analyses.forEach(a => {
+    allAnalyses.forEach(a => {
       const email = (a.owner_email || '').toLowerCase()
       if (!email) return
       const cur = lastByEmail.get(email)
@@ -431,7 +459,7 @@ export default function DashboardAdminPage() {
         return b.daysSince - a.daysSince
       })
       .slice(0, 8)
-  }, [customers, analyses])
+  }, [customers, allAnalyses])
 
   /* ── 3. Confianza promedio del modelo en el tiempo ── */
   const confidenceTrend = useMemo(() => {
@@ -511,6 +539,21 @@ export default function DashboardAdminPage() {
             { label: 'Enfermedad frecuente', value: kpis.topDisease, note: 'Diagnóstico más repetido', icon: 'fa-bug', tone: 'amber', small: true },
           ]}
         />
+
+        {/* ── Filtro de período: afecta todas las gráficas de este dashboard ── */}
+        <section className="mb-4 info-card p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filtrar por período</p>
+          <HistoryFilterBar
+            rangeOptions={RANGE_OPTIONS}
+            range={period}
+            onRangeChange={setPeriod}
+            dateFrom={dateFrom}
+            onDateFromChange={setDateFrom}
+            dateTo={dateTo}
+            onDateToChange={setDateTo}
+            onClear={() => { setPeriod('all'); setDateFrom(''); setDateTo('') }}
+          />
+        </section>
 
         {/* ── Row growth: Crecimiento de usuarios + Volumen de análisis ── */}
         <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
