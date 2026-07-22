@@ -1,16 +1,18 @@
 import AppLogo from '../../../components/AppLogo'
+import { severityBucket } from '../../../utils/severity'
 import '../../../components/modals/modals.css'
 import '../ChatbotPage.css'
 
-const getSevColors = (sev) => {
-  const s = (sev || '').toLowerCase()
-  if (s.includes('crít') || s.includes('critic')) return { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', dot: '#ef4444' }
-  if (s.includes('alta') || s.includes('high') || s.includes('grave')) return { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c', dot: '#f97316' }
-  if (s.includes('media') || s.includes('moder')) return { bg: '#fffbeb', border: '#fde68a', text: '#92400e', dot: '#f59e0b' }
-  if (s.includes('baja') || s.includes('low') || s.includes('leve')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
-  if (s.includes('sana') || s.includes('health') || s.includes('normal') || s.includes('ninguna')) return { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' }
-  return { bg: '#f8fafc', border: '#e2e8f0', text: '#475569', dot: '#94a3b8' }
+// Paleta propia de esta tarjeta, pero la clasificación (qué texto cuenta como
+// "alta"/"crítica"/etc.) viene de utils/severity.js para que coincida con el
+// resto de la app en vez de tener su propio criterio.
+const SEV_COLOR_MAP = {
+  critical: { bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', dot: '#ef4444' },
+  high:     { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c', dot: '#f97316' },
+  medium:   { bg: '#fffbeb', border: '#fde68a', text: '#92400e', dot: '#f59e0b' },
+  low:      { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', dot: '#22c55e' },
 }
+const getSevColors = (sev) => SEV_COLOR_MAP[severityBucket(sev)]
 
 export default function AnalysisCard({ cardData }) {
   const sev = getSevColors(cardData.severity)

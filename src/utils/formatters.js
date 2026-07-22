@@ -2,6 +2,13 @@ export function escapeHtml(v) {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+// Iniciales para avatares (p.ej. "Steven Nieto" -> "SN"). filter(Boolean) evita
+// que espacios dobles/al final produzcan huecos al tomar la primera letra.
+export function getInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+  return parts.map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
+}
+
 // Motor único de formateo de fechas — las funciones de abajo son atajos
 // con nombre sobre las combinaciones de opciones realmente usadas en la app.
 function formatDate(s, options, fallback = '—') {

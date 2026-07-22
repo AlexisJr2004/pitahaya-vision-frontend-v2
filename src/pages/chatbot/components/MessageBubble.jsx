@@ -1,18 +1,13 @@
 import AppLogo from '../../../components/AppLogo'
 import '../ChatbotPage.css'
 
-function esc(text) {
-  const div = document.createElement('div')
-  div.textContent = text || ''
-  return div.innerHTML
-}
-
 export function UserBubble({ content, imagePath }) {
   return (
     <div className="flex justify-end animate-fade-up">
       <div className="text-right">
         {imagePath && <img src={imagePath} alt="Preview" className="max-w-[75vw] sm:max-w-xs w-full rounded-2xl mb-2 block ml-auto shadow-sm msg-img-preview" />}
-        {content && <div className="user-bubble text-white text-sm px-4 py-3 rounded-3xl rounded-tr-md leading-relaxed shadow-sm max-w-[80vw] sm:max-w-sm">{esc(content)}</div>}
+        {/* Hijo de JSX plano: React ya escapa el texto, no hace falta escapar a mano */}
+        {content && <div className="user-bubble text-white text-sm px-4 py-3 rounded-3xl rounded-tr-md leading-relaxed shadow-sm max-w-[80vw] sm:max-w-sm">{content}</div>}
       </div>
     </div>
   )

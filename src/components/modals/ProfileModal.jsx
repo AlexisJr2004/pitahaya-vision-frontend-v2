@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { updateProfile, deleteAccount } from '../../services/authService'
 import { animateClose, setupDragToDismiss } from '../../utils/modalUtils'
+import { getInitials } from '../../utils/formatters'
 import './modals.css'
 
 export default function ProfileModal({ isOpen, onClose }) {
@@ -23,10 +24,7 @@ export default function ProfileModal({ isOpen, onClose }) {
 
   const displayName = user?.full_name || user?.username || 'Usuario'
   const roleLabel = user?.role_label || (user?.is_admin ? 'Administrador' : 'Usuario')
-  const initials = (() => {
-    const parts = displayName.split(' ')
-    return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : displayName.substring(0, 2).toUpperCase()
-  })()
+  const initials = getInitials(displayName)
   const profilePhotoUrl = user?.profile_photo_url
 
   useEffect(() => {

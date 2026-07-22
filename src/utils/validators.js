@@ -34,6 +34,13 @@ export function validateEcuadorianPhone(phone) {
   return null
 }
 
+export function validatePasswordStrength(password) {
+  if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres'
+  if (/^\d+$/.test(password)) return 'La contraseña no puede ser solo números'
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) return 'Esta contraseña es demasiado común'
+  return null
+}
+
 function isSimilarToUserAttributes(password, { first_name, last_name, username, email }) {
   const lowerPwd = password.toLowerCase()
   const attrs = [first_name, last_name, username]
@@ -82,12 +89,9 @@ export function validateRegistration(form) {
   if (!form.password1) {
     errors.password1 = 'La contraseña es obligatoria'
   } else {
-    if (form.password1.length < 8) {
-      errors.password1 = 'La contraseña debe tener al menos 8 caracteres'
-    } else if (/^\d+$/.test(form.password1)) {
-      errors.password1 = 'La contraseña no puede ser solo números'
-    } else if (COMMON_PASSWORDS.has(form.password1.toLowerCase())) {
-      errors.password1 = 'Esta contraseña es demasiado común'
+    const strengthError = validatePasswordStrength(form.password1)
+    if (strengthError) {
+      errors.password1 = strengthError
     } else if (isSimilarToUserAttributes(form.password1, form)) {
       errors.password1 = 'La contraseña es demasiado similar a tus datos personales'
     }

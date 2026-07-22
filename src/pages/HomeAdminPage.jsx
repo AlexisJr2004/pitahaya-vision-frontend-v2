@@ -7,6 +7,7 @@ import ClientesAdminPage from './clientes/ClientesAdminPage'
 import HistorialAdminPage from './historial/HistorialAdminPage'
 import DashboardAdminPage from './dashboard/DashboardAdminPage'
 import { getWeather } from '../services/analysisService'
+import { getInitials } from '../utils/formatters'
 import Sidebar from '../components/Sidebar'
 import TopBar from '../components/TopBar'
 import Footer from '../components/Footer'
@@ -42,10 +43,7 @@ export default function HomeAdminPage() {
 
   const displayName = user?.full_name || user?.username || 'Usuario'
   const userEmail = user?.email || ''
-  const initials = (() => {
-    const parts = displayName.split(' ')
-    return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : displayName.substring(0, 2).toUpperCase()
-  })()
+  const initials = getInitials(displayName)
   const profilePhotoUrl = user?.profile_photo_url
 
   const handleLogout = async () => { await logout(); navigate('/login', { replace: true }) }

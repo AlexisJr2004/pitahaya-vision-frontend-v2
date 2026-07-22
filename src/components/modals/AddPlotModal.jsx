@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import { animateClose } from '../../utils/modalUtils'
+import { TILE_LAYERS } from '../../constants/mapLayers'
 import './modals.css'
 
 export default function AddPlotModal({
@@ -57,12 +58,6 @@ export default function AddPlotModal({
       return
     }
 
-    const TILE_CFGS = {
-      street:    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',    attribution: '© OpenStreetMap contributors', subdomains: 'abc',  maxNativeZoom: 19, maxZoom: 21 },
-      satellite: { url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: '© Google',                     subdomains: '0123', maxNativeZoom: 20, maxZoom: 21 },
-      terrain:   { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',      attribution: '© OpenTopoMap contributors',   subdomains: 'abc',  maxNativeZoom: 17, maxZoom: 21 },
-    }
-
     const mkIcon = () => L.divIcon({
       html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))">
         <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#16a34a,#22c55e);border:3px solid #fff"></div>
@@ -85,7 +80,7 @@ export default function AddPlotModal({
       map.getContainer().style.background = '#e8f4ea'
 
       const tileLayers = {}
-      Object.entries(TILE_CFGS).forEach(([key, cfg]) => {
+      Object.entries(TILE_LAYERS).forEach(([key, cfg]) => {
         tileLayers[key] = L.tileLayer(cfg.url, {
           attribution: cfg.attribution,
           subdomains:  cfg.subdomains,

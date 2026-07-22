@@ -11,6 +11,7 @@ import AddFarmModal from '../../components/modals/AddFarmModal'
 import AddPlotModal from '../../components/modals/AddPlotModal'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
 import { setupDragToDismiss } from '../../utils/modalUtils'
+import { getInitials, escapeHtml } from '../../utils/formatters'
 import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../../services/analysisService'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
@@ -102,7 +103,6 @@ export default function ChatbotPage() {
   const [plotZone, setPlotZone] = useState('')
   const [plotRows, setPlotRows] = useState('')
   const [sessionMenuState, setSessionMenuState] = useState({ sessionId: null, left: 0, top: 0, open: false })
-  const [contextOptions, setContextOptions] = useState({ lotId: [], zone: [], rows: [] })
   const [showNoFarmHint, setShowNoFarmHint] = useState(false)
   const [showNoContextHint, setShowNoContextHint] = useState(false)
   const [weatherData, setWeatherData] = useState(null)
@@ -128,9 +128,6 @@ export default function ChatbotPage() {
   const contextIrrigationRef = useRef(null)
   const contextPhytoRef = useRef(null)
   const contextNotesRef = useRef(null)
-  const settingsLotInputRef = useRef(null)
-  const settingsZoneInputRef = useRef(null)
-  const settingsRowsInputRef = useRef(null)
   const parcelasModalRef = useRef(null)
   const addFarmModalRef = useRef(null)
   const addPlotModalRef = useRef(null)
@@ -139,10 +136,7 @@ export default function ChatbotPage() {
   const displayName = user?.full_name || user?.username || 'Usuario'
   const userEmail = user?.email || ''
   const roleLabel = user?.role_label || (user?.is_admin ? 'Administrador' : 'Usuario')
-  const initials = (() => {
-    const parts = displayName.split(' ')
-    return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : displayName.substring(0, 2).toUpperCase()
-  })()
+  const initials = getInitials(displayName)
   const profilePhotoUrl = user?.profile_photo_url
 
   const farmsCacheRef = useRef(null)
@@ -857,7 +851,7 @@ export default function ChatbotPage() {
     const sorted = [...conversations].sort((a, b) => {
       const aPinned = a.pinnedAt || 0, bPinned = b.pinnedAt || 0
       if (aPinned !== bPinned) return bPinned - aPinned
-      return (b.updated_at || 0) - (a.updated_at || 0)
+      return new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
     })
     return sorted
   })()
@@ -994,19 +988,6 @@ export default function ChatbotPage() {
 
   const handleDeletePlot = async (id) => { try { await deletePlot(id); debouncedLoadFarms() } catch { alert('Error al eliminar la parcela') } }
 
-  const openProfileModal  = () => { setShowProfileModal(true);  setMenuOpen(false) }
-  const openSettingsModal = () => { setShowSettingsModal(true); setMenuOpen(false) }
-
-  const addContextOption = (field) => {
-    const inputRef = { lotId: settingsLotInputRef, zone: settingsZoneInputRef, rows: settingsRowsInputRef }[field]
-    const value = inputRef.current?.value?.trim()
-    if (!value) return
-    if (!contextOptions[field].includes(value)) setContextOptions(prev => ({ ...prev, [field]: [...prev[field], value] }))
-    if (inputRef.current) inputRef.current.value = ''
-  }
-
-  const removeContextOption = (field, value) => { setContextOptions(prev => ({ ...prev, [field]: prev[field].filter(v => v !== value) })) }
-
 
   const formatBotText = (text) => {
     if (!text) return ''
@@ -1097,8 +1078,6 @@ export default function ChatbotPage() {
     navigator.clipboard.writeText(text).then(() => { setCopiedIndex(index); setTimeout(() => setCopiedIndex(null), 2000) })
   }
 
-  const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
   const savedContextIdRef = useRef(null)
   const savedPlantKeyRef = useRef('')
   const micRef = useRef(null)
@@ -1147,8 +1126,8 @@ export default function ChatbotPage() {
     <li key={conv.id} className={`session-card rounded-xl border transition w-full cursor-pointer ${activeConvId === conv.id ? 'bg-brand-50 border-brand-200 text-brand-800' : 'bg-white border-transparent text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`} onClick={() => selectConversation(conv)}>
       <div className="flex items-start justify-between gap-2 px-3 py-2.5 pr-12">
         <div className="min-w-0 flex-1">
-          <p className={`text-xs font-semibold truncate ${activeConvId === conv.id ? 'text-brand-800' : 'text-gray-700'}`}>{esc(getConvTitle(conv))}</p>
-          <p className={`text-[0.68rem] mt-0.5 truncate ${activeConvId === conv.id ? 'text-brand-700/80' : 'text-gray-400'}`}>{esc(getConvPreview(conv))}</p>
+          <p className={`text-xs font-semibold truncate ${activeConvId === conv.id ? 'text-brand-800' : 'text-gray-700'}`}>{escapeHtml(getConvTitle(conv))}</p>
+          <p className={`text-[0.68rem] mt-0.5 truncate ${activeConvId === conv.id ? 'text-brand-700/80' : 'text-gray-400'}`}>{escapeHtml(getConvPreview(conv))}</p>
         </div>
         <span className={`text-[0.62rem] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${activeConvId === conv.id ? 'text-brand-700 bg-brand-100' : 'text-gray-400 bg-gray-100'}`}>{conv.messages?.length || 0} msg</span>
       </div>

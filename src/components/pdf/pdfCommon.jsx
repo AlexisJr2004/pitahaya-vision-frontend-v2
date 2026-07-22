@@ -5,19 +5,18 @@ export const R  = { red:'#dc2626',redL:'#fef2f2',redB:'#fecaca', ora:'#ea580c',o
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { PITAHAYA_PATH } from '../AppLogo'
+import { severityBucket } from '../../utils/severity'
 
 export const SERIF = "'Cormorant Garamond', Georgia, serif"
 export const SANS  = "Inter, -apple-system, 'Segoe UI', Arial, sans-serif"
 export const MONO  = "'IBM Plex Mono', 'Courier New', monospace"
 
-export function normSev(v) { return String(v||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'') }
+// La clasificación (qué texto cuenta como "alta"/"crítica"/etc.) viene de
+// utils/severity.js para que coincida con el resto de la app; aquí solo se
+// mapea ese resultado a la paleta propia de los PDF.
 export function sevColor(v) {
-  const s = normSev(v)
-  if (s.includes('crit')||s.includes('extrem')||s.includes('muy alt')) return R.red
-  if (s.includes('alta')||s.includes('high')||s.includes('grav')||s.includes('enfer')) return R.ora
-  if (s.includes('moder')||s.includes('media')||s.includes('inter')) return R.amb
-  if (s.includes('sana')||s.includes('buena')||s.includes('salud')||s.includes('baja')||s.includes('low')) return B[600]
-  return SL[500]
+  if (!String(v || '').trim()) return SL[500]
+  return { critical: R.red, high: R.ora, medium: R.amb, low: B[600] }[severityBucket(v)]
 }
 export function sevBg(v)     { const c=sevColor(v); return c===R.red?R.redL:c===R.ora?R.oraL:c===R.amb?R.ambL:c===B[600]?B[50]:SL[100] }
 export function sevBorder(v) { const c=sevColor(v); return c===R.red?R.redB:c===R.ora?R.oraB:c===R.amb?R.ambB:c===B[600]?B[200]:SL[200] }

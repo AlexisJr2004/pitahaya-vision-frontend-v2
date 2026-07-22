@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { login as apiLogin, logout as apiLogout, getProfile } from '../services/authService'
+import { clearAllHttpCaches } from '../services/httpClient'
 
 const AuthContext = createContext(null)
 const AUTH_TRANSITION_MS = 500
@@ -41,6 +42,7 @@ export function AuthProvider({ children }) {
     setLoading(true)
     try {
       const data = await apiLogin(credentials)
+      clearAllHttpCaches()
       localStorage.setItem('auth_token', data.key)
       const profile = await getProfile()
       setUser(profile)
@@ -58,6 +60,7 @@ export function AuthProvider({ children }) {
       // ignore
     }
     localStorage.removeItem('auth_token')
+    clearAllHttpCaches()
     setUser(null)
     flashAuthLoader()
   }, [])
