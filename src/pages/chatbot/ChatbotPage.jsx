@@ -233,9 +233,16 @@ export default function ChatbotPage() {
   }, [messages])
 
   useEffect(() => {
-    if (!contextSelectedPlotId || !farms.length) { setWeatherData(null); setWeatherCondition(''); return }
-    const plot = farms.flatMap(f => f.plots || []).find(p => String(p.id) === String(contextSelectedPlotId))
-    if (!plot?.gps_location) { setWeatherData(null); return }
+    const plot = contextSelectedPlotId && farms.length
+      ? farms.flatMap(f => f.plots || []).find(p => String(p.id) === String(contextSelectedPlotId))
+      : null
+
+    // Mantiene el campo "GPS o ubicación exacta" del contexto sincronizado con
+    // la parcela seleccionada, sin importar por cuál de los dos caminos se
+    // llegó a seleccionarla (dropdown del propio modal, o "Mis Parcelas").
+    if (contextLocationRef.current) contextLocationRef.current.value = plot?.gps_location || ''
+
+    if (!plot?.gps_location) { setWeatherData(null); setWeatherCondition(''); return }
     const nums = plot.gps_location.match(/-?\d+\.?\d+/g)
     if (!nums || nums.length < 2) { setWeatherData(null); return }
     const lat = parseFloat(nums[0]), lon = parseFloat(nums[1])
@@ -568,10 +575,13 @@ export default function ChatbotPage() {
         }
         await sendMessage({ conversation: convId, role: 'assistant', content: `**Plan de tratamiento**\n\n${treatmentReply}` })
 
-        // Fetch plant histories once — used for both deduplication check and comparison
+        // Fetch plant histories once — used for both deduplication check and comparison.
+        // force=true: plantHistoriesCacheRef se llenó una sola vez al cargar la página y
+        // nunca vence, así que sin esto la comprobación de "¿ya existe?" siempre mira datos
+        // viejos (de antes de este análisis) y termina creando un historial duplicado.
         let allPhs = []
         try {
-          const phs = await loadPlantHistories()
+          const phs = await loadPlantHistories(true)
           allPhs = Array.isArray(phs) ? phs : phs.results || []
         } catch {}
 
@@ -795,9 +805,14 @@ export default function ChatbotPage() {
     setContextSelectedFarmId(farm.id); setContextSelectedZone(plot.zone || '')
     setContextSelectedPlotId(String(plot.id))
     setTimeout(() => { if (contextRowsRef.current) contextRowsRef.current.value = String(plot.id) }, 0)
-    if (contextLocationRef.current && plot.gps_location) contextLocationRef.current.value = plot.gps_location
+    // El GPS se sincroniza solo, vía el useEffect que observa contextSelectedPlotId.
     if (contextDatetimeRef.current && !contextDatetimeRef.current.value) {
-      contextDatetimeRef.current.value = new Date().toISOString().slice(0, 16)
+      // toISOString() da la hora en UTC; datetime-local necesita la hora LOCAL
+      // tal cual (no hace conversión de huso horario), así que hay que restar
+      // el offset antes de truncar, o el campo sale adelantado varias horas.
+      const now = new Date()
+      const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      contextDatetimeRef.current.value = local.toISOString().slice(0, 16)
     }
     setShowParcelasModal(false); setShowContextModal(true)
   }
