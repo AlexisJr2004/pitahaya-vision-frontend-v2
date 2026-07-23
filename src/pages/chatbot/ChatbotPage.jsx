@@ -12,7 +12,7 @@ import AddPlotModal from '../../components/modals/AddPlotModal'
 import ConfirmDeleteModal from '../../components/modals/ConfirmDeleteModal'
 import { setupDragToDismiss } from '../../utils/modalUtils'
 import { getInitials, escapeHtml } from '../../utils/formatters'
-import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../../services/chatbotService'
+import { getFarms, createFarm, updateFarm, deleteFarm, createPlot, updatePlot, deletePlot, getConversations, getConversation, createConversation, deleteConversation, sendMessage, createContext, updateContext, updateConversation, getPlantHistories, createPlantHistory, updatePlantHistory, askChatbot, askChatbotStream, getSuggestions } from '../../services/chatbotService'
 import { uploadImage, updateAnalysis, getWeather } from '../../services/analysisService'
 import { API_PAGE_SIZE } from '../../services/apiConfig'
 import ConversationPDF from '../../components/pdf/ConversationPDF'
@@ -585,24 +585,36 @@ export default function ChatbotPage() {
           allPhs = Array.isArray(phs) ? phs : phs.results || []
         } catch {}
 
-        // Save plant history only if backend didn't auto-create one for this analysis
+        // Guardar historial de planta solo si el backend no auto-creó uno para
+        // este análisis. Si ya existe (lo normal: apps/analysis/views.py lo crea
+        // al procesar la imagen), ese auto-creado no conoce las "Notas de campo"
+        // del formulario de contexto (viven solo en el frontend) — hay que
+        // completarlas aparte con un update, o se pierden en silencio.
         const ctxId = savedContextIdRef.current
         if (ctxId) {
-          const alreadyExists = allPhs.some(ph => {
+          const existingPh = allPhs.find(ph => {
             const phId = ph.analysis_result?.id ?? ph.analysis_result
             return String(phId) === String(analysisResult.id)
           })
-          if (!alreadyExists) {
+          const notesVal = contextNotesRef.current?.value || ''
+          if (!existingPh) {
             try {
               const newPh = await createPlantHistory({
                 context: ctxId,
                 analysis_result: analysisResult.id,
                 final_diagnosis: analysisResult.disease_name_predicted || '',
-                notes: contextNotesRef.current?.value || '',
+                notes: notesVal,
               })
               allPhs = [...allPhs, newPh]
             } catch (e) {
               console.error('Error guardando historial de planta:', e)
+            }
+          } else if (notesVal) {
+            try {
+              const updatedPh = await updatePlantHistory(existingPh.id, { notes: notesVal })
+              allPhs = allPhs.map(ph => ph.id === existingPh.id ? updatedPh : ph)
+            } catch (e) {
+              console.error('Error actualizando notas del historial de planta:', e)
             }
           }
         }
@@ -801,19 +813,22 @@ export default function ChatbotPage() {
     if (window.innerWidth < 768) closeSidebar()
   }
 
+  const fillDefaultContextDatetime = () => {
+    if (!contextDatetimeRef.current || contextDatetimeRef.current.value) return
+    // toISOString() da la hora en UTC; datetime-local necesita la hora LOCAL
+    // tal cual (no hace conversión de huso horario), así que hay que restar
+    // el offset antes de truncar, o el campo sale adelantado varias horas.
+    const now = new Date()
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    contextDatetimeRef.current.value = local.toISOString().slice(0, 16)
+  }
+
   const handleSelectPlot = (plot, farm) => {
     setContextSelectedFarmId(farm.id); setContextSelectedZone(plot.zone || '')
     setContextSelectedPlotId(String(plot.id))
     setTimeout(() => { if (contextRowsRef.current) contextRowsRef.current.value = String(plot.id) }, 0)
     // El GPS se sincroniza solo, vía el useEffect que observa contextSelectedPlotId.
-    if (contextDatetimeRef.current && !contextDatetimeRef.current.value) {
-      // toISOString() da la hora en UTC; datetime-local necesita la hora LOCAL
-      // tal cual (no hace conversión de huso horario), así que hay que restar
-      // el offset antes de truncar, o el campo sale adelantado varias horas.
-      const now = new Date()
-      const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-      contextDatetimeRef.current.value = local.toISOString().slice(0, 16)
-    }
+    fillDefaultContextDatetime()
     setShowParcelasModal(false); setShowContextModal(true)
   }
 
@@ -990,11 +1005,20 @@ export default function ChatbotPage() {
         debouncedLoadFarms()
       } else {
         if (!selectedFarmForPlot) return
-        await createPlot({ farm: selectedFarmForPlot.id, name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
+        const newPlot = await createPlot({ farm: selectedFarmForPlot.id, name: plotName.trim(), gps_location: plotGps.trim(), hectares: parseFloat(plotHectares) || 0, zone: plotZone.trim(), rows: plotRows.trim() })
         setShowAddPlotModal(false)
         debouncedLoadFarms()
         if (farms.flatMap(f => f.plots || []).length === 0) {
           setShowParcelasModal(false)
+          // Preseleccionar la finca/parcela recién creadas: si no, el modal de
+          // contexto se abre con "Seleccionar lote"/"Seleccionar parcela" vacíos,
+          // el usuario llena todo el formulario y al guardar no queda vinculado
+          // a ninguna parcela — se pierde en silencio (síntoma, GPS, severidad...).
+          setContextSelectedFarmId(String(selectedFarmForPlot.id))
+          setContextSelectedZone(newPlot?.zone || '')
+          setContextSelectedPlotId(String(newPlot?.id || ''))
+          setTimeout(() => { if (contextRowsRef.current && newPlot?.id) contextRowsRef.current.value = String(newPlot.id) }, 0)
+          fillDefaultContextDatetime()
           setShowContextModal(true)
         }
       }
